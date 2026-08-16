@@ -1,0 +1,55 @@
+[workspace]
+members = [
+    "crates/brain-core",
+    "crates/brain-autograd",
+    "crates/brain-nn",
+    "crates/brain-optim",
+    "crates/brain-transformer",
+    "crates/brain-cv",
+    "crates/brain-rl",
+    "crates/brain-text",
+    "crates/brain-dataset",
+    "crates/brain-graph",
+    "crates/brain-compile",
+    "crates/brain-distributed",
+    "crates/brain-utils",
+    "crates/brain-audio",
+    "crates/brain-quantization",
+    "crates/brain-export",
+    "crates/brain-gan",
+    "crates/brain-diffusion",
+    "crates/brain-neuroevolution",
+    "crates/brain-federated",
+    "crates/brain-onnx",
+    "crates/brain-vit",
+    "crates/brain-rnn",
+    "crates/brain-gnn",
+    "crates/brain-metric",
+    "crates/brain-loss",
+    "crates/brain-regularization",
+    "crates/brain-data",
+    "crates/brain-benchmark",
+    "crates/brain-cli",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+authors = ["Brain Contributors"]
+repository = "https://github.com/brain-dl/brain"
+
+[workspace.dependencies]
+brain-core = { path = "crates/brain-core" }
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+
+[profile.dev]
+opt-level = 0
+
+[profile.bench]
+opt-level = 3
+lto = false
