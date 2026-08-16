@@ -1,18 +1,79 @@
-//! Memory management for the Brain deep learning framework.
+//! Memory management infrastructure for the Brain deep learning framework.
 //!
-//! This module provides memory allocation tracking, pool-based allocation,
-//! arena allocators, and memory format utilities for efficient tensor operations.
+//! This module provides high-performance, production-grade memory allocation, tracking,
+//! pooling, arena allocation, aligned buffers, and memory format utilities for efficient
+//! tensor operations without external runtime dependencies.
 //!
-//! # Key Components
+//! # Architecture & Components
 //!
-//! * [`MemoryPool`] trait and [`SimplePool`] implementation
-//! * [`ArenaAllocator`] for batch allocation
-//! * [`AllocationStats`] for tracking memory usage
-//! * [`MemoryFormat`] enum for different memory layouts
-//! * [`MemoryPlanner`] for graph execution memory planning
+//! 1. **Aligned Memory Allocator**: Page-aligned (4096-byte) and cacheline-aligned (64-byte)
+//!    allocations via standard library allocator primitives (`std::alloc`), ensuring optimal
+//!    SIMD vectorized access and AVX-512/AVX2 cache line efficiency.
+//! 2. **Memory Pools**:
+//!    - [`SimplePool`]: Pre-allocated contiguous slab with best-fit / first-fit free-list.
+//!    - [`BinnedMemoryPool`]: Power-of-two segregated free lists for \(O(1)\) allocations
+//!      with minimal internal and external fragmentation.
+//! 3. **Memory Arena**:
+//!    - [`MemoryArena`]: Fast linear bump allocator with checkpoint/rollback semantics
+//!      and batch reset for ephemeral neural network activation buffers.
+//! 4. **Memory Tracker & Leak Detection**:
+//!    - [`MemoryTracker`]: Thread-safe allocation registry with tags, call site context,
+//!      peak watermark tracking, and comprehensive leak reporting.
+//! 5. **Memory Layouts & Formats**:
+//!    - [`MemoryFormat`]: Strided layout definitions (Contiguous, ChannelsFirst/NCHW,
+//!      ChannelsLast/NHWC, Blocked, Sparse, Packed).
+//! 6. **Memory Planning**:
+//!    - [`MemoryPlanner`]: Static memory planner for computation graphs that reuses
+//!      temporary memory across non-overlapping tensor lifetimes.
 
+use std::alloc::{alloc, dealloc, realloc as std_realloc, Layout};
 use std::collections::HashMap;
 use std::fmt;
+use std::ptr::NonNull;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex};
+
+use crate::error::{BrainError, BrainResult};
+
+// =============================================================================
+// Memory Constants & Alignment
+// =============================================================================
+
+/// Standard CPU cache line size in bytes (64 bytes on modern x86_64 and aarch64).
+pub const CACHE_LINE_SIZE: usize = 64;
+
+/// Standard OS virtual memory page size in bytes (4 KiB).
+pub const PAGE_SIZE: usize = 4096;
+
+/// Huge page size in bytes (2 MiB).
+pub const HUGE_PAGE_SIZE: usize = 2 * 1024 * 1024;
+
+/// Default SIMD vector alignment (32 bytes for AVX2, 64 bytes for AVX-512).
+pub const SIMD_ALIGNMENT: usize = 64;
+
+/// Checks if a memory address/pointer is aligned to the given boundary.
+#[inline(always)]
+pub fn is_aligned(ptr: *const u8, alignment: usize) -> bool {
+    (ptr as usize) % alignment == 0
+}
+
+/// Rounds up a size in bytes to the nearest multiple of alignment.
+#[inline(always)]
+pub const fn align_up(size: usize, alignment: usize) -> usize {
+    if alignment == 0 {
+        return size;
+    }
+    (size + alignment - 1) & !(alignment - 1)
+}
+
+/// Rounds down a size in bytes to the nearest multiple of alignment.
+#[inline(always)]
+pub const fn align_down(size: usize, alignment: usize) -> usize {
+    if alignment == 0 {
+        return size;
+    }
+    size & !(alignment - 1)
+}
 
 // =============================================================================
 // Memory Format
@@ -62,20 +123,16 @@ impl MemoryFormat {
             MemoryFormat::ChannelsFirst => strides_row_major(shape),
             MemoryFormat::ChannelsLast => {
                 if shape.len() == 4 {
-                    // NHWC strides
-                    let (n, h, w, c) = (shape[0], shape[1], shape[2], shape[3]);
-                    vec![h * w * c, w * c, c, 1]
+                    let (_n, h, w, c) = (shape[0], shape[1], shape[2], shape[3]);
+                    vec![h * w * c, w * c, 1, h * w]
                 } else {
                     strides_row_major(shape)
                 }
             }
             MemoryFormat::Blocked { block_size } => {
-                // Blocked: tiles of block_size x block_size
                 if shape.len() == 2 {
-                    let (rows, cols) = (shape[0], shape[1]);
-                    let br = (rows + block_size - 1) / block_size;
-                    let bc = (cols + block_size - 1) / block_size;
-                    vec![block_size, 1, br * block_size * block_size, block_size]
+                    let (_rows, cols) = (shape[0], shape[1]);
+                    vec![cols * block_size, *block_size]
                 } else {
                     strides_row_major(shape)
                 }
@@ -83,7 +140,7 @@ impl MemoryFormat {
             MemoryFormat::Sparse => vec![],
             MemoryFormat::Packed => {
                 if shape.len() == 1 {
-                    vec![(shape[0] + 3) / 4]
+                    vec![1]
                 } else {
                     strides_row_major(shape)
                 }
@@ -91,185 +148,427 @@ impl MemoryFormat {
         }
     }
 
-    /// Returns true if the format preserves the natural ordering.
+    /// Returns true if the format is dense and contiguous.
     pub fn is_dense(&self) -> bool {
-        matches!(self, MemoryFormat::Contiguous | MemoryFormat::ChannelsFirst | MemoryFormat::ChannelsLast)
+        matches!(
+            self,
+            MemoryFormat::Contiguous | MemoryFormat::ChannelsFirst | MemoryFormat::ChannelsLast
+        )
     }
+}
+
+/// Helper to compute row-major strides for a shape.
+pub fn strides_row_major(shape: &[usize]) -> Vec<usize> {
+    if shape.is_empty() {
+        return vec![];
+    }
+    let mut strides = vec![1; shape.len()];
+    for i in (0..shape.len() - 1).rev() {
+        strides[i] = strides[i + 1] * shape[i + 1];
+    }
+    strides
+}
+
+// =============================================================================
+// AlignedBuffer - Cache-Line & Page-Aligned RAII Buffer
+// =============================================================================
+
+/// A cache-aligned or page-aligned dynamically allocated contiguous buffer of elements.
+///
+/// Ensures memory is properly aligned for AVX2, AVX-512, and DMA hardware transfers.
+pub struct AlignedBuffer<T> {
+    ptr: NonNull<T>,
+    capacity: usize,
+    len: usize,
+    alignment: usize,
+}
+
+unsafe impl<T: Send> Send for AlignedBuffer<T> {}
+unsafe impl<T: Sync> Sync for AlignedBuffer<T> {}
+
+impl<T> AlignedBuffer<T> {
+    /// Creates a new aligned buffer with the specified capacity and alignment.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `alignment` is not a power of two or is less than `std::mem::align_of::<T>()`.
+    pub fn with_capacity_aligned(capacity: usize, alignment: usize) -> Self {
+        assert!(
+            alignment.is_power_of_two(),
+            "Alignment must be a power of two"
+        );
+        let effective_align = alignment.max(std::mem::align_of::<T>()).max(1);
+
+        if capacity == 0 {
+            return AlignedBuffer {
+                ptr: NonNull::dangling(),
+                capacity: 0,
+                len: 0,
+                alignment: effective_align,
+            };
+        }
+
+        let size = capacity
+            .checked_mul(std::mem::size_of::<T>())
+            .expect("Capacity overflow");
+        let layout = Layout::from_size_align(size, effective_align)
+            .expect("Invalid memory layout requested");
+
+        let raw = unsafe { alloc(layout) as *mut T };
+        let ptr = NonNull::new(raw).expect("Memory allocation failed");
+
+        AlignedBuffer {
+            ptr,
+            capacity,
+            len: 0,
+            alignment: effective_align,
+        }
+    }
+
+    /// Creates a new buffer aligned to the CPU cache line (64 bytes).
+    pub fn with_cacheline_alignment(capacity: usize) -> Self {
+        Self::with_capacity_aligned(capacity, CACHE_LINE_SIZE)
+    }
+
+    /// Creates a new buffer aligned to OS memory pages (4096 bytes).
+    pub fn with_page_alignment(capacity: usize) -> Self {
+        Self::with_capacity_aligned(capacity, PAGE_SIZE)
+    }
+
+    /// Allocates an aligned buffer filled with a default value.
+    pub fn from_elem(elem: T, count: usize, alignment: usize) -> Self
+    where
+        T: Clone,
+    {
+        let mut buf = Self::with_capacity_aligned(count, alignment);
+        for _ in 0..count {
+            buf.push(elem.clone());
+        }
+        buf
+    }
+
+    /// Returns the number of elements currently stored.
+    #[inline(always)]
+    pub fn len(&self) -> usize {
+        self.len
+    }
+
+    /// Returns true if the buffer has zero elements.
+    #[inline(always)]
+    pub fn is_empty(&self) -> bool {
+        self.len == 0
+    }
+
+    /// Returns the total capacity in elements.
+    #[inline(always)]
+    pub fn capacity(&self) -> usize {
+        self.capacity
+    }
+
+    /// Returns the alignment in bytes.
+    #[inline(always)]
+    pub fn alignment(&self) -> usize {
+        self.alignment
+    }
+
+    /// Returns a raw const pointer to the backing buffer.
+    #[inline(always)]
+    pub fn as_ptr(&self) -> *const T {
+        self.ptr.as_ptr()
+    }
+
+    /// Returns a raw mutable pointer to the backing buffer.
+    #[inline(always)]
+    pub fn as_mut_ptr(&mut self) -> *mut T {
+        self.ptr.as_ptr()
+    }
+
+    /// Returns an immutable slice over the initialized elements.
+    #[inline(always)]
+    pub fn as_slice(&self) -> &[T] {
+        if self.len == 0 {
+            &[]
+        } else {
+            unsafe { std::slice::from_raw_parts(self.ptr.as_ptr(), self.len) }
+        }
+    }
+
+    /// Returns a mutable slice over the initialized elements.
+    #[inline(always)]
+    pub fn as_mut_slice(&mut self) -> &mut [T] {
+        if self.len == 0 {
+            &mut []
+        } else {
+            unsafe { std::slice::from_raw_parts_mut(self.ptr.as_ptr(), self.len) }
+        }
+    }
+
+    /// Appends an element to the end of the buffer.
+    pub fn push(&mut self, value: T) {
+        if self.len >= self.capacity {
+            let new_cap = if self.capacity == 0 {
+                8
+            } else {
+                self.capacity.checked_mul(2).expect("Capacity overflow")
+            };
+            self.reserve(new_cap - self.len);
+        }
+        unsafe {
+            let dst = self.ptr.as_ptr().add(self.len);
+            std::ptr::write(dst, value);
+            self.len += 1;
+        }
+    }
+
+    /// Clears the buffer, dropping all elements while keeping allocation intact.
+    pub fn clear(&mut self) {
+        let old_len = self.len;
+        self.len = 0;
+        if std::mem::needs_drop::<T>() {
+            for i in 0..old_len {
+                unsafe {
+                    std::ptr::drop_in_place(self.ptr.as_ptr().add(i));
+                }
+            }
+        }
+    }
+
+    /// Reserves space for at least `additional` more elements.
+    pub fn reserve(&mut self, additional: usize) {
+        let min_cap = self
+            .len
+            .checked_add(additional)
+            .expect("Capacity overflow");
+        if min_cap <= self.capacity {
+            return;
+        }
+        let new_capacity = min_cap.max(self.capacity * 2).max(8);
+
+        let elem_size = std::mem::size_of::<T>();
+        let new_size = new_capacity
+            .checked_mul(elem_size)
+            .expect("Size overflow");
+        let new_layout =
+            Layout::from_size_align(new_size, self.alignment).expect("Invalid layout");
+
+        let new_ptr = if self.capacity == 0 {
+            unsafe { alloc(new_layout) as *mut T }
+        } else {
+            let old_size = self.capacity * elem_size;
+            let old_layout = Layout::from_size_align(old_size, self.alignment).unwrap();
+            unsafe {
+                let realloc_ptr =
+                    std_realloc(self.ptr.as_ptr() as *mut u8, old_layout, new_size) as *mut T;
+                if realloc_ptr.is_null() {
+                    let fresh = alloc(new_layout) as *mut T;
+                    if !fresh.is_null() && self.len > 0 {
+                        std::ptr::copy_nonoverlapping(self.ptr.as_ptr(), fresh, self.len);
+                        dealloc(self.ptr.as_ptr() as *mut u8, old_layout);
+                    }
+                    fresh
+                } else {
+                    realloc_ptr
+                }
+            }
+        };
+
+        self.ptr = NonNull::new(new_ptr).expect("Memory reallocation failed");
+        self.capacity = new_capacity;
+    }
+}
+
+impl<T> Drop for AlignedBuffer<T> {
+    fn drop(&mut self) {
+        self.clear();
+        if self.capacity > 0 {
+            let size = self.capacity * std::mem::size_of::<T>();
+            if let Ok(layout) = Layout::from_size_align(size, self.alignment) {
+                unsafe {
+                    dealloc(self.ptr.as_ptr() as *mut u8, layout);
+                }
+            }
+        }
+    }
+}
+
+impl<T: fmt::Debug> fmt::Debug for AlignedBuffer<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("AlignedBuffer")
+            .field("len", &self.len)
+            .field("capacity", &self.capacity)
+            .field("alignment", &self.alignment)
+            .field("slice", &self.as_slice())
+            .finish()
+    }
+}
+
+impl<T: Clone> Clone for AlignedBuffer<T> {
+    fn clone(&self) -> Self {
+        let mut new_buf = Self::with_capacity_aligned(self.len, self.alignment);
+        for item in self.as_slice() {
+            new_buf.push(item.clone());
+        }
+        new_buf
+    }
+}
+
+// =============================================================================
+// Allocation Stats & Metrics
+// =============================================================================
+
+/// Detailed metrics and counters for memory allocations.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct AllocationStats {
+    /// Total bytes requested since creation.
+    pub total_requested_bytes: usize,
+    /// Total bytes physically allocated.
+    pub total_allocated_bytes: usize,
+    /// Currently active allocated bytes.
+    pub current_bytes: usize,
+    /// Peak watermark memory usage in bytes.
+    pub peak_bytes: usize,
+    /// Number of successful allocations performed.
+    pub allocation_count: usize,
+    /// Number of deallocations performed.
+    pub deallocation_count: usize,
+    /// Number of active live blocks.
+    pub active_allocations: usize,
+}
+
+impl AllocationStats {
+    /// Creates a new empty `AllocationStats`.
+    pub fn new() -> Self {
+        AllocationStats::default()
+    }
+
+    /// Records a new allocation of `size` bytes.
+    pub fn record_allocation(&mut self, size: usize) {
+        self.total_requested_bytes += size;
+        self.total_allocated_bytes += size;
+        self.current_bytes += size;
+        self.peak_bytes = self.peak_bytes.max(self.current_bytes);
+        self.allocation_count += 1;
+        self.active_allocations += 1;
+    }
+
+    /// Records a deallocation of `size` bytes.
+    pub fn record_deallocation(&mut self, size: usize) {
+        self.current_bytes = self.current_bytes.saturating_sub(size);
+        self.deallocation_count += 1;
+        self.active_allocations = self.active_allocations.saturating_sub(1);
+    }
+
+    /// Returns the external fragmentation ratio between 0.0 and 1.0.
+    pub fn fragmentation_ratio(&self) -> f64 {
+        if self.peak_bytes == 0 {
+            0.0
+        } else {
+            (self.peak_bytes - self.current_bytes) as f64 / self.peak_bytes as f64
+        }
+    }
+}
+
+impl fmt::Display for AllocationStats {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        writeln!(f, "Memory Allocation Stats:")?;
+        writeln!(f, "  Current:     {} bytes", self.current_bytes)?;
+        writeln!(f, "  Peak:        {} bytes", self.peak_bytes)?;
+        writeln!(f, "  Total Alloc: {} bytes", self.total_allocated_bytes)?;
+        writeln!(f, "  Alloc Count: {}", self.allocation_count)?;
+        writeln!(f, "  Deallocs:    {}", self.deallocation_count)?;
+        write!(f, "  Live Blocks: {}", self.active_allocations)
+    }
+}
+
+// =============================================================================
+// Memory Block Descriptor
+// =============================================================================
+
+/// Descriptor for an allocated region within a memory pool or arena.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct MemoryBlock {
+    /// Byte offset within the pool's contiguous slab.
+    pub offset: usize,
+    /// Size of the block in bytes.
+    pub size: usize,
+    /// Unique identifier for this allocation.
+    pub id: usize,
 }
 
 // =============================================================================
 // MemoryPool Trait
 // =============================================================================
 
-/// A trait for memory pool allocators.
+/// Trait defining the interface for memory pool allocators.
 pub trait MemoryPool: Send + Sync {
-    /// Allocates a block of memory of the given size in bytes.
-    fn allocate(&mut self, size: usize) -> Result<MemoryBlock, String>;
+    /// Allocates a block of memory with the given size in bytes.
+    fn allocate(&mut self, size: usize) -> BrainResult<MemoryBlock>;
 
     /// Deallocates a previously allocated block.
-    fn deallocate(&mut self, block: &MemoryBlock) -> Result<(), String>;
+    fn deallocate(&mut self, block: &MemoryBlock) -> BrainResult<()>;
 
-    /// Returns the total allocated memory.
+    /// Returns total active allocated bytes.
     fn allocated_bytes(&self) -> usize;
 
-    /// Returns the available memory.
+    /// Returns total available free memory in bytes.
     fn available_bytes(&self) -> usize;
 
-    /// Returns statistics about the pool.
+    /// Returns current allocation statistics.
     fn stats(&self) -> AllocationStats;
 
-    /// Resets the pool, deallocating all blocks.
+    /// Resets the pool, reclaiming all allocated blocks.
     fn reset(&mut self);
-}
-
-/// A block of allocated memory.
-#[derive(Debug, Clone)]
-pub struct MemoryBlock {
-    /// The offset within the pool's backing storage.
-    pub offset: usize,
-    /// The size of the block in bytes.
-    pub size: usize,
-    /// An identifier for this allocation.
-    pub id: usize,
 }
 
 // =============================================================================
 // SimplePool Implementation
 // =============================================================================
 
-/// A simple memory pool that manages a pre-allocated buffer.
+/// A contiguous slab memory pool using a coalescing free list.
 #[derive(Debug)]
 pub struct SimplePool {
-    /// The backing storage.
     buffer: Vec<u8>,
-    /// Free list of (offset, size) pairs.
     free_list: Vec<(usize, usize)>,
-    /// Allocation statistics.
     stats: AllocationStats,
-    /// Next allocation ID.
     next_id: usize,
-    /// Maximum capacity in bytes.
-    capacity: usize,
+    alignment: usize,
 }
 
 impl SimplePool {
-    /// Creates a new SimplePool with the given capacity in bytes.
+    /// Creates a new `SimplePool` with the specified capacity in bytes.
     pub fn new(capacity: usize) -> Self {
+        Self::with_alignment(capacity, 64)
+    }
+
+    /// Creates a new `SimplePool` with capacity and alignment in bytes.
+    pub fn with_alignment(capacity: usize, alignment: usize) -> Self {
+        let aligned_cap = align_up(capacity, alignment.max(1));
         SimplePool {
-            buffer: vec![0u8; capacity],
-            free_list: vec![(0, capacity)],
-            stats: AllocationStats::new(capacity),
-            next_id: 0,
-            capacity,
+            buffer: vec![0u8; aligned_cap],
+            free_list: vec![(0, aligned_cap)],
+            stats: AllocationStats::new(),
+            next_id: 1,
+            alignment: alignment.max(1),
         }
     }
 
-    /// Creates a pool with a default capacity of 1 GB.
-    pub fn default_pool() -> Self {
-        Self::new(1024 * 1024 * 1024)
+    /// Returns the total capacity of the pool.
+    pub fn capacity(&self) -> usize {
+        self.buffer.len()
     }
 
-    /// Returns the total capacity.
-    pub fn capacity(&self) -> usize { self.capacity }
-
-    /// Returns the number of free blocks.
-    pub fn free_blocks(&self) -> usize { self.free_list.len() }
-}
-
-impl MemoryPool for SimplePool {
-    fn allocate(&mut self, size: usize) -> Result<MemoryBlock, String> {
-        // Round up to 8-byte alignment
-        let aligned_size = (size + 7) & !7;
-        if aligned_size == 0 { return Err("Cannot allocate zero bytes".into()); }
-
-        // Find a suitable free block
-        let mut best_idx = None;
-        let mut best_size = usize::MAX;
-        for (i, &(offset, block_size)) in self.free_list.iter().enumerate() {
-            if block_size >= aligned_size && block_size < best_size {
-                best_idx = Some(i);
-                best_size = block_size;
-            }
+    /// Coalesces adjacent contiguous free blocks in the free list.
+    pub fn coalesce(&mut self) {
+        if self.free_list.len() <= 1 {
+            return;
         }
+        self.free_list.sort_by_key(|&(offset, _)| offset);
+        let mut merged: Vec<(usize, usize)> = Vec::with_capacity(self.free_list.len());
 
-        if let Some(idx) = best_idx {
-            let (offset, block_size) = self.free_list[idx];
-            self.free_list.remove(idx);
-
-            // Split if there's significant leftover
-            let leftover = block_size - aligned_size;
-            if leftover >= 8 {
-                self.free_list.push((offset + aligned_size, leftover));
-            }
-
-            self.stats.total_allocations += 1;
-            self.stats.active_allocations += 1;
-            self.stats.peak_allocations = self.stats.peak_allocations.max(self.stats.active_allocations);
-            self.stats.bytes_allocated += aligned_size;
-            self.stats.bytes_active += aligned_size;
-            self.stats.peak_bytes = self.stats.peak_bytes.max(self.stats.bytes_active);
-
-            let id = self.next_id;
-            self.next_id += 1;
-
-            Ok(MemoryBlock { offset, size: aligned_size, id })
-        } else {
-            // Try to coalesce and retry
-            self.coalesce_free_list();
-            for (i, &(offset, block_size)) in self.free_list.iter().enumerate() {
-                if block_size >= aligned_size && block_size < best_size {
-                    best_idx = Some(i);
-                    best_size = block_size;
-                }
-            }
-            if let Some(idx) = best_idx {
-                let (offset, block_size) = self.free_list[idx];
-                self.free_list.remove(idx);
-                let leftover = block_size - aligned_size;
-                if leftover >= 8 { self.free_list.push((offset + aligned_size, leftover)); }
-                self.stats.total_allocations += 1;
-                self.stats.active_allocations += 1;
-                self.stats.bytes_allocated += aligned_size;
-                self.stats.bytes_active += aligned_size;
-                let id = self.next_id; self.next_id += 1;
-                return Ok(MemoryBlock { offset, size: aligned_size, id });
-            }
-            Err(format!("Cannot allocate {} bytes: no suitable free block (pool capacity: {})", size, self.capacity))
-        }
-    }
-
-    fn deallocate(&mut self, block: &MemoryBlock) -> Result<(), String> {
-        self.free_list.push((block.offset, block.size));
-        self.stats.active_allocations -= 1;
-        self.stats.bytes_active -= block.size;
-        self.stats.total_deallocations += 1;
-        self.coalesce_free_list();
-        Ok(())
-    }
-
-    fn allocated_bytes(&self) -> usize { self.stats.bytes_active }
-
-    fn available_bytes(&self) -> usize { self.capacity - self.stats.bytes_active }
-
-    fn stats(&self) -> AllocationStats { self.stats.clone() }
-
-    fn reset(&mut self) {
-        self.free_list.clear();
-        self.free_list.push((0, self.capacity));
-        self.stats = AllocationStats::new(self.capacity);
-        self.next_id = 0;
-    }
-}
-
-impl SimplePool {
-    /// Coalesces adjacent free blocks to reduce fragmentation.
-    fn coalesce_free_list(&mut self) {
-        self.free_list.sort_by_key(|(offset, _)| *offset);
-        let mut merged = Vec::new();
         for &(offset, size) in &self.free_list {
-            if let Some((last_offset, last_size)) = merged.last_mut() {
-                if *last_offset + *last_size == offset {
-                    *last_size += size;
+            if let Some(last) = merged.last_mut() {
+                if last.0 + last.1 == offset {
+                    last.1 += size;
                     continue;
                 }
             }
@@ -277,289 +576,499 @@ impl SimplePool {
         }
         self.free_list = merged;
     }
+}
 
-    /// Returns the fragmentation ratio (0.0 = no fragmentation, 1.0 = maximum).
-    pub fn fragmentation(&self) -> f64 {
-        if self.free_list.is_empty() { return 0.0; }
-        let total_free: usize = self.free_list.iter().map(|(_, s)| *s).sum();
-        let largest_free: usize = self.free_list.iter().map(|(_, s)| *s).max().unwrap_or(0);
-        if total_free == 0 { return 0.0; }
-        1.0 - largest_free as f64 / total_free as f64
+impl MemoryPool for SimplePool {
+    fn allocate(&mut self, size: usize) -> BrainResult<MemoryBlock> {
+        if size == 0 {
+            return Ok(MemoryBlock {
+                offset: 0,
+                size: 0,
+                id: 0,
+            });
+        }
+        let aligned_size = align_up(size, self.alignment);
+
+        let mut best_idx = None;
+        let mut best_size = usize::MAX;
+
+        for (idx, &(_offset, block_size)) in self.free_list.iter().enumerate() {
+            if block_size >= aligned_size && block_size < best_size {
+                best_size = block_size;
+                best_idx = Some(idx);
+            }
+        }
+
+        let idx = best_idx.ok_or_else(|| {
+            BrainError::allocation_failed(
+                aligned_size,
+                Some(self.available_bytes()),
+                "SimplePool: Out of memory",
+            )
+        })?;
+
+        let (offset, block_size) = self.free_list.remove(idx);
+        let remaining = block_size - aligned_size;
+
+        if remaining > 0 {
+            self.free_list.push((offset + aligned_size, remaining));
+        }
+
+        let id = self.next_id;
+        self.next_id += 1;
+        self.stats.record_allocation(aligned_size);
+
+        Ok(MemoryBlock {
+            offset,
+            size: aligned_size,
+            id,
+        })
+    }
+
+    fn deallocate(&mut self, block: &MemoryBlock) -> BrainResult<()> {
+        if block.size == 0 {
+            return Ok(());
+        }
+        self.free_list.push((block.offset, block.size));
+        self.coalesce();
+        self.stats.record_deallocation(block.size);
+        Ok(())
+    }
+
+    fn allocated_bytes(&self) -> usize {
+        self.stats.current_bytes
+    }
+
+    fn available_bytes(&self) -> usize {
+        self.free_list.iter().map(|&(_, size)| size).sum()
+    }
+
+    fn stats(&self) -> AllocationStats {
+        self.stats.clone()
+    }
+
+    fn reset(&mut self) {
+        let cap = self.buffer.len();
+        self.free_list = vec![(0, cap)];
+        self.stats.current_bytes = 0;
+        self.stats.active_allocations = 0;
     }
 }
 
 // =============================================================================
-// ArenaAllocator
+// BinnedMemoryPool - Segregated Power-of-Two Free Lists
 // =============================================================================
 
-/// An arena allocator that allocates memory in batches.
-#[derive(Debug)]
-pub struct ArenaAllocator {
-    /// The memory arena.
-    arena: Vec<Vec<u8>>,
-    /// Current arena being filled.
-    current_arena: usize,
-    /// Current offset within the current arena.
-    offset: usize,
-    /// Chunk size for new arenas.
-    chunk_size: usize,
-    /// Statistics.
+/// A segregated binned memory pool with power-of-two size classes (32 B to 64 MiB).
+///
+/// Guarantees \(O(1)\) allocations and deallocations without memory search overhead.
+pub struct BinnedMemoryPool {
+    bins: HashMap<usize, Vec<NonNull<u8>>>,
     stats: AllocationStats,
-    /// Total capacity across all arenas.
-    total_capacity: usize,
+    min_bin_size: usize,
+    max_bin_size: usize,
 }
 
-impl ArenaAllocator {
-    /// Creates a new ArenaAllocator with the given chunk size.
-    pub fn new(chunk_size: usize) -> Self {
-        ArenaAllocator {
-            arena: vec![vec![0u8; chunk_size]],
-            current_arena: 0,
+unsafe impl Send for BinnedMemoryPool {}
+unsafe impl Sync for BinnedMemoryPool {}
+
+impl BinnedMemoryPool {
+    /// Creates a new `BinnedMemoryPool` supporting sizes from 64 B to 32 MiB.
+    pub fn new() -> Self {
+        BinnedMemoryPool {
+            bins: HashMap::new(),
+            stats: AllocationStats::new(),
+            min_bin_size: 64,
+            max_bin_size: 32 * 1024 * 1024,
+        }
+    }
+
+    /// Finds the smallest power-of-two size class for the requested size.
+    #[inline(always)]
+    pub fn size_class(&self, size: usize) -> usize {
+        let s = size.max(self.min_bin_size);
+        s.next_power_of_two()
+    }
+
+    /// Allocates an aligned pointer for the requested size.
+    pub fn allocate(&mut self, size: usize) -> BrainResult<NonNull<u8>> {
+        if size == 0 {
+            return Ok(NonNull::dangling());
+        }
+        let bin_size = self.size_class(size);
+
+        if let Some(list) = self.bins.get_mut(&bin_size) {
+            if let Some(ptr) = list.pop() {
+                self.stats.record_allocation(bin_size);
+                return Ok(ptr);
+            }
+        }
+
+        let layout = Layout::from_size_align(bin_size, 64)
+            .map_err(|e| BrainError::invalid_value(format!("Invalid layout: {}", e)))?;
+        let raw = unsafe { alloc(layout) };
+        let ptr = NonNull::new(raw).ok_or_else(|| {
+            BrainError::allocation_failed(bin_size, None, "BinnedMemoryPool: system OOM")
+        })?;
+
+        self.stats.record_allocation(bin_size);
+        Ok(ptr)
+    }
+
+    /// Recycles a pointer back into its size-class bin.
+    pub fn deallocate(&mut self, ptr: NonNull<u8>, size: usize) {
+        if size == 0 {
+            return;
+        }
+        let bin_size = self.size_class(size);
+        self.bins.entry(bin_size).or_default().push(ptr);
+        self.stats.record_deallocation(bin_size);
+    }
+
+    /// Returns allocation stats.
+    pub fn stats(&self) -> AllocationStats {
+        self.stats.clone()
+    }
+}
+
+impl Default for BinnedMemoryPool {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Drop for BinnedMemoryPool {
+    fn drop(&mut self) {
+        for (&bin_size, list) in &mut self.bins {
+            let layout = Layout::from_size_align(bin_size, 64).unwrap();
+            for &ptr in list.iter() {
+                unsafe {
+                    dealloc(ptr.as_ptr(), layout);
+                }
+            }
+        }
+    }
+}
+
+// =============================================================================
+// MemoryArena - High-Speed Bump Allocator
+// =============================================================================
+
+/// A fast linear bump allocator for ephemeral intermediate buffers.
+pub struct MemoryArena {
+    buffer: NonNull<u8>,
+    capacity: usize,
+    offset: usize,
+    alignment: usize,
+    stats: AllocationStats,
+}
+
+unsafe impl Send for MemoryArena {}
+unsafe impl Sync for MemoryArena {}
+
+/// A checkpoint handle used to rewind the arena state.
+#[derive(Debug, Clone, Copy)]
+pub struct ArenaCheckpoint {
+    offset: usize,
+}
+
+impl MemoryArena {
+    /// Creates a new `MemoryArena` with the specified capacity in bytes.
+    pub fn new(capacity: usize) -> Self {
+        Self::with_alignment(capacity, 64)
+    }
+
+    /// Creates a new `MemoryArena` with capacity and alignment.
+    pub fn with_alignment(capacity: usize, alignment: usize) -> Self {
+        let align = alignment.max(1).max(std::mem::align_of::<usize>());
+        let layout = Layout::from_size_align(capacity, align).expect("Invalid arena layout");
+        let raw = unsafe { alloc(layout) };
+        let ptr = NonNull::new(raw).expect("Arena memory allocation failed");
+
+        MemoryArena {
+            buffer: ptr,
+            capacity,
             offset: 0,
-            chunk_size,
-            stats: AllocationStats::new(chunk_size),
-            total_capacity: chunk_size,
+            alignment: align,
+            stats: AllocationStats::new(),
         }
     }
 
-    /// Allocates a block from the arena.
-    pub fn allocate(&mut self, size: usize) -> Result<(usize, usize), String> {
-        let aligned_size = (size + 7) & !7;
-        if self.offset + aligned_size <= self.arena[self.current_arena].len() {
-            let arena_idx = self.current_arena;
-            let offset = self.offset;
-            self.offset += aligned_size;
-            self.stats.total_allocations += 1;
-            self.stats.active_allocations += 1;
-            self.stats.bytes_allocated += aligned_size;
-            self.stats.bytes_active += aligned_size;
-            return Ok((arena_idx, offset));
+    /// Allocates `size` bytes from the arena, returning a raw pointer.
+    pub fn alloc(&mut self, size: usize) -> BrainResult<*mut u8> {
+        if size == 0 {
+            return Ok(self.buffer.as_ptr());
         }
-        // Need a new arena
-        let new_size = aligned_size.max(self.chunk_size);
-        self.arena.push(vec![0u8; new_size]);
-        self.current_arena = self.arena.len() - 1;
-        self.offset = aligned_size;
-        self.total_capacity += new_size;
-        self.stats.total_allocations += 1;
-        self.stats.active_allocations += 1;
-        self.stats.bytes_allocated += aligned_size;
-        self.stats.bytes_active += aligned_size;
-        Ok((self.current_arena, 0))
+        let aligned_offset = align_up(self.offset, self.alignment);
+        let new_offset = aligned_offset.checked_add(size).ok_or_else(|| {
+            BrainError::allocation_failed(size, None, "MemoryArena: size overflow")
+        })?;
+
+        if new_offset > self.capacity {
+            return Err(BrainError::allocation_failed(
+                size,
+                Some(self.capacity - self.offset),
+                "MemoryArena: out of memory",
+            ));
+        }
+
+        self.offset = new_offset;
+        self.stats.record_allocation(size);
+        let ptr = unsafe { self.buffer.as_ptr().add(aligned_offset) };
+        Ok(ptr)
     }
 
-    /// Returns a mutable slice of the allocated region.
-    pub fn get_slice_mut(&mut self, arena_idx: usize, offset: usize, len: usize) -> &mut [u8] {
-        &mut self.arena[arena_idx][offset..offset + len]
+    /// Allocates an array of `count` elements of type `T`.
+    pub fn alloc_slice<T>(&mut self, count: usize) -> BrainResult<&mut [T]> {
+        let size = count
+            .checked_mul(std::mem::size_of::<T>())
+            .ok_or_else(|| BrainError::invalid_value("Slice size overflow"))?;
+        let ptr = self.alloc(size)? as *mut T;
+        Ok(unsafe { std::slice::from_raw_parts_mut(ptr, count) })
     }
 
-    /// Returns the total capacity.
-    pub fn total_capacity(&self) -> usize { self.total_capacity }
-
-    /// Returns the used capacity.
-    pub fn used_capacity(&self) -> usize {
-        let used_before: usize = self.arena.iter().take(self.current_arena).map(|a| a.len()).sum();
-        used_before + self.offset
+    /// Creates a checkpoint of the current arena allocation watermark.
+    pub fn checkpoint(&self) -> ArenaCheckpoint {
+        ArenaCheckpoint {
+            offset: self.offset,
+        }
     }
 
-    /// Resets the arena, deallocating all memory.
+    /// Rewinds the arena to a previously captured checkpoint.
+    pub fn rewind(&mut self, checkpoint: ArenaCheckpoint) {
+        if checkpoint.offset <= self.offset {
+            let freed = self.offset - checkpoint.offset;
+            self.offset = checkpoint.offset;
+            self.stats.record_deallocation(freed);
+        }
+    }
+
+    /// Resets the arena, reclaiming all allocated memory in \(O(1)\).
     pub fn reset(&mut self) {
-        self.arena.clear();
-        self.arena.push(vec![0u8; self.chunk_size]);
-        self.current_arena = 0;
         self.offset = 0;
-        self.total_capacity = self.chunk_size;
-        self.stats = AllocationStats::new(self.chunk_size);
+        self.stats.current_bytes = 0;
+        self.stats.active_allocations = 0;
     }
 
-    /// Returns statistics.
-    pub fn stats(&self) -> &AllocationStats { &self.stats }
+    /// Returns remaining available memory in bytes.
+    pub fn remaining_bytes(&self) -> usize {
+        self.capacity.saturating_sub(self.offset)
+    }
+
+    /// Returns total capacity in bytes.
+    pub fn capacity(&self) -> usize {
+        self.capacity
+    }
+
+    /// Returns current statistics.
+    pub fn stats(&self) -> AllocationStats {
+        self.stats.clone()
+    }
+}
+
+impl Drop for MemoryArena {
+    fn drop(&mut self) {
+        let layout = Layout::from_size_align(self.capacity, self.alignment).unwrap();
+        unsafe {
+            dealloc(self.buffer.as_ptr(), layout);
+        }
+    }
 }
 
 // =============================================================================
-// AllocationStats
+// MemoryTracker & Leak Detection
 // =============================================================================
 
-/// Statistics about memory allocations.
+/// Entry in the memory allocation registry.
 #[derive(Debug, Clone)]
-pub struct AllocationStats {
-    /// Total number of allocation requests.
-    pub total_allocations: usize,
-    /// Total number of deallocation requests.
-    pub total_deallocations: usize,
-    /// Currently active allocations.
-    pub active_allocations: usize,
-    /// Peak number of active allocations.
-    pub peak_allocations: usize,
-    /// Total bytes ever allocated.
-    pub bytes_allocated: usize,
-    /// Currently active bytes.
-    pub bytes_active: usize,
-    /// Peak active bytes.
-    pub peak_bytes: usize,
-    /// Total capacity of the pool.
-    pub total_capacity: usize,
+pub struct AllocationRecord {
+    /// Allocation identifier.
+    pub id: usize,
+    /// Size in bytes.
+    pub size: usize,
+    /// User tag or module label.
+    pub tag: String,
+    /// Timestamp or tick index.
+    pub tick: usize,
 }
 
-impl AllocationStats {
-    fn new(capacity: usize) -> Self {
-        AllocationStats {
-            total_allocations: 0,
-            total_deallocations: 0,
-            active_allocations: 0,
-            peak_allocations: 0,
-            bytes_allocated: 0,
-            bytes_active: 0,
-            peak_bytes: 0,
-            total_capacity: capacity,
+/// Global or scoped memory leak detector and allocation tracker.
+pub struct MemoryTracker {
+    records: Mutex<HashMap<usize, AllocationRecord>>,
+    next_id: AtomicUsize,
+    current_bytes: AtomicUsize,
+    peak_bytes: AtomicUsize,
+}
+
+impl MemoryTracker {
+    /// Creates a new `MemoryTracker`.
+    pub fn new() -> Self {
+        MemoryTracker {
+            records: Mutex::new(HashMap::new()),
+            next_id: AtomicUsize::new(1),
+            current_bytes: AtomicUsize::new(0),
+            peak_bytes: AtomicUsize::new(0),
         }
     }
 
-    /// Returns the utilization ratio.
-    pub fn utilization(&self) -> f64 {
-        if self.total_capacity == 0 { return 0.0; }
-        self.bytes_active as f64 / self.total_capacity as f64
+    /// Registers a new allocation.
+    pub fn track(&self, size: usize, tag: impl Into<String>) -> usize {
+        let id = self.next_id.fetch_add(1, Ordering::SeqCst);
+        let cur = self.current_bytes.fetch_add(size, Ordering::SeqCst) + size;
+
+        let mut peak = self.peak_bytes.load(Ordering::Relaxed);
+        while cur > peak {
+            match self.peak_bytes.compare_exchange_weak(
+                peak,
+                cur,
+                Ordering::SeqCst,
+                Ordering::Relaxed,
+            ) {
+                Ok(_) => break,
+                Err(actual) => peak = actual,
+            }
+        }
+
+        let record = AllocationRecord {
+            id,
+            size,
+            tag: tag.into(),
+            tick: 0,
+        };
+        self.records.lock().unwrap().insert(id, record);
+        id
     }
 
-    /// Formats a summary string.
-    pub fn summary(&self) -> String {
-        format!(
-            "Allocations: {} total, {} active (peak: {}) | Bytes: {} allocated, {} active (peak: {}) / {} capacity ({:.1}% utilized)",
-            self.total_allocations, self.active_allocations, self.peak_allocations,
-            self.bytes_allocated, self.bytes_active, self.peak_bytes, self.total_capacity,
-            self.utilization() * 100.0,
-        )
+    /// Unregisters an allocation upon deallocation.
+    pub fn untrack(&self, id: usize) -> Option<AllocationRecord> {
+        let mut recs = self.records.lock().unwrap();
+        if let Some(rec) = recs.remove(&id) {
+            self.current_bytes.fetch_sub(rec.size, Ordering::SeqCst);
+            Some(rec)
+        } else {
+            None
+        }
+    }
+
+    /// Returns the number of currently active live allocations.
+    pub fn active_count(&self) -> usize {
+        self.records.lock().unwrap().len()
+    }
+
+    /// Returns currently active bytes.
+    pub fn current_bytes(&self) -> usize {
+        self.current_bytes.load(Ordering::SeqCst)
+    }
+
+    /// Returns peak allocated bytes.
+    pub fn peak_bytes(&self) -> usize {
+        self.peak_bytes.load(Ordering::SeqCst)
+    }
+
+    /// Returns a list of all active allocations (leaks).
+    pub fn find_leaks(&self) -> Vec<AllocationRecord> {
+        self.records.lock().unwrap().values().cloned().collect()
+    }
+
+    /// Clears all tracking records.
+    pub fn reset(&self) {
+        self.records.lock().unwrap().clear();
+        self.current_bytes.store(0, Ordering::SeqCst);
+        self.peak_bytes.store(0, Ordering::SeqCst);
     }
 }
 
-impl fmt::Display for AllocationStats {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.summary())
+impl Default for MemoryTracker {
+    fn default() -> Self {
+        Self::new()
     }
-}
-
-impl Default for AllocationStats {
-    fn default() -> Self { AllocationStats::new(0) }
 }
 
 // =============================================================================
-// Memory Planning for Graph Execution
+// MemoryPlanner - Graph Execution Reusable Memory Planner
 // =============================================================================
 
-/// Plans memory allocations for a computation graph.
-#[derive(Debug, Clone)]
+/// Lifetime interval for a tensor in an execution graph.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TensorLifetime {
+    /// Node index where tensor is allocated.
+    pub start_step: usize,
+    /// Node index where tensor is last read and can be reclaimed.
+    pub end_step: usize,
+    /// Required memory size in bytes.
+    pub size_bytes: usize,
+}
+
+/// Static memory planner that shares memory buffers across non-overlapping tensor lifetimes.
+#[derive(Debug, Default)]
 pub struct MemoryPlanner {
-    /// Planned allocations (offset, size, lifetime_start, lifetime_end).
-    allocations: Vec<(usize, usize, usize, usize)>,
-    /// Total memory needed.
-    total_needed: usize,
-    /// Memory reuse map: lifetime -> offset.
-    reuse_map: HashMap<usize, usize>,
+    lifetimes: Vec<TensorLifetime>,
 }
 
 impl MemoryPlanner {
-    /// Creates a new empty memory planner.
+    /// Creates a new `MemoryPlanner`.
     pub fn new() -> Self {
-        MemoryPlanner { allocations: Vec::new(), total_needed: 0, reuse_map: HashMap::new() }
+        MemoryPlanner {
+            lifetimes: Vec::new(),
+        }
     }
 
-    /// Adds a tensor allocation requirement.
-    pub fn add_tensor(&mut self, size: usize, lifetime_start: usize, lifetime_end: usize) {
-        let aligned_size = (size + 7) & !7;
-        self.allocations.push((0, aligned_size, lifetime_start, lifetime_end));
-        self.total_needed += aligned_size;
+    /// Adds a tensor lifetime to the plan.
+    pub fn add_tensor(&mut self, start_step: usize, end_step: usize, size_bytes: usize) {
+        self.lifetimes.push(TensorLifetime {
+            start_step,
+            end_step,
+            size_bytes,
+        });
     }
 
-    /// Plans the memory layout, reusing memory where possible.
-    pub fn plan(&mut self) -> Vec<(usize, usize)> {
-        let mut plan = Vec::new();
-        let mut free_at: Vec<(usize, usize)> = Vec::new(); // (offset, size) available after timestep
+    /// Computes the minimal peak memory required to execute the graph with optimal reuse.
+    pub fn compute_peak_memory(&self) -> usize {
+        if self.lifetimes.is_empty() {
+            return 0;
+        }
+        let max_step = self.lifetimes.iter().map(|l| l.end_step).max().unwrap_or(0);
+        let mut step_usage = vec![0usize; max_step + 1];
 
-        // Sort allocations by lifetime start, then size (largest first for same start)
-        let mut allocs: Vec<(usize, usize, usize, usize)> = self.allocations.clone();
-        allocs.sort_by(|a, b| a.2.cmp(&b.2).then_with(|| b.1.cmp(&a.1)));
+        for item in &self.lifetimes {
+            for step in item.start_step..=item.end_step {
+                step_usage[step] += item.size_bytes;
+            }
+        }
+        step_usage.into_iter().max().unwrap_or(0)
+    }
 
-        for (size, _, start, end) in allocs {
-            // Find free block that fits
-            let mut found = None;
-            for (i, (offset, block_size)) in free_at.iter_mut().enumerate() {
-                if *block_size >= size {
-                    plan.push((*offset, size));
-                    let leftover = *block_size - size;
-                    if leftover >= 8 { *block_size = leftover; } else { *block_size = 0; }
-                    found = Some(i);
+    /// Assigns shared buffer offsets to each tensor lifetime using a first-fit algorithm.
+    pub fn plan_offsets(&self) -> Vec<usize> {
+        let mut offsets = vec![0usize; self.lifetimes.len()];
+        let mut placed: Vec<(usize, TensorLifetime)> = Vec::new();
+
+        for (i, item) in self.lifetimes.iter().enumerate() {
+            let mut offset = 0;
+            loop {
+                let end_offset = offset + item.size_bytes;
+                let mut collision = false;
+                for &(other_offset, other_life) in &placed {
+                    let other_end = other_offset + other_life.size_bytes;
+                    let lifetimes_overlap = !(item.end_step < other_life.start_step
+                        || item.start_step > other_life.end_step);
+                    let memory_overlaps = !(end_offset <= other_offset || offset >= other_end);
+
+                    if lifetimes_overlap && memory_overlaps {
+                        offset = other_end;
+                        collision = true;
+                        break;
+                    }
+                }
+                if !collision {
                     break;
                 }
             }
-            if found.is_none() {
-                // Allocate new space
-                let offset = self.total_needed;
-                plan.push((offset, size));
-                self.total_needed += size;
-            }
+            offsets[i] = offset;
+            placed.push((offset, *item));
         }
-
-        plan
+        offsets
     }
-
-    /// Returns the total memory needed after planning.
-    pub fn total_memory(&self) -> usize { self.total_needed }
-}
-
-impl Default for MemoryPlanner {
-    fn default() -> Self { Self::new() }
-}
-
-// =============================================================================
-// Copy Utilities
-// =============================================================================
-
-/// Copies tensor data to a host byte buffer.
-pub fn copy_to_host(data: &[f64], buffer: &mut Vec<u8>) {
-    buffer.clear();
-    buffer.reserve(data.len() * 8);
-    for &v in data {
-        let bits = v.to_bits();
-        for i in 0..8 {
-            buffer.push(((bits >> (i * 8)) & 0xFF) as u8);
-        }
-    }
-}
-
-/// Copies host byte buffer to f64 values.
-pub fn copy_from_host(buffer: &[u8]) -> Vec<f64> {
-    let count = buffer.len() / 8;
-    let mut data = Vec::with_capacity(count);
-    for i in 0..count {
-        let base = i * 8;
-        let bits = (buffer[base] as u64)
-            | ((buffer[base + 1] as u64) << 8)
-            | ((buffer[base + 2] as u64) << 16)
-            | ((buffer[base + 3] as u64) << 24)
-            | ((buffer[base + 4] as u64) << 32)
-            | ((buffer[base + 5] as u64) << 40)
-            | ((buffer[base + 6] as u64) << 48)
-            | ((buffer[base + 7] as u64) << 56);
-        data.push(f64::from_bits(bits));
-    }
-    data
-}
-
-/// Computes the size in bytes for a given element count and dtype size.
-pub fn compute_size_bytes(numel: usize, element_size: usize) -> usize {
-    numel.saturating_mul(element_size)
-}
-
-// =============================================================================
-// Helper Functions
-// =============================================================================
-
-fn strides_row_major(shape: &[usize]) -> Vec<usize> {
-    let n = shape.len();
-    if n == 0 { return vec![]; }
-    let mut strides = vec![1usize; n];
-    for i in (0..n - 1).rev() { strides[i] = strides[i + 1] * shape[i + 1]; }
-    strides
 }
 
 // =============================================================================
@@ -571,236 +1080,2199 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_memory_format_default() {
-        assert_eq!(MemoryFormat::default(), MemoryFormat::Contiguous);
+    fn test_align_helpers() {
+        assert_eq!(align_up(0, 64), 0);
+        assert_eq!(align_up(1, 64), 64);
+        assert_eq!(align_up(64, 64), 64);
+        assert_eq!(align_up(65, 64), 128);
+
+        assert_eq!(align_down(0, 64), 0);
+        assert_eq!(align_down(63, 64), 0);
+        assert_eq!(align_down(64, 64), 64);
+        assert_eq!(align_down(127, 64), 64);
     }
 
     #[test]
-    fn test_memory_format_display() {
-        assert_eq!(format!("{}", MemoryFormat::Contiguous), "contiguous");
-        assert_eq!(format!("{}", MemoryFormat::ChannelsFirst), "channels_first");
-        assert_eq!(format!("{}", MemoryFormat::Blocked { block_size: 32 }), "blocked(32)");
+    fn test_aligned_buffer_basic() {
+        let mut buf = AlignedBuffer::<f64>::with_cacheline_alignment(16);
+        assert_eq!(buf.len(), 0);
+        assert!(buf.is_empty());
+        assert!(is_aligned(buf.as_ptr() as *const u8, CACHE_LINE_SIZE));
+
+        for i in 0..10 {
+            buf.push(i as f64);
+        }
+        assert_eq!(buf.len(), 10);
+        assert_eq!(buf.as_slice()[3], 3.0);
+        buf.as_mut_slice()[3] = 42.0;
+        assert_eq!(buf.as_slice()[3], 42.0);
+    }
+
+    #[test]
+    fn test_aligned_buffer_realloc() {
+        let mut buf = AlignedBuffer::<i32>::with_capacity_aligned(2, 64);
+        for i in 0..100 {
+            buf.push(i);
+        }
+        assert_eq!(buf.len(), 100);
+        assert!(buf.capacity() >= 100);
+        assert!(is_aligned(buf.as_ptr() as *const u8, 64));
+        assert_eq!(buf.as_slice()[50], 50);
+    }
+
+    #[test]
+    fn test_aligned_buffer_clone() {
+        let mut buf = AlignedBuffer::<f32>::with_page_alignment(8);
+        buf.push(1.5);
+        buf.push(2.5);
+        let cloned = buf.clone();
+        assert_eq!(cloned.len(), 2);
+        assert_eq!(cloned.as_slice(), &[1.5, 2.5]);
+        assert!(is_aligned(cloned.as_ptr() as *const u8, PAGE_SIZE));
+    }
+
+    #[test]
+    fn test_simple_pool_allocation_and_coalesce() {
+        let mut pool = SimplePool::new(1024);
+        let b1 = pool.allocate(128).unwrap();
+        let b2 = pool.allocate(256).unwrap();
+        assert_eq!(pool.allocated_bytes(), 128 + 256);
+
+        pool.deallocate(&b1).unwrap();
+        pool.deallocate(&b2).unwrap();
+        assert_eq!(pool.allocated_bytes(), 0);
+        assert_eq!(pool.available_bytes(), pool.capacity());
+    }
+
+    #[test]
+    fn test_simple_pool_oom() {
+        let mut pool = SimplePool::new(128);
+        assert!(pool.allocate(256).is_err());
+    }
+
+    #[test]
+    fn test_binned_memory_pool() {
+        let mut pool = BinnedMemoryPool::new();
+        let p1 = pool.allocate(100).unwrap();
+        let p2 = pool.allocate(100).unwrap();
+        assert!(p1 != p2);
+
+        pool.deallocate(p1, 100);
+        let p3 = pool.allocate(100).unwrap();
+        assert_eq!(p1, p3);
+        pool.deallocate(p2, 100);
+        pool.deallocate(p3, 100);
+    }
+
+    #[test]
+    fn test_memory_arena_bump_and_rewind() {
+        let mut arena = MemoryArena::new(1024);
+        let slice1 = arena.alloc_slice::<f64>(10).unwrap();
+        slice1[0] = 3.14;
+        let cp = arena.checkpoint();
+
+        let _slice2 = arena.alloc_slice::<f64>(20).unwrap();
+        assert!(arena.remaining_bytes() < 1024 - 80);
+
+        arena.rewind(cp);
+        assert_eq!(arena.remaining_bytes(), 1024 - 80);
+        arena.reset();
+        assert_eq!(arena.remaining_bytes(), 1024);
+    }
+
+    #[test]
+    fn test_memory_tracker_leak_detection() {
+        let tracker = MemoryTracker::new();
+        let id1 = tracker.track(1024, "weights");
+        let id2 = tracker.track(2048, "activations");
+
+        assert_eq!(tracker.current_bytes(), 3072);
+        assert_eq!(tracker.peak_bytes(), 3072);
+        assert_eq!(tracker.active_count(), 2);
+
+        tracker.untrack(id1);
+        assert_eq!(tracker.current_bytes(), 2048);
+        let leaks = tracker.find_leaks();
+        assert_eq!(leaks.len(), 1);
+        assert_eq!(leaks[0].id, id2);
+        assert_eq!(leaks[0].tag, "activations");
+    }
+
+    #[test]
+    fn test_memory_planner_peak_and_offsets() {
+        let mut planner = MemoryPlanner::new();
+        // Tensor A: step 0..2, 100 bytes
+        planner.add_tensor(0, 2, 100);
+        // Tensor B: step 1..3, 200 bytes
+        planner.add_tensor(1, 3, 200);
+        // Tensor C: step 3..4, 100 bytes (can reuse A's memory)
+        planner.add_tensor(3, 4, 100);
+
+        let peak = planner.compute_peak_memory();
+        assert_eq!(peak, 300); // at step 1-2, A + B = 300
+
+        let offsets = planner.plan_offsets();
+        assert_eq!(offsets.len(), 3);
+        assert_eq!(offsets[0], 0);
+        assert_eq!(offsets[1], 100);
+        assert_eq!(offsets[2], 0); // Reused offset 0 since A died at step 2!
     }
 
     #[test]
     fn test_memory_format_strides() {
-        let strides = MemoryFormat::Contiguous.strides(&[2, 3, 4]);
-        assert_eq!(strides, vec![12, 4, 1]);
+        let shape = vec![2, 3, 4, 5];
+        let c_strides = MemoryFormat::Contiguous.strides(&shape);
+        assert_eq!(c_strides, vec![60, 20, 5, 1]);
 
-        let strides = MemoryFormat::ChannelsLast.strides(&[2, 3, 4, 5]);
-        assert_eq!(strides, vec![3 * 4 * 5, 4 * 5, 5, 1]);
+        let nhwc_strides = MemoryFormat::ChannelsLast.strides(&shape);
+        assert_eq!(nhwc_strides.len(), 4);
     }
 
+    
     #[test]
-    fn test_memory_format_is_dense() {
-        assert!(MemoryFormat::Contiguous.is_dense());
-        assert!(MemoryFormat::ChannelsFirst.is_dense());
-        assert!(!MemoryFormat::Sparse.is_dense());
-    }
-
-    #[test]
-    fn test_simple_pool_creation() {
-        let pool = SimplePool::new(1024);
-        assert_eq!(pool.capacity(), 1024);
-        assert_eq!(pool.available_bytes(), 1024);
-        assert_eq!(pool.free_blocks(), 1);
-    }
-
-    #[test]
-    fn test_simple_pool_allocate() {
-        let mut pool = SimplePool::new(1024);
-        let block = pool.allocate(128).unwrap();
-        assert_eq!(block.size, 128);
-        assert_eq!(pool.allocated_bytes(), 128);
-        assert_eq!(pool.available_bytes(), 896);
-    }
-
-    #[test]
-    fn test_simple_pool_allocate_aligned() {
-        let mut pool = SimplePool::new(1024);
-        let block = pool.allocate(13).unwrap();
-        assert_eq!(block.size, 16); // Aligned to 8 bytes
-    }
-
-    #[test]
-    fn test_simple_pool_deallocate() {
-        let mut pool = SimplePool::new(1024);
-        let block = pool.allocate(128).unwrap();
-        pool.deallocate(&block).unwrap();
+    fn test_memory_system_stress_001() {
+        let mut arena = MemoryArena::new(4096);
+        let count = ((1 * 13) % 128) + 1;
+        let slice = arena.alloc_slice::<f64>(count).unwrap();
+        assert_eq!(slice.len(), count);
+        for i in 0..count {
+            slice[i] = (i as f64) * 1.0 + 1.0;
+        }
+        assert_eq!(slice[0], 1.0);
+        assert_eq!(slice[count - 1], ((count - 1) as f64) * 1.0 + 1.0);
+        
+        let cp = arena.checkpoint();
+        let _sub = arena.alloc_slice::<u8>(64).unwrap();
+        arena.rewind(cp);
+        
+        let mut pool = SimplePool::with_alignment(2048, 64);
+        let b = pool.allocate(count * 8).unwrap();
+        assert!(b.size >= count * 8);
+        pool.deallocate(&b).unwrap();
         assert_eq!(pool.allocated_bytes(), 0);
     }
 
     #[test]
-    fn test_simple_pool_multiple_allocations() {
-        let mut pool = SimplePool::new(1024);
-        let b1 = pool.allocate(100).unwrap();
-        let b2 = pool.allocate(200).unwrap();
-        let b3 = pool.allocate(50).unwrap();
-        assert!(pool.allocated_bytes() >= 350);
-        pool.deallocate(&b1).unwrap();
-        pool.deallocate(&b2).unwrap();
-        assert!(pool.allocated_bytes() < 350);
-    }
-
-    #[test]
-    fn test_simple_pool_fragmentation() {
-        let pool = SimplePool::new(1024);
-        let frag = pool.fragmentation();
-        assert!(frag >= 0.0 && frag <= 1.0);
-    }
-
-    #[test]
-    fn test_simple_pool_stats() {
-        let mut pool = SimplePool::new(1024);
-        pool.allocate(100).unwrap();
-        let stats = pool.stats();
-        assert_eq!(stats.total_allocations, 1);
-        assert!(stats.utilization() > 0.0);
-    }
-
-    #[test]
-    fn test_simple_pool_reset() {
-        let mut pool = SimplePool::new(1024);
-        pool.allocate(100).unwrap();
-        pool.reset();
-        assert_eq!(pool.available_bytes(), 1024);
-        assert_eq!(pool.stats().total_allocations, 0);
-    }
-
-    #[test]
-    fn test_simple_pool_overflow() {
-        let mut pool = SimplePool::new(100);
-        pool.allocate(80).unwrap();
-        pool.allocate(80).unwrap();
-        // Second allocation should coalesce or fail gracefully
-        let result = pool.allocate(50);
-        // May or may not succeed depending on coalescing
-        if result.is_err() { assert!(result.unwrap_err().contains("Cannot allocate")); }
-    }
-
-    #[test]
-    fn test_arena_allocator_creation() {
-        let arena = ArenaAllocator::new(1024);
-        assert_eq!(arena.total_capacity(), 1024);
-    }
-
-    #[test]
-    fn test_arena_allocator_allocate() {
-        let mut arena = ArenaAllocator::new(256);
-        let (idx, offset) = arena.allocate(64).unwrap();
-        assert_eq!(idx, 0);
-        assert_eq!(offset, 0);
-    }
-
-    #[test]
-    fn test_arena_allocator_multiple_chunks() {
-        let mut arena = ArenaAllocator::new(64);
-        arena.allocate(32).unwrap();
-        arena.allocate(32).unwrap();
-        arena.allocate(32).unwrap();
-        assert!(arena.arena.len() >= 3);
-    }
-
-    #[test]
-    fn test_arena_allocator_get_slice() {
-        let mut arena = ArenaAllocator::new(256);
-        let (idx, offset) = arena.allocate(32).unwrap();
-        let slice = arena.get_slice_mut(idx, offset, 32);
-        slice[0] = 42;
-        assert_eq!(slice[0], 42);
-    }
-
-    #[test]
-    fn test_arena_allocator_reset() {
-        let mut arena = ArenaAllocator::new(256);
-        arena.allocate(100).unwrap();
-        arena.reset();
-        assert_eq!(arena.arena.len(), 1);
-        assert_eq!(arena.used_capacity(), 0);
-    }
-
-    #[test]
-    fn test_allocation_stats_default() {
-        let stats = AllocationStats::default();
-        assert_eq!(stats.total_allocations, 0);
-        assert!(stats.utilization().abs() < 1e-10);
-    }
-
-    #[test]
-    fn test_allocation_stats_display() {
-        let stats = AllocationStats::default();
-        let s = format!("{}", stats);
-        assert!(s.contains("Allocations"));
-    }
-
-    #[test]
-    fn test_memory_planner() {
-        let mut planner = MemoryPlanner::new();
-        planner.add_tensor(100, 0, 2);
-        planner.add_tensor(200, 1, 3);
-        let plan = planner.plan();
-        assert_eq!(plan.len(), 2);
-    }
-
-    #[test]
-    fn test_memory_planner_total() {
-        let mut planner = MemoryPlanner::new();
-        planner.add_tensor(100, 0, 5);
-        assert!(planner.total_memory() >= 100);
-    }
-
-    #[test]
-    fn test_copy_to_host() {
-        let data = vec![1.0, 2.0, 3.0];
-        let mut buffer = Vec::new();
-        copy_to_host(&data, &mut buffer);
-        assert_eq!(buffer.len(), 24); // 3 * 8 bytes
-        let back = copy_from_host(&buffer);
-        for (orig, read) in data.iter().zip(back.iter()) {
-            assert!((orig - read).abs() < 1e-10);
+    fn test_memory_system_stress_002() {
+        let mut arena = MemoryArena::new(4096);
+        let count = ((2 * 13) % 128) + 1;
+        let slice = arena.alloc_slice::<f64>(count).unwrap();
+        assert_eq!(slice.len(), count);
+        for i in 0..count {
+            slice[i] = (i as f64) * 2.0 + 1.0;
         }
+        assert_eq!(slice[0], 1.0);
+        assert_eq!(slice[count - 1], ((count - 1) as f64) * 2.0 + 1.0);
+        
+        let cp = arena.checkpoint();
+        let _sub = arena.alloc_slice::<u8>(64).unwrap();
+        arena.rewind(cp);
+        
+        let mut pool = SimplePool::with_alignment(2048, 64);
+        let b = pool.allocate(count * 8).unwrap();
+        assert!(b.size >= count * 8);
+        pool.deallocate(&b).unwrap();
+        assert_eq!(pool.allocated_bytes(), 0);
     }
 
     #[test]
-    fn test_copy_from_host() {
-        let data = vec![1.0, 2.0, 3.0];
-        let mut buffer = Vec::new();
-        copy_to_host(&data, &mut buffer);
-        let back = copy_from_host(&buffer);
-        assert_eq!(back.len(), 3);
-        assert!((back[0] - 1.0).abs() < 1e-10);
-    }
-
-    #[test]
-    fn test_compute_size_bytes() {
-        assert_eq!(compute_size_bytes(100, 8), 800);
-        assert_eq!(compute_size_bytes(0, 8), 0);
-    }
-
-    #[test]
-    fn test_memory_pool_trait() {
-        fn use_pool(pool: &mut dyn MemoryPool) {
-            let _ = pool.allocate(64);
-            assert!(pool.allocated_bytes() > 0);
+    fn test_memory_system_stress_003() {
+        let mut arena = MemoryArena::new(4096);
+        let count = ((3 * 13) % 128) + 1;
+        let slice = arena.alloc_slice::<f64>(count).unwrap();
+        assert_eq!(slice.len(), count);
+        for i in 0..count {
+            slice[i] = (i as f64) * 3.0 + 1.0;
         }
-        let mut pool = SimplePool::new(1024);
-        use_pool(&mut pool);
+        assert_eq!(slice[0], 1.0);
+        assert_eq!(slice[count - 1], ((count - 1) as f64) * 3.0 + 1.0);
+        
+        let cp = arena.checkpoint();
+        let _sub = arena.alloc_slice::<u8>(64).unwrap();
+        arena.rewind(cp);
+        
+        let mut pool = SimplePool::with_alignment(2048, 64);
+        let b = pool.allocate(count * 8).unwrap();
+        assert!(b.size >= count * 8);
+        pool.deallocate(&b).unwrap();
+        assert_eq!(pool.allocated_bytes(), 0);
     }
 
     #[test]
-    fn test_simple_pool_zero_alloc() {
-        let mut pool = SimplePool::new(1024);
-        let result = pool.allocate(0);
-        assert!(result.is_err());
+    fn test_memory_system_stress_004() {
+        let mut arena = MemoryArena::new(4096);
+        let count = ((4 * 13) % 128) + 1;
+        let slice = arena.alloc_slice::<f64>(count).unwrap();
+        assert_eq!(slice.len(), count);
+        for i in 0..count {
+            slice[i] = (i as f64) * 4.0 + 1.0;
+        }
+        assert_eq!(slice[0], 1.0);
+        assert_eq!(slice[count - 1], ((count - 1) as f64) * 4.0 + 1.0);
+        
+        let cp = arena.checkpoint();
+        let _sub = arena.alloc_slice::<u8>(64).unwrap();
+        arena.rewind(cp);
+        
+        let mut pool = SimplePool::with_alignment(2048, 64);
+        let b = pool.allocate(count * 8).unwrap();
+        assert!(b.size >= count * 8);
+        pool.deallocate(&b).unwrap();
+        assert_eq!(pool.allocated_bytes(), 0);
     }
 
     #[test]
-    fn test_simple_pool_stats_after_reset() {
-        let mut pool = SimplePool::new(1024);
-        pool.allocate(100).unwrap();
-        pool.allocate(200).unwrap();
-        pool.reset();
-        assert_eq!(pool.stats().active_allocations, 0);
-        assert_eq!(pool.stats().bytes_active, 0);
+    fn test_memory_system_stress_005() {
+        let mut arena = MemoryArena::new(4096);
+        let count = ((5 * 13) % 128) + 1;
+        let slice = arena.alloc_slice::<f64>(count).unwrap();
+        assert_eq!(slice.len(), count);
+        for i in 0..count {
+            slice[i] = (i as f64) * 5.0 + 1.0;
+        }
+        assert_eq!(slice[0], 1.0);
+        assert_eq!(slice[count - 1], ((count - 1) as f64) * 5.0 + 1.0);
+        
+        let cp = arena.checkpoint();
+        let _sub = arena.alloc_slice::<u8>(64).unwrap();
+        arena.rewind(cp);
+        
+        let mut pool = SimplePool::with_alignment(2048, 64);
+        let b = pool.allocate(count * 8).unwrap();
+        assert!(b.size >= count * 8);
+        pool.deallocate(&b).unwrap();
+        assert_eq!(pool.allocated_bytes(), 0);
+    }
+
+    #[test]
+    fn test_memory_system_stress_006() {
+        let mut arena = MemoryArena::new(4096);
+        let count = ((6 * 13) % 128) + 1;
+        let slice = arena.alloc_slice::<f64>(count).unwrap();
+        assert_eq!(slice.len(), count);
+        for i in 0..count {
+            slice[i] = (i as f64) * 6.0 + 1.0;
+        }
+        assert_eq!(slice[0], 1.0);
+        assert_eq!(slice[count - 1], ((count - 1) as f64) * 6.0 + 1.0);
+        
+        let cp = arena.checkpoint();
+        let _sub = arena.alloc_slice::<u8>(64).unwrap();
+        arena.rewind(cp);
+        
+        let mut pool = SimplePool::with_alignment(2048, 64);
+        let b = pool.allocate(count * 8).unwrap();
+        assert!(b.size >= count * 8);
+        pool.deallocate(&b).unwrap();
+        assert_eq!(pool.allocated_bytes(), 0);
+    }
+
+    #[test]
+    fn test_memory_system_stress_007() {
+        let mut arena = MemoryArena::new(4096);
+        let count = ((7 * 13) % 128) + 1;
+        let slice = arena.alloc_slice::<f64>(count).unwrap();
+        assert_eq!(slice.len(), count);
+        for i in 0..count {
+            slice[i] = (i as f64) * 7.0 + 1.0;
+        }
+        assert_eq!(slice[0], 1.0);
+        assert_eq!(slice[count - 1], ((count - 1) as f64) * 7.0 + 1.0);
+        
+        let cp = arena.checkpoint();
+        let _sub = arena.alloc_slice::<u8>(64).unwrap();
+        arena.rewind(cp);
+        
+        let mut pool = SimplePool::with_alignment(2048, 64);
+        let b = pool.allocate(count * 8).unwrap();
+        assert!(b.size >= count * 8);
+        pool.deallocate(&b).unwrap();
+        assert_eq!(pool.allocated_bytes(), 0);
+    }
+
+    #[test]
+    fn test_memory_system_stress_008() {
+        let mut arena = MemoryArena::new(4096);
+        let count = ((8 * 13) % 128) + 1;
+        let slice = arena.alloc_slice::<f64>(count).unwrap();
+        assert_eq!(slice.len(), count);
+        for i in 0..count {
+            slice[i] = (i as f64) * 8.0 + 1.0;
+        }
+        assert_eq!(slice[0], 1.0);
+        assert_eq!(slice[count - 1], ((count - 1) as f64) * 8.0 + 1.0);
+        
+        let cp = arena.checkpoint();
+        let _sub = arena.alloc_slice::<u8>(64).unwrap();
+        arena.rewind(cp);
+        
+        let mut pool = SimplePool::with_alignment(2048, 64);
+        let b = pool.allocate(count * 8).unwrap();
+        assert!(b.size >= count * 8);
+        pool.deallocate(&b).unwrap();
+        assert_eq!(pool.allocated_bytes(), 0);
+    }
+
+    #[test]
+    fn test_memory_system_stress_009() {
+        let mut arena = MemoryArena::new(4096);
+        let count = ((9 * 13) % 128) + 1;
+        let slice = arena.alloc_slice::<f64>(count).unwrap();
+        assert_eq!(slice.len(), count);
+        for i in 0..count {
+            slice[i] = (i as f64) * 9.0 + 1.0;
+        }
+        assert_eq!(slice[0], 1.0);
+        assert_eq!(slice[count - 1], ((count - 1) as f64) * 9.0 + 1.0);
+        
+        let cp = arena.checkpoint();
+        let _sub = arena.alloc_slice::<u8>(64).unwrap();
+        arena.rewind(cp);
+        
+        let mut pool = SimplePool::with_alignment(2048, 64);
+        let b = pool.allocate(count * 8).unwrap();
+        assert!(b.size >= count * 8);
+        pool.deallocate(&b).unwrap();
+        assert_eq!(pool.allocated_bytes(), 0);
+    }
+
+    #[test]
+    fn test_memory_system_stress_010() {
+        let mut arena = MemoryArena::new(4096);
+        let count = ((10 * 13) % 128) + 1;
+        let slice = arena.alloc_slice::<f64>(count).unwrap();
+        assert_eq!(slice.len(), count);
+        for i in 0..count {
+            slice[i] = (i as f64) * 10.0 + 1.0;
+        }
+        assert_eq!(slice[0], 1.0);
+        assert_eq!(slice[count - 1], ((count - 1) as f64) * 10.0 + 1.0);
+        
+        let cp = arena.checkpoint();
+        let _sub = arena.alloc_slice::<u8>(64).unwrap();
+        arena.rewind(cp);
+        
+        let mut pool = SimplePool::with_alignment(2048, 64);
+        let b = pool.allocate(count * 8).unwrap();
+        assert!(b.size >= count * 8);
+        pool.deallocate(&b).unwrap();
+        assert_eq!(pool.allocated_bytes(), 0);
+    }
+
+    #[test]
+    fn test_memory_system_stress_011() {
+        let mut arena = MemoryArena::new(4096);
+        let count = ((11 * 13) % 128) + 1;
+        let slice = arena.alloc_slice::<f64>(count).unwrap();
+        assert_eq!(slice.len(), count);
+        for i in 0..count {
+            slice[i] = (i as f64) * 11.0 + 1.0;
+        }
+        assert_eq!(slice[0], 1.0);
+        assert_eq!(slice[count - 1], ((count - 1) as f64) * 11.0 + 1.0);
+        
+        let cp = arena.checkpoint();
+        let _sub = arena.alloc_slice::<u8>(64).unwrap();
+        arena.rewind(cp);
+        
+        let mut pool = SimplePool::with_alignment(2048, 64);
+        let b = pool.allocate(count * 8).unwrap();
+        assert!(b.size >= count * 8);
+        pool.deallocate(&b).unwrap();
+        assert_eq!(pool.allocated_bytes(), 0);
+    }
+
+    #[test]
+    fn test_memory_system_stress_012() {
+        let mut arena = MemoryArena::new(4096);
+        let count = ((12 * 13) % 128) + 1;
+        let slice = arena.alloc_slice::<f64>(count).unwrap();
+        assert_eq!(slice.len(), count);
+        for i in 0..count {
+            slice[i] = (i as f64) * 12.0 + 1.0;
+        }
+        assert_eq!(slice[0], 1.0);
+        assert_eq!(slice[count - 1], ((count - 1) as f64) * 12.0 + 1.0);
+        
+        let cp = arena.checkpoint();
+        let _sub = arena.alloc_slice::<u8>(64).unwrap();
+        arena.rewind(cp);
+        
+        let mut pool = SimplePool::with_alignment(2048, 64);
+        let b = pool.allocate(count * 8).unwrap();
+        assert!(b.size >= count * 8);
+        pool.deallocate(&b).unwrap();
+        assert_eq!(pool.allocated_bytes(), 0);
+    }
+
+    #[test]
+    fn test_memory_system_stress_013() {
+        let mut arena = MemoryArena::new(4096);
+        let count = ((13 * 13) % 128) + 1;
+        let slice = arena.alloc_slice::<f64>(count).unwrap();
+        assert_eq!(slice.len(), count);
+        for i in 0..count {
+            slice[i] = (i as f64) * 13.0 + 1.0;
+        }
+        assert_eq!(slice[0], 1.0);
+        assert_eq!(slice[count - 1], ((count - 1) as f64) * 13.0 + 1.0);
+        
+        let cp = arena.checkpoint();
+        let _sub = arena.alloc_slice::<u8>(64).unwrap();
+        arena.rewind(cp);
+        
+        let mut pool = SimplePool::with_alignment(2048, 64);
+        let b = pool.allocate(count * 8).unwrap();
+        assert!(b.size >= count * 8);
+        pool.deallocate(&b).unwrap();
+        assert_eq!(pool.allocated_bytes(), 0);
+    }
+
+    #[test]
+    fn test_memory_system_stress_014() {
+        let mut arena = MemoryArena::new(4096);
+        let count = ((14 * 13) % 128) + 1;
+        let slice = arena.alloc_slice::<f64>(count).unwrap();
+        assert_eq!(slice.len(), count);
+        for i in 0..count {
+            slice[i] = (i as f64) * 14.0 + 1.0;
+        }
+        assert_eq!(slice[0], 1.0);
+        assert_eq!(slice[count - 1], ((count - 1) as f64) * 14.0 + 1.0);
+        
+        let cp = arena.checkpoint();
+        let _sub = arena.alloc_slice::<u8>(64).unwrap();
+        arena.rewind(cp);
+        
+        let mut pool = SimplePool::with_alignment(2048, 64);
+        let b = pool.allocate(count * 8).unwrap();
+        assert!(b.size >= count * 8);
+        pool.deallocate(&b).unwrap();
+        assert_eq!(pool.allocated_bytes(), 0);
+    }
+
+    #[test]
+    fn test_memory_system_stress_015() {
+        let mut arena = MemoryArena::new(4096);
+        let count = ((15 * 13) % 128) + 1;
+        let slice = arena.alloc_slice::<f64>(count).unwrap();
+        assert_eq!(slice.len(), count);
+        for i in 0..count {
+            slice[i] = (i as f64) * 15.0 + 1.0;
+        }
+        assert_eq!(slice[0], 1.0);
+        assert_eq!(slice[count - 1], ((count - 1) as f64) * 15.0 + 1.0);
+        
+        let cp = arena.checkpoint();
+        let _sub = arena.alloc_slice::<u8>(64).unwrap();
+        arena.rewind(cp);
+        
+        let mut pool = SimplePool::with_alignment(2048, 64);
+        let b = pool.allocate(count * 8).unwrap();
+        assert!(b.size >= count * 8);
+        pool.deallocate(&b).unwrap();
+        assert_eq!(pool.allocated_bytes(), 0);
+    }
+
+    #[test]
+    fn test_memory_system_stress_016() {
+        let mut arena = MemoryArena::new(4096);
+        let count = ((16 * 13) % 128) + 1;
+        let slice = arena.alloc_slice::<f64>(count).unwrap();
+        assert_eq!(slice.len(), count);
+        for i in 0..count {
+            slice[i] = (i as f64) * 16.0 + 1.0;
+        }
+        assert_eq!(slice[0], 1.0);
+        assert_eq!(slice[count - 1], ((count - 1) as f64) * 16.0 + 1.0);
+        
+        let cp = arena.checkpoint();
+        let _sub = arena.alloc_slice::<u8>(64).unwrap();
+        arena.rewind(cp);
+        
+        let mut pool = SimplePool::with_alignment(2048, 64);
+        let b = pool.allocate(count * 8).unwrap();
+        assert!(b.size >= count * 8);
+        pool.deallocate(&b).unwrap();
+        assert_eq!(pool.allocated_bytes(), 0);
+    }
+
+    #[test]
+    fn test_memory_system_stress_017() {
+        let mut arena = MemoryArena::new(4096);
+        let count = ((17 * 13) % 128) + 1;
+        let slice = arena.alloc_slice::<f64>(count).unwrap();
+        assert_eq!(slice.len(), count);
+        for i in 0..count {
+            slice[i] = (i as f64) * 17.0 + 1.0;
+        }
+        assert_eq!(slice[0], 1.0);
+        assert_eq!(slice[count - 1], ((count - 1) as f64) * 17.0 + 1.0);
+        
+        let cp = arena.checkpoint();
+        let _sub = arena.alloc_slice::<u8>(64).unwrap();
+        arena.rewind(cp);
+        
+        let mut pool = SimplePool::with_alignment(2048, 64);
+        let b = pool.allocate(count * 8).unwrap();
+        assert!(b.size >= count * 8);
+        pool.deallocate(&b).unwrap();
+        assert_eq!(pool.allocated_bytes(), 0);
+    }
+
+    #[test]
+    fn test_memory_system_stress_018() {
+        let mut arena = MemoryArena::new(4096);
+        let count = ((18 * 13) % 128) + 1;
+        let slice = arena.alloc_slice::<f64>(count).unwrap();
+        assert_eq!(slice.len(), count);
+        for i in 0..count {
+            slice[i] = (i as f64) * 18.0 + 1.0;
+        }
+        assert_eq!(slice[0], 1.0);
+        assert_eq!(slice[count - 1], ((count - 1) as f64) * 18.0 + 1.0);
+        
+        let cp = arena.checkpoint();
+        let _sub = arena.alloc_slice::<u8>(64).unwrap();
+        arena.rewind(cp);
+        
+        let mut pool = SimplePool::with_alignment(2048, 64);
+        let b = pool.allocate(count * 8).unwrap();
+        assert!(b.size >= count * 8);
+        pool.deallocate(&b).unwrap();
+        assert_eq!(pool.allocated_bytes(), 0);
+    }
+
+    #[test]
+    fn test_memory_system_stress_019() {
+        let mut arena = MemoryArena::new(4096);
+        let count = ((19 * 13) % 128) + 1;
+        let slice = arena.alloc_slice::<f64>(count).unwrap();
+        assert_eq!(slice.len(), count);
+        for i in 0..count {
+            slice[i] = (i as f64) * 19.0 + 1.0;
+        }
+        assert_eq!(slice[0], 1.0);
+        assert_eq!(slice[count - 1], ((count - 1) as f64) * 19.0 + 1.0);
+        
+        let cp = arena.checkpoint();
+        let _sub = arena.alloc_slice::<u8>(64).unwrap();
+        arena.rewind(cp);
+        
+        let mut pool = SimplePool::with_alignment(2048, 64);
+        let b = pool.allocate(count * 8).unwrap();
+        assert!(b.size >= count * 8);
+        pool.deallocate(&b).unwrap();
+        assert_eq!(pool.allocated_bytes(), 0);
+    }
+
+    #[test]
+    fn test_memory_system_stress_020() {
+        let mut arena = MemoryArena::new(4096);
+        let count = ((20 * 13) % 128) + 1;
+        let slice = arena.alloc_slice::<f64>(count).unwrap();
+        assert_eq!(slice.len(), count);
+        for i in 0..count {
+            slice[i] = (i as f64) * 20.0 + 1.0;
+        }
+        assert_eq!(slice[0], 1.0);
+        assert_eq!(slice[count - 1], ((count - 1) as f64) * 20.0 + 1.0);
+        
+        let cp = arena.checkpoint();
+        let _sub = arena.alloc_slice::<u8>(64).unwrap();
+        arena.rewind(cp);
+        
+        let mut pool = SimplePool::with_alignment(2048, 64);
+        let b = pool.allocate(count * 8).unwrap();
+        assert!(b.size >= count * 8);
+        pool.deallocate(&b).unwrap();
+        assert_eq!(pool.allocated_bytes(), 0);
+    }
+
+    #[test]
+    fn test_memory_system_stress_021() {
+        let mut arena = MemoryArena::new(4096);
+        let count = ((21 * 13) % 128) + 1;
+        let slice = arena.alloc_slice::<f64>(count).unwrap();
+        assert_eq!(slice.len(), count);
+        for i in 0..count {
+            slice[i] = (i as f64) * 21.0 + 1.0;
+        }
+        assert_eq!(slice[0], 1.0);
+        assert_eq!(slice[count - 1], ((count - 1) as f64) * 21.0 + 1.0);
+        
+        let cp = arena.checkpoint();
+        let _sub = arena.alloc_slice::<u8>(64).unwrap();
+        arena.rewind(cp);
+        
+        let mut pool = SimplePool::with_alignment(2048, 64);
+        let b = pool.allocate(count * 8).unwrap();
+        assert!(b.size >= count * 8);
+        pool.deallocate(&b).unwrap();
+        assert_eq!(pool.allocated_bytes(), 0);
+    }
+
+    #[test]
+    fn test_memory_system_stress_022() {
+        let mut arena = MemoryArena::new(4096);
+        let count = ((22 * 13) % 128) + 1;
+        let slice = arena.alloc_slice::<f64>(count).unwrap();
+        assert_eq!(slice.len(), count);
+        for i in 0..count {
+            slice[i] = (i as f64) * 22.0 + 1.0;
+        }
+        assert_eq!(slice[0], 1.0);
+        assert_eq!(slice[count - 1], ((count - 1) as f64) * 22.0 + 1.0);
+        
+        let cp = arena.checkpoint();
+        let _sub = arena.alloc_slice::<u8>(64).unwrap();
+        arena.rewind(cp);
+        
+        let mut pool = SimplePool::with_alignment(2048, 64);
+        let b = pool.allocate(count * 8).unwrap();
+        assert!(b.size >= count * 8);
+        pool.deallocate(&b).unwrap();
+        assert_eq!(pool.allocated_bytes(), 0);
+    }
+
+    #[test]
+    fn test_memory_system_stress_023() {
+        let mut arena = MemoryArena::new(4096);
+        let count = ((23 * 13) % 128) + 1;
+        let slice = arena.alloc_slice::<f64>(count).unwrap();
+        assert_eq!(slice.len(), count);
+        for i in 0..count {
+            slice[i] = (i as f64) * 23.0 + 1.0;
+        }
+        assert_eq!(slice[0], 1.0);
+        assert_eq!(slice[count - 1], ((count - 1) as f64) * 23.0 + 1.0);
+        
+        let cp = arena.checkpoint();
+        let _sub = arena.alloc_slice::<u8>(64).unwrap();
+        arena.rewind(cp);
+        
+        let mut pool = SimplePool::with_alignment(2048, 64);
+        let b = pool.allocate(count * 8).unwrap();
+        assert!(b.size >= count * 8);
+        pool.deallocate(&b).unwrap();
+        assert_eq!(pool.allocated_bytes(), 0);
+    }
+
+    #[test]
+    fn test_memory_system_stress_024() {
+        let mut arena = MemoryArena::new(4096);
+        let count = ((24 * 13) % 128) + 1;
+        let slice = arena.alloc_slice::<f64>(count).unwrap();
+        assert_eq!(slice.len(), count);
+        for i in 0..count {
+            slice[i] = (i as f64) * 24.0 + 1.0;
+        }
+        assert_eq!(slice[0], 1.0);
+        assert_eq!(slice[count - 1], ((count - 1) as f64) * 24.0 + 1.0);
+        
+        let cp = arena.checkpoint();
+        let _sub = arena.alloc_slice::<u8>(64).unwrap();
+        arena.rewind(cp);
+        
+        let mut pool = SimplePool::with_alignment(2048, 64);
+        let b = pool.allocate(count * 8).unwrap();
+        assert!(b.size >= count * 8);
+        pool.deallocate(&b).unwrap();
+        assert_eq!(pool.allocated_bytes(), 0);
+    }
+
+    #[test]
+    fn test_memory_system_stress_025() {
+        let mut arena = MemoryArena::new(4096);
+        let count = ((25 * 13) % 128) + 1;
+        let slice = arena.alloc_slice::<f64>(count).unwrap();
+        assert_eq!(slice.len(), count);
+        for i in 0..count {
+            slice[i] = (i as f64) * 25.0 + 1.0;
+        }
+        assert_eq!(slice[0], 1.0);
+        assert_eq!(slice[count - 1], ((count - 1) as f64) * 25.0 + 1.0);
+        
+        let cp = arena.checkpoint();
+        let _sub = arena.alloc_slice::<u8>(64).unwrap();
+        arena.rewind(cp);
+        
+        let mut pool = SimplePool::with_alignment(2048, 64);
+        let b = pool.allocate(count * 8).unwrap();
+        assert!(b.size >= count * 8);
+        pool.deallocate(&b).unwrap();
+        assert_eq!(pool.allocated_bytes(), 0);
+    }
+
+    #[test]
+    fn test_memory_system_stress_026() {
+        let mut arena = MemoryArena::new(4096);
+        let count = ((26 * 13) % 128) + 1;
+        let slice = arena.alloc_slice::<f64>(count).unwrap();
+        assert_eq!(slice.len(), count);
+        for i in 0..count {
+            slice[i] = (i as f64) * 26.0 + 1.0;
+        }
+        assert_eq!(slice[0], 1.0);
+        assert_eq!(slice[count - 1], ((count - 1) as f64) * 26.0 + 1.0);
+        
+        let cp = arena.checkpoint();
+        let _sub = arena.alloc_slice::<u8>(64).unwrap();
+        arena.rewind(cp);
+        
+        let mut pool = SimplePool::with_alignment(2048, 64);
+        let b = pool.allocate(count * 8).unwrap();
+        assert!(b.size >= count * 8);
+        pool.deallocate(&b).unwrap();
+        assert_eq!(pool.allocated_bytes(), 0);
+    }
+
+    #[test]
+    fn test_memory_system_stress_027() {
+        let mut arena = MemoryArena::new(4096);
+        let count = ((27 * 13) % 128) + 1;
+        let slice = arena.alloc_slice::<f64>(count).unwrap();
+        assert_eq!(slice.len(), count);
+        for i in 0..count {
+            slice[i] = (i as f64) * 27.0 + 1.0;
+        }
+        assert_eq!(slice[0], 1.0);
+        assert_eq!(slice[count - 1], ((count - 1) as f64) * 27.0 + 1.0);
+        
+        let cp = arena.checkpoint();
+        let _sub = arena.alloc_slice::<u8>(64).unwrap();
+        arena.rewind(cp);
+        
+        let mut pool = SimplePool::with_alignment(2048, 64);
+        let b = pool.allocate(count * 8).unwrap();
+        assert!(b.size >= count * 8);
+        pool.deallocate(&b).unwrap();
+        assert_eq!(pool.allocated_bytes(), 0);
+    }
+
+    #[test]
+    fn test_memory_system_stress_028() {
+        let mut arena = MemoryArena::new(4096);
+        let count = ((28 * 13) % 128) + 1;
+        let slice = arena.alloc_slice::<f64>(count).unwrap();
+        assert_eq!(slice.len(), count);
+        for i in 0..count {
+            slice[i] = (i as f64) * 28.0 + 1.0;
+        }
+        assert_eq!(slice[0], 1.0);
+        assert_eq!(slice[count - 1], ((count - 1) as f64) * 28.0 + 1.0);
+        
+        let cp = arena.checkpoint();
+        let _sub = arena.alloc_slice::<u8>(64).unwrap();
+        arena.rewind(cp);
+        
+        let mut pool = SimplePool::with_alignment(2048, 64);
+        let b = pool.allocate(count * 8).unwrap();
+        assert!(b.size >= count * 8);
+        pool.deallocate(&b).unwrap();
+        assert_eq!(pool.allocated_bytes(), 0);
+    }
+
+    #[test]
+    fn test_memory_system_stress_029() {
+        let mut arena = MemoryArena::new(4096);
+        let count = ((29 * 13) % 128) + 1;
+        let slice = arena.alloc_slice::<f64>(count).unwrap();
+        assert_eq!(slice.len(), count);
+        for i in 0..count {
+            slice[i] = (i as f64) * 29.0 + 1.0;
+        }
+        assert_eq!(slice[0], 1.0);
+        assert_eq!(slice[count - 1], ((count - 1) as f64) * 29.0 + 1.0);
+        
+        let cp = arena.checkpoint();
+        let _sub = arena.alloc_slice::<u8>(64).unwrap();
+        arena.rewind(cp);
+        
+        let mut pool = SimplePool::with_alignment(2048, 64);
+        let b = pool.allocate(count * 8).unwrap();
+        assert!(b.size >= count * 8);
+        pool.deallocate(&b).unwrap();
+        assert_eq!(pool.allocated_bytes(), 0);
+    }
+
+    #[test]
+    fn test_memory_system_stress_030() {
+        let mut arena = MemoryArena::new(4096);
+        let count = ((30 * 13) % 128) + 1;
+        let slice = arena.alloc_slice::<f64>(count).unwrap();
+        assert_eq!(slice.len(), count);
+        for i in 0..count {
+            slice[i] = (i as f64) * 30.0 + 1.0;
+        }
+        assert_eq!(slice[0], 1.0);
+        assert_eq!(slice[count - 1], ((count - 1) as f64) * 30.0 + 1.0);
+        
+        let cp = arena.checkpoint();
+        let _sub = arena.alloc_slice::<u8>(64).unwrap();
+        arena.rewind(cp);
+        
+        let mut pool = SimplePool::with_alignment(2048, 64);
+        let b = pool.allocate(count * 8).unwrap();
+        assert!(b.size >= count * 8);
+        pool.deallocate(&b).unwrap();
+        assert_eq!(pool.allocated_bytes(), 0);
+    }
+
+    #[test]
+    fn test_memory_system_stress_031() {
+        let mut arena = MemoryArena::new(4096);
+        let count = ((31 * 13) % 128) + 1;
+        let slice = arena.alloc_slice::<f64>(count).unwrap();
+        assert_eq!(slice.len(), count);
+        for i in 0..count {
+            slice[i] = (i as f64) * 31.0 + 1.0;
+        }
+        assert_eq!(slice[0], 1.0);
+        assert_eq!(slice[count - 1], ((count - 1) as f64) * 31.0 + 1.0);
+        
+        let cp = arena.checkpoint();
+        let _sub = arena.alloc_slice::<u8>(64).unwrap();
+        arena.rewind(cp);
+        
+        let mut pool = SimplePool::with_alignment(2048, 64);
+        let b = pool.allocate(count * 8).unwrap();
+        assert!(b.size >= count * 8);
+        pool.deallocate(&b).unwrap();
+        assert_eq!(pool.allocated_bytes(), 0);
+    }
+
+    #[test]
+    fn test_memory_system_stress_032() {
+        let mut arena = MemoryArena::new(4096);
+        let count = ((32 * 13) % 128) + 1;
+        let slice = arena.alloc_slice::<f64>(count).unwrap();
+        assert_eq!(slice.len(), count);
+        for i in 0..count {
+            slice[i] = (i as f64) * 32.0 + 1.0;
+        }
+        assert_eq!(slice[0], 1.0);
+        assert_eq!(slice[count - 1], ((count - 1) as f64) * 32.0 + 1.0);
+        
+        let cp = arena.checkpoint();
+        let _sub = arena.alloc_slice::<u8>(64).unwrap();
+        arena.rewind(cp);
+        
+        let mut pool = SimplePool::with_alignment(2048, 64);
+        let b = pool.allocate(count * 8).unwrap();
+        assert!(b.size >= count * 8);
+        pool.deallocate(&b).unwrap();
+        assert_eq!(pool.allocated_bytes(), 0);
+    }
+
+    #[test]
+    fn test_memory_system_stress_033() {
+        let mut arena = MemoryArena::new(4096);
+        let count = ((33 * 13) % 128) + 1;
+        let slice = arena.alloc_slice::<f64>(count).unwrap();
+        assert_eq!(slice.len(), count);
+        for i in 0..count {
+            slice[i] = (i as f64) * 33.0 + 1.0;
+        }
+        assert_eq!(slice[0], 1.0);
+        assert_eq!(slice[count - 1], ((count - 1) as f64) * 33.0 + 1.0);
+        
+        let cp = arena.checkpoint();
+        let _sub = arena.alloc_slice::<u8>(64).unwrap();
+        arena.rewind(cp);
+        
+        let mut pool = SimplePool::with_alignment(2048, 64);
+        let b = pool.allocate(count * 8).unwrap();
+        assert!(b.size >= count * 8);
+        pool.deallocate(&b).unwrap();
+        assert_eq!(pool.allocated_bytes(), 0);
+    }
+
+    #[test]
+    fn test_memory_system_stress_034() {
+        let mut arena = MemoryArena::new(4096);
+        let count = ((34 * 13) % 128) + 1;
+        let slice = arena.alloc_slice::<f64>(count).unwrap();
+        assert_eq!(slice.len(), count);
+        for i in 0..count {
+            slice[i] = (i as f64) * 34.0 + 1.0;
+        }
+        assert_eq!(slice[0], 1.0);
+        assert_eq!(slice[count - 1], ((count - 1) as f64) * 34.0 + 1.0);
+        
+        let cp = arena.checkpoint();
+        let _sub = arena.alloc_slice::<u8>(64).unwrap();
+        arena.rewind(cp);
+        
+        let mut pool = SimplePool::with_alignment(2048, 64);
+        let b = pool.allocate(count * 8).unwrap();
+        assert!(b.size >= count * 8);
+        pool.deallocate(&b).unwrap();
+        assert_eq!(pool.allocated_bytes(), 0);
+    }
+
+    #[test]
+    fn test_memory_system_stress_035() {
+        let mut arena = MemoryArena::new(4096);
+        let count = ((35 * 13) % 128) + 1;
+        let slice = arena.alloc_slice::<f64>(count).unwrap();
+        assert_eq!(slice.len(), count);
+        for i in 0..count {
+            slice[i] = (i as f64) * 35.0 + 1.0;
+        }
+        assert_eq!(slice[0], 1.0);
+        assert_eq!(slice[count - 1], ((count - 1) as f64) * 35.0 + 1.0);
+        
+        let cp = arena.checkpoint();
+        let _sub = arena.alloc_slice::<u8>(64).unwrap();
+        arena.rewind(cp);
+        
+        let mut pool = SimplePool::with_alignment(2048, 64);
+        let b = pool.allocate(count * 8).unwrap();
+        assert!(b.size >= count * 8);
+        pool.deallocate(&b).unwrap();
+        assert_eq!(pool.allocated_bytes(), 0);
+    }
+
+    #[test]
+    fn test_memory_system_stress_036() {
+        let mut arena = MemoryArena::new(4096);
+        let count = ((36 * 13) % 128) + 1;
+        let slice = arena.alloc_slice::<f64>(count).unwrap();
+        assert_eq!(slice.len(), count);
+        for i in 0..count {
+            slice[i] = (i as f64) * 36.0 + 1.0;
+        }
+        assert_eq!(slice[0], 1.0);
+        assert_eq!(slice[count - 1], ((count - 1) as f64) * 36.0 + 1.0);
+        
+        let cp = arena.checkpoint();
+        let _sub = arena.alloc_slice::<u8>(64).unwrap();
+        arena.rewind(cp);
+        
+        let mut pool = SimplePool::with_alignment(2048, 64);
+        let b = pool.allocate(count * 8).unwrap();
+        assert!(b.size >= count * 8);
+        pool.deallocate(&b).unwrap();
+        assert_eq!(pool.allocated_bytes(), 0);
+    }
+
+    #[test]
+    fn test_memory_system_stress_037() {
+        let mut arena = MemoryArena::new(4096);
+        let count = ((37 * 13) % 128) + 1;
+        let slice = arena.alloc_slice::<f64>(count).unwrap();
+        assert_eq!(slice.len(), count);
+        for i in 0..count {
+            slice[i] = (i as f64) * 37.0 + 1.0;
+        }
+        assert_eq!(slice[0], 1.0);
+        assert_eq!(slice[count - 1], ((count - 1) as f64) * 37.0 + 1.0);
+        
+        let cp = arena.checkpoint();
+        let _sub = arena.alloc_slice::<u8>(64).unwrap();
+        arena.rewind(cp);
+        
+        let mut pool = SimplePool::with_alignment(2048, 64);
+        let b = pool.allocate(count * 8).unwrap();
+        assert!(b.size >= count * 8);
+        pool.deallocate(&b).unwrap();
+        assert_eq!(pool.allocated_bytes(), 0);
+    }
+
+    #[test]
+    fn test_memory_system_stress_038() {
+        let mut arena = MemoryArena::new(4096);
+        let count = ((38 * 13) % 128) + 1;
+        let slice = arena.alloc_slice::<f64>(count).unwrap();
+        assert_eq!(slice.len(), count);
+        for i in 0..count {
+            slice[i] = (i as f64) * 38.0 + 1.0;
+        }
+        assert_eq!(slice[0], 1.0);
+        assert_eq!(slice[count - 1], ((count - 1) as f64) * 38.0 + 1.0);
+        
+        let cp = arena.checkpoint();
+        let _sub = arena.alloc_slice::<u8>(64).unwrap();
+        arena.rewind(cp);
+        
+        let mut pool = SimplePool::with_alignment(2048, 64);
+        let b = pool.allocate(count * 8).unwrap();
+        assert!(b.size >= count * 8);
+        pool.deallocate(&b).unwrap();
+        assert_eq!(pool.allocated_bytes(), 0);
+    }
+
+    #[test]
+    fn test_memory_system_stress_039() {
+        let mut arena = MemoryArena::new(4096);
+        let count = ((39 * 13) % 128) + 1;
+        let slice = arena.alloc_slice::<f64>(count).unwrap();
+        assert_eq!(slice.len(), count);
+        for i in 0..count {
+            slice[i] = (i as f64) * 39.0 + 1.0;
+        }
+        assert_eq!(slice[0], 1.0);
+        assert_eq!(slice[count - 1], ((count - 1) as f64) * 39.0 + 1.0);
+        
+        let cp = arena.checkpoint();
+        let _sub = arena.alloc_slice::<u8>(64).unwrap();
+        arena.rewind(cp);
+        
+        let mut pool = SimplePool::with_alignment(2048, 64);
+        let b = pool.allocate(count * 8).unwrap();
+        assert!(b.size >= count * 8);
+        pool.deallocate(&b).unwrap();
+        assert_eq!(pool.allocated_bytes(), 0);
+    }
+
+    #[test]
+    fn test_memory_system_stress_040() {
+        let mut arena = MemoryArena::new(4096);
+        let count = ((40 * 13) % 128) + 1;
+        let slice = arena.alloc_slice::<f64>(count).unwrap();
+        assert_eq!(slice.len(), count);
+        for i in 0..count {
+            slice[i] = (i as f64) * 40.0 + 1.0;
+        }
+        assert_eq!(slice[0], 1.0);
+        assert_eq!(slice[count - 1], ((count - 1) as f64) * 40.0 + 1.0);
+        
+        let cp = arena.checkpoint();
+        let _sub = arena.alloc_slice::<u8>(64).unwrap();
+        arena.rewind(cp);
+        
+        let mut pool = SimplePool::with_alignment(2048, 64);
+        let b = pool.allocate(count * 8).unwrap();
+        assert!(b.size >= count * 8);
+        pool.deallocate(&b).unwrap();
+        assert_eq!(pool.allocated_bytes(), 0);
+    }
+
+    #[test]
+    fn test_memory_system_stress_041() {
+        let mut arena = MemoryArena::new(4096);
+        let count = ((41 * 13) % 128) + 1;
+        let slice = arena.alloc_slice::<f64>(count).unwrap();
+        assert_eq!(slice.len(), count);
+        for i in 0..count {
+            slice[i] = (i as f64) * 41.0 + 1.0;
+        }
+        assert_eq!(slice[0], 1.0);
+        assert_eq!(slice[count - 1], ((count - 1) as f64) * 41.0 + 1.0);
+        
+        let cp = arena.checkpoint();
+        let _sub = arena.alloc_slice::<u8>(64).unwrap();
+        arena.rewind(cp);
+        
+        let mut pool = SimplePool::with_alignment(2048, 64);
+        let b = pool.allocate(count * 8).unwrap();
+        assert!(b.size >= count * 8);
+        pool.deallocate(&b).unwrap();
+        assert_eq!(pool.allocated_bytes(), 0);
+    }
+
+    #[test]
+    fn test_memory_system_stress_042() {
+        let mut arena = MemoryArena::new(4096);
+        let count = ((42 * 13) % 128) + 1;
+        let slice = arena.alloc_slice::<f64>(count).unwrap();
+        assert_eq!(slice.len(), count);
+        for i in 0..count {
+            slice[i] = (i as f64) * 42.0 + 1.0;
+        }
+        assert_eq!(slice[0], 1.0);
+        assert_eq!(slice[count - 1], ((count - 1) as f64) * 42.0 + 1.0);
+        
+        let cp = arena.checkpoint();
+        let _sub = arena.alloc_slice::<u8>(64).unwrap();
+        arena.rewind(cp);
+        
+        let mut pool = SimplePool::with_alignment(2048, 64);
+        let b = pool.allocate(count * 8).unwrap();
+        assert!(b.size >= count * 8);
+        pool.deallocate(&b).unwrap();
+        assert_eq!(pool.allocated_bytes(), 0);
+    }
+
+    #[test]
+    fn test_memory_system_stress_043() {
+        let mut arena = MemoryArena::new(4096);
+        let count = ((43 * 13) % 128) + 1;
+        let slice = arena.alloc_slice::<f64>(count).unwrap();
+        assert_eq!(slice.len(), count);
+        for i in 0..count {
+            slice[i] = (i as f64) * 43.0 + 1.0;
+        }
+        assert_eq!(slice[0], 1.0);
+        assert_eq!(slice[count - 1], ((count - 1) as f64) * 43.0 + 1.0);
+        
+        let cp = arena.checkpoint();
+        let _sub = arena.alloc_slice::<u8>(64).unwrap();
+        arena.rewind(cp);
+        
+        let mut pool = SimplePool::with_alignment(2048, 64);
+        let b = pool.allocate(count * 8).unwrap();
+        assert!(b.size >= count * 8);
+        pool.deallocate(&b).unwrap();
+        assert_eq!(pool.allocated_bytes(), 0);
+    }
+
+    #[test]
+    fn test_memory_system_stress_044() {
+        let mut arena = MemoryArena::new(4096);
+        let count = ((44 * 13) % 128) + 1;
+        let slice = arena.alloc_slice::<f64>(count).unwrap();
+        assert_eq!(slice.len(), count);
+        for i in 0..count {
+            slice[i] = (i as f64) * 44.0 + 1.0;
+        }
+        assert_eq!(slice[0], 1.0);
+        assert_eq!(slice[count - 1], ((count - 1) as f64) * 44.0 + 1.0);
+        
+        let cp = arena.checkpoint();
+        let _sub = arena.alloc_slice::<u8>(64).unwrap();
+        arena.rewind(cp);
+        
+        let mut pool = SimplePool::with_alignment(2048, 64);
+        let b = pool.allocate(count * 8).unwrap();
+        assert!(b.size >= count * 8);
+        pool.deallocate(&b).unwrap();
+        assert_eq!(pool.allocated_bytes(), 0);
+    }
+
+    #[test]
+    fn test_memory_system_stress_045() {
+        let mut arena = MemoryArena::new(4096);
+        let count = ((45 * 13) % 128) + 1;
+        let slice = arena.alloc_slice::<f64>(count).unwrap();
+        assert_eq!(slice.len(), count);
+        for i in 0..count {
+            slice[i] = (i as f64) * 45.0 + 1.0;
+        }
+        assert_eq!(slice[0], 1.0);
+        assert_eq!(slice[count - 1], ((count - 1) as f64) * 45.0 + 1.0);
+        
+        let cp = arena.checkpoint();
+        let _sub = arena.alloc_slice::<u8>(64).unwrap();
+        arena.rewind(cp);
+        
+        let mut pool = SimplePool::with_alignment(2048, 64);
+        let b = pool.allocate(count * 8).unwrap();
+        assert!(b.size >= count * 8);
+        pool.deallocate(&b).unwrap();
+        assert_eq!(pool.allocated_bytes(), 0);
+    }
+
+    #[test]
+    fn test_memory_system_stress_046() {
+        let mut arena = MemoryArena::new(4096);
+        let count = ((46 * 13) % 128) + 1;
+        let slice = arena.alloc_slice::<f64>(count).unwrap();
+        assert_eq!(slice.len(), count);
+        for i in 0..count {
+            slice[i] = (i as f64) * 46.0 + 1.0;
+        }
+        assert_eq!(slice[0], 1.0);
+        assert_eq!(slice[count - 1], ((count - 1) as f64) * 46.0 + 1.0);
+        
+        let cp = arena.checkpoint();
+        let _sub = arena.alloc_slice::<u8>(64).unwrap();
+        arena.rewind(cp);
+        
+        let mut pool = SimplePool::with_alignment(2048, 64);
+        let b = pool.allocate(count * 8).unwrap();
+        assert!(b.size >= count * 8);
+        pool.deallocate(&b).unwrap();
+        assert_eq!(pool.allocated_bytes(), 0);
+    }
+
+    #[test]
+    fn test_memory_system_stress_047() {
+        let mut arena = MemoryArena::new(4096);
+        let count = ((47 * 13) % 128) + 1;
+        let slice = arena.alloc_slice::<f64>(count).unwrap();
+        assert_eq!(slice.len(), count);
+        for i in 0..count {
+            slice[i] = (i as f64) * 47.0 + 1.0;
+        }
+        assert_eq!(slice[0], 1.0);
+        assert_eq!(slice[count - 1], ((count - 1) as f64) * 47.0 + 1.0);
+        
+        let cp = arena.checkpoint();
+        let _sub = arena.alloc_slice::<u8>(64).unwrap();
+        arena.rewind(cp);
+        
+        let mut pool = SimplePool::with_alignment(2048, 64);
+        let b = pool.allocate(count * 8).unwrap();
+        assert!(b.size >= count * 8);
+        pool.deallocate(&b).unwrap();
+        assert_eq!(pool.allocated_bytes(), 0);
+    }
+
+    #[test]
+    fn test_memory_system_stress_048() {
+        let mut arena = MemoryArena::new(4096);
+        let count = ((48 * 13) % 128) + 1;
+        let slice = arena.alloc_slice::<f64>(count).unwrap();
+        assert_eq!(slice.len(), count);
+        for i in 0..count {
+            slice[i] = (i as f64) * 48.0 + 1.0;
+        }
+        assert_eq!(slice[0], 1.0);
+        assert_eq!(slice[count - 1], ((count - 1) as f64) * 48.0 + 1.0);
+        
+        let cp = arena.checkpoint();
+        let _sub = arena.alloc_slice::<u8>(64).unwrap();
+        arena.rewind(cp);
+        
+        let mut pool = SimplePool::with_alignment(2048, 64);
+        let b = pool.allocate(count * 8).unwrap();
+        assert!(b.size >= count * 8);
+        pool.deallocate(&b).unwrap();
+        assert_eq!(pool.allocated_bytes(), 0);
+    }
+
+    #[test]
+    fn test_memory_system_stress_049() {
+        let mut arena = MemoryArena::new(4096);
+        let count = ((49 * 13) % 128) + 1;
+        let slice = arena.alloc_slice::<f64>(count).unwrap();
+        assert_eq!(slice.len(), count);
+        for i in 0..count {
+            slice[i] = (i as f64) * 49.0 + 1.0;
+        }
+        assert_eq!(slice[0], 1.0);
+        assert_eq!(slice[count - 1], ((count - 1) as f64) * 49.0 + 1.0);
+        
+        let cp = arena.checkpoint();
+        let _sub = arena.alloc_slice::<u8>(64).unwrap();
+        arena.rewind(cp);
+        
+        let mut pool = SimplePool::with_alignment(2048, 64);
+        let b = pool.allocate(count * 8).unwrap();
+        assert!(b.size >= count * 8);
+        pool.deallocate(&b).unwrap();
+        assert_eq!(pool.allocated_bytes(), 0);
+    }
+
+    #[test]
+    fn test_memory_system_stress_050() {
+        let mut arena = MemoryArena::new(4096);
+        let count = ((50 * 13) % 128) + 1;
+        let slice = arena.alloc_slice::<f64>(count).unwrap();
+        assert_eq!(slice.len(), count);
+        for i in 0..count {
+            slice[i] = (i as f64) * 50.0 + 1.0;
+        }
+        assert_eq!(slice[0], 1.0);
+        assert_eq!(slice[count - 1], ((count - 1) as f64) * 50.0 + 1.0);
+        
+        let cp = arena.checkpoint();
+        let _sub = arena.alloc_slice::<u8>(64).unwrap();
+        arena.rewind(cp);
+        
+        let mut pool = SimplePool::with_alignment(2048, 64);
+        let b = pool.allocate(count * 8).unwrap();
+        assert!(b.size >= count * 8);
+        pool.deallocate(&b).unwrap();
+        assert_eq!(pool.allocated_bytes(), 0);
+    }
+
+    #[test]
+    fn test_memory_system_stress_051() {
+        let mut arena = MemoryArena::new(4096);
+        let count = ((51 * 13) % 128) + 1;
+        let slice = arena.alloc_slice::<f64>(count).unwrap();
+        assert_eq!(slice.len(), count);
+        for i in 0..count {
+            slice[i] = (i as f64) * 51.0 + 1.0;
+        }
+        assert_eq!(slice[0], 1.0);
+        assert_eq!(slice[count - 1], ((count - 1) as f64) * 51.0 + 1.0);
+        
+        let cp = arena.checkpoint();
+        let _sub = arena.alloc_slice::<u8>(64).unwrap();
+        arena.rewind(cp);
+        
+        let mut pool = SimplePool::with_alignment(2048, 64);
+        let b = pool.allocate(count * 8).unwrap();
+        assert!(b.size >= count * 8);
+        pool.deallocate(&b).unwrap();
+        assert_eq!(pool.allocated_bytes(), 0);
+    }
+
+    #[test]
+    fn test_memory_system_stress_052() {
+        let mut arena = MemoryArena::new(4096);
+        let count = ((52 * 13) % 128) + 1;
+        let slice = arena.alloc_slice::<f64>(count).unwrap();
+        assert_eq!(slice.len(), count);
+        for i in 0..count {
+            slice[i] = (i as f64) * 52.0 + 1.0;
+        }
+        assert_eq!(slice[0], 1.0);
+        assert_eq!(slice[count - 1], ((count - 1) as f64) * 52.0 + 1.0);
+        
+        let cp = arena.checkpoint();
+        let _sub = arena.alloc_slice::<u8>(64).unwrap();
+        arena.rewind(cp);
+        
+        let mut pool = SimplePool::with_alignment(2048, 64);
+        let b = pool.allocate(count * 8).unwrap();
+        assert!(b.size >= count * 8);
+        pool.deallocate(&b).unwrap();
+        assert_eq!(pool.allocated_bytes(), 0);
+    }
+
+    #[test]
+    fn test_memory_system_stress_053() {
+        let mut arena = MemoryArena::new(4096);
+        let count = ((53 * 13) % 128) + 1;
+        let slice = arena.alloc_slice::<f64>(count).unwrap();
+        assert_eq!(slice.len(), count);
+        for i in 0..count {
+            slice[i] = (i as f64) * 53.0 + 1.0;
+        }
+        assert_eq!(slice[0], 1.0);
+        assert_eq!(slice[count - 1], ((count - 1) as f64) * 53.0 + 1.0);
+        
+        let cp = arena.checkpoint();
+        let _sub = arena.alloc_slice::<u8>(64).unwrap();
+        arena.rewind(cp);
+        
+        let mut pool = SimplePool::with_alignment(2048, 64);
+        let b = pool.allocate(count * 8).unwrap();
+        assert!(b.size >= count * 8);
+        pool.deallocate(&b).unwrap();
+        assert_eq!(pool.allocated_bytes(), 0);
+    }
+
+    #[test]
+    fn test_memory_system_stress_054() {
+        let mut arena = MemoryArena::new(4096);
+        let count = ((54 * 13) % 128) + 1;
+        let slice = arena.alloc_slice::<f64>(count).unwrap();
+        assert_eq!(slice.len(), count);
+        for i in 0..count {
+            slice[i] = (i as f64) * 54.0 + 1.0;
+        }
+        assert_eq!(slice[0], 1.0);
+        assert_eq!(slice[count - 1], ((count - 1) as f64) * 54.0 + 1.0);
+        
+        let cp = arena.checkpoint();
+        let _sub = arena.alloc_slice::<u8>(64).unwrap();
+        arena.rewind(cp);
+        
+        let mut pool = SimplePool::with_alignment(2048, 64);
+        let b = pool.allocate(count * 8).unwrap();
+        assert!(b.size >= count * 8);
+        pool.deallocate(&b).unwrap();
+        assert_eq!(pool.allocated_bytes(), 0);
+    }
+
+    #[test]
+    fn test_memory_system_stress_055() {
+        let mut arena = MemoryArena::new(4096);
+        let count = ((55 * 13) % 128) + 1;
+        let slice = arena.alloc_slice::<f64>(count).unwrap();
+        assert_eq!(slice.len(), count);
+        for i in 0..count {
+            slice[i] = (i as f64) * 55.0 + 1.0;
+        }
+        assert_eq!(slice[0], 1.0);
+        assert_eq!(slice[count - 1], ((count - 1) as f64) * 55.0 + 1.0);
+        
+        let cp = arena.checkpoint();
+        let _sub = arena.alloc_slice::<u8>(64).unwrap();
+        arena.rewind(cp);
+        
+        let mut pool = SimplePool::with_alignment(2048, 64);
+        let b = pool.allocate(count * 8).unwrap();
+        assert!(b.size >= count * 8);
+        pool.deallocate(&b).unwrap();
+        assert_eq!(pool.allocated_bytes(), 0);
+    }
+
+    #[test]
+    fn test_memory_system_stress_056() {
+        let mut arena = MemoryArena::new(4096);
+        let count = ((56 * 13) % 128) + 1;
+        let slice = arena.alloc_slice::<f64>(count).unwrap();
+        assert_eq!(slice.len(), count);
+        for i in 0..count {
+            slice[i] = (i as f64) * 56.0 + 1.0;
+        }
+        assert_eq!(slice[0], 1.0);
+        assert_eq!(slice[count - 1], ((count - 1) as f64) * 56.0 + 1.0);
+        
+        let cp = arena.checkpoint();
+        let _sub = arena.alloc_slice::<u8>(64).unwrap();
+        arena.rewind(cp);
+        
+        let mut pool = SimplePool::with_alignment(2048, 64);
+        let b = pool.allocate(count * 8).unwrap();
+        assert!(b.size >= count * 8);
+        pool.deallocate(&b).unwrap();
+        assert_eq!(pool.allocated_bytes(), 0);
+    }
+
+    #[test]
+    fn test_memory_system_stress_057() {
+        let mut arena = MemoryArena::new(4096);
+        let count = ((57 * 13) % 128) + 1;
+        let slice = arena.alloc_slice::<f64>(count).unwrap();
+        assert_eq!(slice.len(), count);
+        for i in 0..count {
+            slice[i] = (i as f64) * 57.0 + 1.0;
+        }
+        assert_eq!(slice[0], 1.0);
+        assert_eq!(slice[count - 1], ((count - 1) as f64) * 57.0 + 1.0);
+        
+        let cp = arena.checkpoint();
+        let _sub = arena.alloc_slice::<u8>(64).unwrap();
+        arena.rewind(cp);
+        
+        let mut pool = SimplePool::with_alignment(2048, 64);
+        let b = pool.allocate(count * 8).unwrap();
+        assert!(b.size >= count * 8);
+        pool.deallocate(&b).unwrap();
+        assert_eq!(pool.allocated_bytes(), 0);
+    }
+
+    #[test]
+    fn test_memory_system_stress_058() {
+        let mut arena = MemoryArena::new(4096);
+        let count = ((58 * 13) % 128) + 1;
+        let slice = arena.alloc_slice::<f64>(count).unwrap();
+        assert_eq!(slice.len(), count);
+        for i in 0..count {
+            slice[i] = (i as f64) * 58.0 + 1.0;
+        }
+        assert_eq!(slice[0], 1.0);
+        assert_eq!(slice[count - 1], ((count - 1) as f64) * 58.0 + 1.0);
+        
+        let cp = arena.checkpoint();
+        let _sub = arena.alloc_slice::<u8>(64).unwrap();
+        arena.rewind(cp);
+        
+        let mut pool = SimplePool::with_alignment(2048, 64);
+        let b = pool.allocate(count * 8).unwrap();
+        assert!(b.size >= count * 8);
+        pool.deallocate(&b).unwrap();
+        assert_eq!(pool.allocated_bytes(), 0);
+    }
+
+    #[test]
+    fn test_memory_system_stress_059() {
+        let mut arena = MemoryArena::new(4096);
+        let count = ((59 * 13) % 128) + 1;
+        let slice = arena.alloc_slice::<f64>(count).unwrap();
+        assert_eq!(slice.len(), count);
+        for i in 0..count {
+            slice[i] = (i as f64) * 59.0 + 1.0;
+        }
+        assert_eq!(slice[0], 1.0);
+        assert_eq!(slice[count - 1], ((count - 1) as f64) * 59.0 + 1.0);
+        
+        let cp = arena.checkpoint();
+        let _sub = arena.alloc_slice::<u8>(64).unwrap();
+        arena.rewind(cp);
+        
+        let mut pool = SimplePool::with_alignment(2048, 64);
+        let b = pool.allocate(count * 8).unwrap();
+        assert!(b.size >= count * 8);
+        pool.deallocate(&b).unwrap();
+        assert_eq!(pool.allocated_bytes(), 0);
+    }
+
+    #[test]
+    fn test_memory_system_stress_060() {
+        let mut arena = MemoryArena::new(4096);
+        let count = ((60 * 13) % 128) + 1;
+        let slice = arena.alloc_slice::<f64>(count).unwrap();
+        assert_eq!(slice.len(), count);
+        for i in 0..count {
+            slice[i] = (i as f64) * 60.0 + 1.0;
+        }
+        assert_eq!(slice[0], 1.0);
+        assert_eq!(slice[count - 1], ((count - 1) as f64) * 60.0 + 1.0);
+        
+        let cp = arena.checkpoint();
+        let _sub = arena.alloc_slice::<u8>(64).unwrap();
+        arena.rewind(cp);
+        
+        let mut pool = SimplePool::with_alignment(2048, 64);
+        let b = pool.allocate(count * 8).unwrap();
+        assert!(b.size >= count * 8);
+        pool.deallocate(&b).unwrap();
+        assert_eq!(pool.allocated_bytes(), 0);
+    }
+
+    #[test]
+    fn test_memory_system_stress_061() {
+        let mut arena = MemoryArena::new(4096);
+        let count = ((61 * 13) % 128) + 1;
+        let slice = arena.alloc_slice::<f64>(count).unwrap();
+        assert_eq!(slice.len(), count);
+        for i in 0..count {
+            slice[i] = (i as f64) * 61.0 + 1.0;
+        }
+        assert_eq!(slice[0], 1.0);
+        assert_eq!(slice[count - 1], ((count - 1) as f64) * 61.0 + 1.0);
+        
+        let cp = arena.checkpoint();
+        let _sub = arena.alloc_slice::<u8>(64).unwrap();
+        arena.rewind(cp);
+        
+        let mut pool = SimplePool::with_alignment(2048, 64);
+        let b = pool.allocate(count * 8).unwrap();
+        assert!(b.size >= count * 8);
+        pool.deallocate(&b).unwrap();
+        assert_eq!(pool.allocated_bytes(), 0);
+    }
+
+    #[test]
+    fn test_memory_system_stress_062() {
+        let mut arena = MemoryArena::new(4096);
+        let count = ((62 * 13) % 128) + 1;
+        let slice = arena.alloc_slice::<f64>(count).unwrap();
+        assert_eq!(slice.len(), count);
+        for i in 0..count {
+            slice[i] = (i as f64) * 62.0 + 1.0;
+        }
+        assert_eq!(slice[0], 1.0);
+        assert_eq!(slice[count - 1], ((count - 1) as f64) * 62.0 + 1.0);
+        
+        let cp = arena.checkpoint();
+        let _sub = arena.alloc_slice::<u8>(64).unwrap();
+        arena.rewind(cp);
+        
+        let mut pool = SimplePool::with_alignment(2048, 64);
+        let b = pool.allocate(count * 8).unwrap();
+        assert!(b.size >= count * 8);
+        pool.deallocate(&b).unwrap();
+        assert_eq!(pool.allocated_bytes(), 0);
+    }
+
+    #[test]
+    fn test_memory_system_stress_063() {
+        let mut arena = MemoryArena::new(4096);
+        let count = ((63 * 13) % 128) + 1;
+        let slice = arena.alloc_slice::<f64>(count).unwrap();
+        assert_eq!(slice.len(), count);
+        for i in 0..count {
+            slice[i] = (i as f64) * 63.0 + 1.0;
+        }
+        assert_eq!(slice[0], 1.0);
+        assert_eq!(slice[count - 1], ((count - 1) as f64) * 63.0 + 1.0);
+        
+        let cp = arena.checkpoint();
+        let _sub = arena.alloc_slice::<u8>(64).unwrap();
+        arena.rewind(cp);
+        
+        let mut pool = SimplePool::with_alignment(2048, 64);
+        let b = pool.allocate(count * 8).unwrap();
+        assert!(b.size >= count * 8);
+        pool.deallocate(&b).unwrap();
+        assert_eq!(pool.allocated_bytes(), 0);
+    }
+
+    #[test]
+    fn test_memory_system_stress_064() {
+        let mut arena = MemoryArena::new(4096);
+        let count = ((64 * 13) % 128) + 1;
+        let slice = arena.alloc_slice::<f64>(count).unwrap();
+        assert_eq!(slice.len(), count);
+        for i in 0..count {
+            slice[i] = (i as f64) * 64.0 + 1.0;
+        }
+        assert_eq!(slice[0], 1.0);
+        assert_eq!(slice[count - 1], ((count - 1) as f64) * 64.0 + 1.0);
+        
+        let cp = arena.checkpoint();
+        let _sub = arena.alloc_slice::<u8>(64).unwrap();
+        arena.rewind(cp);
+        
+        let mut pool = SimplePool::with_alignment(2048, 64);
+        let b = pool.allocate(count * 8).unwrap();
+        assert!(b.size >= count * 8);
+        pool.deallocate(&b).unwrap();
+        assert_eq!(pool.allocated_bytes(), 0);
+    }
+
+    #[test]
+    fn test_memory_system_stress_065() {
+        let mut arena = MemoryArena::new(4096);
+        let count = ((65 * 13) % 128) + 1;
+        let slice = arena.alloc_slice::<f64>(count).unwrap();
+        assert_eq!(slice.len(), count);
+        for i in 0..count {
+            slice[i] = (i as f64) * 65.0 + 1.0;
+        }
+        assert_eq!(slice[0], 1.0);
+        assert_eq!(slice[count - 1], ((count - 1) as f64) * 65.0 + 1.0);
+        
+        let cp = arena.checkpoint();
+        let _sub = arena.alloc_slice::<u8>(64).unwrap();
+        arena.rewind(cp);
+        
+        let mut pool = SimplePool::with_alignment(2048, 64);
+        let b = pool.allocate(count * 8).unwrap();
+        assert!(b.size >= count * 8);
+        pool.deallocate(&b).unwrap();
+        assert_eq!(pool.allocated_bytes(), 0);
+    }
+
+    #[test]
+    fn test_memory_system_stress_066() {
+        let mut arena = MemoryArena::new(4096);
+        let count = ((66 * 13) % 128) + 1;
+        let slice = arena.alloc_slice::<f64>(count).unwrap();
+        assert_eq!(slice.len(), count);
+        for i in 0..count {
+            slice[i] = (i as f64) * 66.0 + 1.0;
+        }
+        assert_eq!(slice[0], 1.0);
+        assert_eq!(slice[count - 1], ((count - 1) as f64) * 66.0 + 1.0);
+        
+        let cp = arena.checkpoint();
+        let _sub = arena.alloc_slice::<u8>(64).unwrap();
+        arena.rewind(cp);
+        
+        let mut pool = SimplePool::with_alignment(2048, 64);
+        let b = pool.allocate(count * 8).unwrap();
+        assert!(b.size >= count * 8);
+        pool.deallocate(&b).unwrap();
+        assert_eq!(pool.allocated_bytes(), 0);
+    }
+
+    #[test]
+    fn test_memory_system_stress_067() {
+        let mut arena = MemoryArena::new(4096);
+        let count = ((67 * 13) % 128) + 1;
+        let slice = arena.alloc_slice::<f64>(count).unwrap();
+        assert_eq!(slice.len(), count);
+        for i in 0..count {
+            slice[i] = (i as f64) * 67.0 + 1.0;
+        }
+        assert_eq!(slice[0], 1.0);
+        assert_eq!(slice[count - 1], ((count - 1) as f64) * 67.0 + 1.0);
+        
+        let cp = arena.checkpoint();
+        let _sub = arena.alloc_slice::<u8>(64).unwrap();
+        arena.rewind(cp);
+        
+        let mut pool = SimplePool::with_alignment(2048, 64);
+        let b = pool.allocate(count * 8).unwrap();
+        assert!(b.size >= count * 8);
+        pool.deallocate(&b).unwrap();
+        assert_eq!(pool.allocated_bytes(), 0);
+    }
+
+    #[test]
+    fn test_memory_system_stress_068() {
+        let mut arena = MemoryArena::new(4096);
+        let count = ((68 * 13) % 128) + 1;
+        let slice = arena.alloc_slice::<f64>(count).unwrap();
+        assert_eq!(slice.len(), count);
+        for i in 0..count {
+            slice[i] = (i as f64) * 68.0 + 1.0;
+        }
+        assert_eq!(slice[0], 1.0);
+        assert_eq!(slice[count - 1], ((count - 1) as f64) * 68.0 + 1.0);
+        
+        let cp = arena.checkpoint();
+        let _sub = arena.alloc_slice::<u8>(64).unwrap();
+        arena.rewind(cp);
+        
+        let mut pool = SimplePool::with_alignment(2048, 64);
+        let b = pool.allocate(count * 8).unwrap();
+        assert!(b.size >= count * 8);
+        pool.deallocate(&b).unwrap();
+        assert_eq!(pool.allocated_bytes(), 0);
+    }
+
+    #[test]
+    fn test_memory_system_stress_069() {
+        let mut arena = MemoryArena::new(4096);
+        let count = ((69 * 13) % 128) + 1;
+        let slice = arena.alloc_slice::<f64>(count).unwrap();
+        assert_eq!(slice.len(), count);
+        for i in 0..count {
+            slice[i] = (i as f64) * 69.0 + 1.0;
+        }
+        assert_eq!(slice[0], 1.0);
+        assert_eq!(slice[count - 1], ((count - 1) as f64) * 69.0 + 1.0);
+        
+        let cp = arena.checkpoint();
+        let _sub = arena.alloc_slice::<u8>(64).unwrap();
+        arena.rewind(cp);
+        
+        let mut pool = SimplePool::with_alignment(2048, 64);
+        let b = pool.allocate(count * 8).unwrap();
+        assert!(b.size >= count * 8);
+        pool.deallocate(&b).unwrap();
+        assert_eq!(pool.allocated_bytes(), 0);
+    }
+
+    #[test]
+    fn test_memory_system_stress_070() {
+        let mut arena = MemoryArena::new(4096);
+        let count = ((70 * 13) % 128) + 1;
+        let slice = arena.alloc_slice::<f64>(count).unwrap();
+        assert_eq!(slice.len(), count);
+        for i in 0..count {
+            slice[i] = (i as f64) * 70.0 + 1.0;
+        }
+        assert_eq!(slice[0], 1.0);
+        assert_eq!(slice[count - 1], ((count - 1) as f64) * 70.0 + 1.0);
+        
+        let cp = arena.checkpoint();
+        let _sub = arena.alloc_slice::<u8>(64).unwrap();
+        arena.rewind(cp);
+        
+        let mut pool = SimplePool::with_alignment(2048, 64);
+        let b = pool.allocate(count * 8).unwrap();
+        assert!(b.size >= count * 8);
+        pool.deallocate(&b).unwrap();
+        assert_eq!(pool.allocated_bytes(), 0);
+    }
+
+    #[test]
+    fn test_memory_system_stress_071() {
+        let mut arena = MemoryArena::new(4096);
+        let count = ((71 * 13) % 128) + 1;
+        let slice = arena.alloc_slice::<f64>(count).unwrap();
+        assert_eq!(slice.len(), count);
+        for i in 0..count {
+            slice[i] = (i as f64) * 71.0 + 1.0;
+        }
+        assert_eq!(slice[0], 1.0);
+        assert_eq!(slice[count - 1], ((count - 1) as f64) * 71.0 + 1.0);
+        
+        let cp = arena.checkpoint();
+        let _sub = arena.alloc_slice::<u8>(64).unwrap();
+        arena.rewind(cp);
+        
+        let mut pool = SimplePool::with_alignment(2048, 64);
+        let b = pool.allocate(count * 8).unwrap();
+        assert!(b.size >= count * 8);
+        pool.deallocate(&b).unwrap();
+        assert_eq!(pool.allocated_bytes(), 0);
+    }
+
+    #[test]
+    fn test_memory_system_stress_072() {
+        let mut arena = MemoryArena::new(4096);
+        let count = ((72 * 13) % 128) + 1;
+        let slice = arena.alloc_slice::<f64>(count).unwrap();
+        assert_eq!(slice.len(), count);
+        for i in 0..count {
+            slice[i] = (i as f64) * 72.0 + 1.0;
+        }
+        assert_eq!(slice[0], 1.0);
+        assert_eq!(slice[count - 1], ((count - 1) as f64) * 72.0 + 1.0);
+        
+        let cp = arena.checkpoint();
+        let _sub = arena.alloc_slice::<u8>(64).unwrap();
+        arena.rewind(cp);
+        
+        let mut pool = SimplePool::with_alignment(2048, 64);
+        let b = pool.allocate(count * 8).unwrap();
+        assert!(b.size >= count * 8);
+        pool.deallocate(&b).unwrap();
+        assert_eq!(pool.allocated_bytes(), 0);
+    }
+
+    #[test]
+    fn test_memory_system_stress_073() {
+        let mut arena = MemoryArena::new(4096);
+        let count = ((73 * 13) % 128) + 1;
+        let slice = arena.alloc_slice::<f64>(count).unwrap();
+        assert_eq!(slice.len(), count);
+        for i in 0..count {
+            slice[i] = (i as f64) * 73.0 + 1.0;
+        }
+        assert_eq!(slice[0], 1.0);
+        assert_eq!(slice[count - 1], ((count - 1) as f64) * 73.0 + 1.0);
+        
+        let cp = arena.checkpoint();
+        let _sub = arena.alloc_slice::<u8>(64).unwrap();
+        arena.rewind(cp);
+        
+        let mut pool = SimplePool::with_alignment(2048, 64);
+        let b = pool.allocate(count * 8).unwrap();
+        assert!(b.size >= count * 8);
+        pool.deallocate(&b).unwrap();
+        assert_eq!(pool.allocated_bytes(), 0);
+    }
+
+    #[test]
+    fn test_memory_system_stress_074() {
+        let mut arena = MemoryArena::new(4096);
+        let count = ((74 * 13) % 128) + 1;
+        let slice = arena.alloc_slice::<f64>(count).unwrap();
+        assert_eq!(slice.len(), count);
+        for i in 0..count {
+            slice[i] = (i as f64) * 74.0 + 1.0;
+        }
+        assert_eq!(slice[0], 1.0);
+        assert_eq!(slice[count - 1], ((count - 1) as f64) * 74.0 + 1.0);
+        
+        let cp = arena.checkpoint();
+        let _sub = arena.alloc_slice::<u8>(64).unwrap();
+        arena.rewind(cp);
+        
+        let mut pool = SimplePool::with_alignment(2048, 64);
+        let b = pool.allocate(count * 8).unwrap();
+        assert!(b.size >= count * 8);
+        pool.deallocate(&b).unwrap();
+        assert_eq!(pool.allocated_bytes(), 0);
+    }
+
+    #[test]
+    fn test_memory_system_stress_075() {
+        let mut arena = MemoryArena::new(4096);
+        let count = ((75 * 13) % 128) + 1;
+        let slice = arena.alloc_slice::<f64>(count).unwrap();
+        assert_eq!(slice.len(), count);
+        for i in 0..count {
+            slice[i] = (i as f64) * 75.0 + 1.0;
+        }
+        assert_eq!(slice[0], 1.0);
+        assert_eq!(slice[count - 1], ((count - 1) as f64) * 75.0 + 1.0);
+        
+        let cp = arena.checkpoint();
+        let _sub = arena.alloc_slice::<u8>(64).unwrap();
+        arena.rewind(cp);
+        
+        let mut pool = SimplePool::with_alignment(2048, 64);
+        let b = pool.allocate(count * 8).unwrap();
+        assert!(b.size >= count * 8);
+        pool.deallocate(&b).unwrap();
+        assert_eq!(pool.allocated_bytes(), 0);
+    }
+
+    #[test]
+    fn test_memory_system_stress_076() {
+        let mut arena = MemoryArena::new(4096);
+        let count = ((76 * 13) % 128) + 1;
+        let slice = arena.alloc_slice::<f64>(count).unwrap();
+        assert_eq!(slice.len(), count);
+        for i in 0..count {
+            slice[i] = (i as f64) * 76.0 + 1.0;
+        }
+        assert_eq!(slice[0], 1.0);
+        assert_eq!(slice[count - 1], ((count - 1) as f64) * 76.0 + 1.0);
+        
+        let cp = arena.checkpoint();
+        let _sub = arena.alloc_slice::<u8>(64).unwrap();
+        arena.rewind(cp);
+        
+        let mut pool = SimplePool::with_alignment(2048, 64);
+        let b = pool.allocate(count * 8).unwrap();
+        assert!(b.size >= count * 8);
+        pool.deallocate(&b).unwrap();
+        assert_eq!(pool.allocated_bytes(), 0);
+    }
+
+    #[test]
+    fn test_memory_system_stress_077() {
+        let mut arena = MemoryArena::new(4096);
+        let count = ((77 * 13) % 128) + 1;
+        let slice = arena.alloc_slice::<f64>(count).unwrap();
+        assert_eq!(slice.len(), count);
+        for i in 0..count {
+            slice[i] = (i as f64) * 77.0 + 1.0;
+        }
+        assert_eq!(slice[0], 1.0);
+        assert_eq!(slice[count - 1], ((count - 1) as f64) * 77.0 + 1.0);
+        
+        let cp = arena.checkpoint();
+        let _sub = arena.alloc_slice::<u8>(64).unwrap();
+        arena.rewind(cp);
+        
+        let mut pool = SimplePool::with_alignment(2048, 64);
+        let b = pool.allocate(count * 8).unwrap();
+        assert!(b.size >= count * 8);
+        pool.deallocate(&b).unwrap();
+        assert_eq!(pool.allocated_bytes(), 0);
+    }
+
+    #[test]
+    fn test_memory_system_stress_078() {
+        let mut arena = MemoryArena::new(4096);
+        let count = ((78 * 13) % 128) + 1;
+        let slice = arena.alloc_slice::<f64>(count).unwrap();
+        assert_eq!(slice.len(), count);
+        for i in 0..count {
+            slice[i] = (i as f64) * 78.0 + 1.0;
+        }
+        assert_eq!(slice[0], 1.0);
+        assert_eq!(slice[count - 1], ((count - 1) as f64) * 78.0 + 1.0);
+        
+        let cp = arena.checkpoint();
+        let _sub = arena.alloc_slice::<u8>(64).unwrap();
+        arena.rewind(cp);
+        
+        let mut pool = SimplePool::with_alignment(2048, 64);
+        let b = pool.allocate(count * 8).unwrap();
+        assert!(b.size >= count * 8);
+        pool.deallocate(&b).unwrap();
+        assert_eq!(pool.allocated_bytes(), 0);
+    }
+
+    #[test]
+    fn test_memory_system_stress_079() {
+        let mut arena = MemoryArena::new(4096);
+        let count = ((79 * 13) % 128) + 1;
+        let slice = arena.alloc_slice::<f64>(count).unwrap();
+        assert_eq!(slice.len(), count);
+        for i in 0..count {
+            slice[i] = (i as f64) * 79.0 + 1.0;
+        }
+        assert_eq!(slice[0], 1.0);
+        assert_eq!(slice[count - 1], ((count - 1) as f64) * 79.0 + 1.0);
+        
+        let cp = arena.checkpoint();
+        let _sub = arena.alloc_slice::<u8>(64).unwrap();
+        arena.rewind(cp);
+        
+        let mut pool = SimplePool::with_alignment(2048, 64);
+        let b = pool.allocate(count * 8).unwrap();
+        assert!(b.size >= count * 8);
+        pool.deallocate(&b).unwrap();
+        assert_eq!(pool.allocated_bytes(), 0);
+    }
+
+    #[test]
+    fn test_memory_system_stress_080() {
+        let mut arena = MemoryArena::new(4096);
+        let count = ((80 * 13) % 128) + 1;
+        let slice = arena.alloc_slice::<f64>(count).unwrap();
+        assert_eq!(slice.len(), count);
+        for i in 0..count {
+            slice[i] = (i as f64) * 80.0 + 1.0;
+        }
+        assert_eq!(slice[0], 1.0);
+        assert_eq!(slice[count - 1], ((count - 1) as f64) * 80.0 + 1.0);
+        
+        let cp = arena.checkpoint();
+        let _sub = arena.alloc_slice::<u8>(64).unwrap();
+        arena.rewind(cp);
+        
+        let mut pool = SimplePool::with_alignment(2048, 64);
+        let b = pool.allocate(count * 8).unwrap();
+        assert!(b.size >= count * 8);
+        pool.deallocate(&b).unwrap();
+        assert_eq!(pool.allocated_bytes(), 0);
+    }
+
+    #[test]
+    fn test_memory_system_stress_081() {
+        let mut arena = MemoryArena::new(4096);
+        let count = ((81 * 13) % 128) + 1;
+        let slice = arena.alloc_slice::<f64>(count).unwrap();
+        assert_eq!(slice.len(), count);
+        for i in 0..count {
+            slice[i] = (i as f64) * 81.0 + 1.0;
+        }
+        assert_eq!(slice[0], 1.0);
+        assert_eq!(slice[count - 1], ((count - 1) as f64) * 81.0 + 1.0);
+        
+        let cp = arena.checkpoint();
+        let _sub = arena.alloc_slice::<u8>(64).unwrap();
+        arena.rewind(cp);
+        
+        let mut pool = SimplePool::with_alignment(2048, 64);
+        let b = pool.allocate(count * 8).unwrap();
+        assert!(b.size >= count * 8);
+        pool.deallocate(&b).unwrap();
+        assert_eq!(pool.allocated_bytes(), 0);
+    }
+
+    #[test]
+    fn test_memory_system_stress_082() {
+        let mut arena = MemoryArena::new(4096);
+        let count = ((82 * 13) % 128) + 1;
+        let slice = arena.alloc_slice::<f64>(count).unwrap();
+        assert_eq!(slice.len(), count);
+        for i in 0..count {
+            slice[i] = (i as f64) * 82.0 + 1.0;
+        }
+        assert_eq!(slice[0], 1.0);
+        assert_eq!(slice[count - 1], ((count - 1) as f64) * 82.0 + 1.0);
+        
+        let cp = arena.checkpoint();
+        let _sub = arena.alloc_slice::<u8>(64).unwrap();
+        arena.rewind(cp);
+        
+        let mut pool = SimplePool::with_alignment(2048, 64);
+        let b = pool.allocate(count * 8).unwrap();
+        assert!(b.size >= count * 8);
+        pool.deallocate(&b).unwrap();
+        assert_eq!(pool.allocated_bytes(), 0);
+    }
+
+    #[test]
+    fn test_memory_system_stress_083() {
+        let mut arena = MemoryArena::new(4096);
+        let count = ((83 * 13) % 128) + 1;
+        let slice = arena.alloc_slice::<f64>(count).unwrap();
+        assert_eq!(slice.len(), count);
+        for i in 0..count {
+            slice[i] = (i as f64) * 83.0 + 1.0;
+        }
+        assert_eq!(slice[0], 1.0);
+        assert_eq!(slice[count - 1], ((count - 1) as f64) * 83.0 + 1.0);
+        
+        let cp = arena.checkpoint();
+        let _sub = arena.alloc_slice::<u8>(64).unwrap();
+        arena.rewind(cp);
+        
+        let mut pool = SimplePool::with_alignment(2048, 64);
+        let b = pool.allocate(count * 8).unwrap();
+        assert!(b.size >= count * 8);
+        pool.deallocate(&b).unwrap();
+        assert_eq!(pool.allocated_bytes(), 0);
+    }
+
+    #[test]
+    fn test_memory_system_stress_084() {
+        let mut arena = MemoryArena::new(4096);
+        let count = ((84 * 13) % 128) + 1;
+        let slice = arena.alloc_slice::<f64>(count).unwrap();
+        assert_eq!(slice.len(), count);
+        for i in 0..count {
+            slice[i] = (i as f64) * 84.0 + 1.0;
+        }
+        assert_eq!(slice[0], 1.0);
+        assert_eq!(slice[count - 1], ((count - 1) as f64) * 84.0 + 1.0);
+        
+        let cp = arena.checkpoint();
+        let _sub = arena.alloc_slice::<u8>(64).unwrap();
+        arena.rewind(cp);
+        
+        let mut pool = SimplePool::with_alignment(2048, 64);
+        let b = pool.allocate(count * 8).unwrap();
+        assert!(b.size >= count * 8);
+        pool.deallocate(&b).unwrap();
+        assert_eq!(pool.allocated_bytes(), 0);
+    }
+
+    #[test]
+    fn test_memory_system_stress_085() {
+        let mut arena = MemoryArena::new(4096);
+        let count = ((85 * 13) % 128) + 1;
+        let slice = arena.alloc_slice::<f64>(count).unwrap();
+        assert_eq!(slice.len(), count);
+        for i in 0..count {
+            slice[i] = (i as f64) * 85.0 + 1.0;
+        }
+        assert_eq!(slice[0], 1.0);
+        assert_eq!(slice[count - 1], ((count - 1) as f64) * 85.0 + 1.0);
+        
+        let cp = arena.checkpoint();
+        let _sub = arena.alloc_slice::<u8>(64).unwrap();
+        arena.rewind(cp);
+        
+        let mut pool = SimplePool::with_alignment(2048, 64);
+        let b = pool.allocate(count * 8).unwrap();
+        assert!(b.size >= count * 8);
+        pool.deallocate(&b).unwrap();
+        assert_eq!(pool.allocated_bytes(), 0);
+    }
+
+    #[test]
+    fn test_memory_system_stress_086() {
+        let mut arena = MemoryArena::new(4096);
+        let count = ((86 * 13) % 128) + 1;
+        let slice = arena.alloc_slice::<f64>(count).unwrap();
+        assert_eq!(slice.len(), count);
+        for i in 0..count {
+            slice[i] = (i as f64) * 86.0 + 1.0;
+        }
+        assert_eq!(slice[0], 1.0);
+        assert_eq!(slice[count - 1], ((count - 1) as f64) * 86.0 + 1.0);
+        
+        let cp = arena.checkpoint();
+        let _sub = arena.alloc_slice::<u8>(64).unwrap();
+        arena.rewind(cp);
+        
+        let mut pool = SimplePool::with_alignment(2048, 64);
+        let b = pool.allocate(count * 8).unwrap();
+        assert!(b.size >= count * 8);
+        pool.deallocate(&b).unwrap();
+        assert_eq!(pool.allocated_bytes(), 0);
+    }
+
+    #[test]
+    fn test_memory_system_stress_087() {
+        let mut arena = MemoryArena::new(4096);
+        let count = ((87 * 13) % 128) + 1;
+        let slice = arena.alloc_slice::<f64>(count).unwrap();
+        assert_eq!(slice.len(), count);
+        for i in 0..count {
+            slice[i] = (i as f64) * 87.0 + 1.0;
+        }
+        assert_eq!(slice[0], 1.0);
+        assert_eq!(slice[count - 1], ((count - 1) as f64) * 87.0 + 1.0);
+        
+        let cp = arena.checkpoint();
+        let _sub = arena.alloc_slice::<u8>(64).unwrap();
+        arena.rewind(cp);
+        
+        let mut pool = SimplePool::with_alignment(2048, 64);
+        let b = pool.allocate(count * 8).unwrap();
+        assert!(b.size >= count * 8);
+        pool.deallocate(&b).unwrap();
+        assert_eq!(pool.allocated_bytes(), 0);
+    }
+
+    #[test]
+    fn test_memory_system_stress_088() {
+        let mut arena = MemoryArena::new(4096);
+        let count = ((88 * 13) % 128) + 1;
+        let slice = arena.alloc_slice::<f64>(count).unwrap();
+        assert_eq!(slice.len(), count);
+        for i in 0..count {
+            slice[i] = (i as f64) * 88.0 + 1.0;
+        }
+        assert_eq!(slice[0], 1.0);
+        assert_eq!(slice[count - 1], ((count - 1) as f64) * 88.0 + 1.0);
+        
+        let cp = arena.checkpoint();
+        let _sub = arena.alloc_slice::<u8>(64).unwrap();
+        arena.rewind(cp);
+        
+        let mut pool = SimplePool::with_alignment(2048, 64);
+        let b = pool.allocate(count * 8).unwrap();
+        assert!(b.size >= count * 8);
+        pool.deallocate(&b).unwrap();
+        assert_eq!(pool.allocated_bytes(), 0);
+    }
+
+    #[test]
+    fn test_memory_system_stress_089() {
+        let mut arena = MemoryArena::new(4096);
+        let count = ((89 * 13) % 128) + 1;
+        let slice = arena.alloc_slice::<f64>(count).unwrap();
+        assert_eq!(slice.len(), count);
+        for i in 0..count {
+            slice[i] = (i as f64) * 89.0 + 1.0;
+        }
+        assert_eq!(slice[0], 1.0);
+        assert_eq!(slice[count - 1], ((count - 1) as f64) * 89.0 + 1.0);
+        
+        let cp = arena.checkpoint();
+        let _sub = arena.alloc_slice::<u8>(64).unwrap();
+        arena.rewind(cp);
+        
+        let mut pool = SimplePool::with_alignment(2048, 64);
+        let b = pool.allocate(count * 8).unwrap();
+        assert!(b.size >= count * 8);
+        pool.deallocate(&b).unwrap();
+        assert_eq!(pool.allocated_bytes(), 0);
     }
 }

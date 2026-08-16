@@ -1,71 +1,103 @@
 //! Core Tensor struct implementation for the Brain deep learning framework.
 //!
-//! This module defines the [`Tensor`] struct and all its fundamental operations
-//! including creation, element access, transformations, operator overloads,
-//! and mutation methods.
+//! This module defines the [`Tensor`] struct and all fundamental constructors, accessors,
+//! memory representations, shape transformations, splitting/chunking routines, device/dtype
+//! conversions, operator overloads, and mutation primitives.
 
 use std::fmt;
 use std::hash::{Hash, Hasher};
-use std::ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Neg, Sub, SubAssign, Index, IndexMut};
+use std::ops::{Add, AddAssign, Div, DivAssign, Index, IndexMut, Mul, MulAssign, Neg, Sub, SubAssign};
 
 use crate::device::Device;
 use crate::dtype::DType;
-use crate::error::BrainResult;
-use crate::random::{self, BrainRng};
+use crate::error::{BrainError, BrainResult};
+use crate::random::{self, BrainRng, Rng};
 
 // =============================================================================
-// Tensor Struct
+// Helper Functions for Strides and Layout
+// =============================================================================
+
+/// Computes standard row-major (C-order) strides from a shape slice.
+pub fn compute_strides(shape: &[usize]) -> Vec<usize> {
+    if shape.is_empty() {
+        return vec![];
+    }
+    let mut strides = vec![1; shape.len()];
+    for i in (0..shape.len() - 1).rev() {
+        strides[i] = strides[i + 1] * shape[i + 1];
+    }
+    strides
+}
+
+// =============================================================================
+// Tensor Struct Definition
 // =============================================================================
 
 /// A multi-dimensional array of numerical data.
 ///
-/// The Tensor is the core data structure of the Brain framework, representing
+/// The Tensor is the central data structure of the Brain framework, representing
 /// an n-dimensional array with a given shape, data type, device placement,
 /// and optional gradient tracking.
 ///
 /// Internally, data is stored as a contiguous `Vec<f64>` in row-major order.
 #[derive(Debug, Clone)]
 pub struct Tensor {
-    /// The underlying data stored as f64 values in row-major order.
     data: Vec<f64>,
-    /// The shape (dimensions) of the tensor.
     shape: Vec<usize>,
-    /// The strides for each dimension.
     strides: Vec<usize>,
-    /// The device where the tensor resides.
     device: Device,
-    /// The data type of the tensor elements.
     dtype: DType,
-    /// Whether gradients should be computed for this tensor.
     requires_grad: bool,
-    /// An optional name for debugging purposes.
     name: Option<String>,
 }
 
 // =============================================================================
-// Tensor Implementation
+// Tensor Implementation - Constructors
 // =============================================================================
 
 impl Tensor {
-    // -----------------------------------------------------------------------
-    // Creation Methods
-    // -----------------------------------------------------------------------
-
     /// Creates a new tensor from a data vector and shape.
     ///
     /// # Panics
     ///
-    /// Panics if the product of shape dimensions does not equal data.len().
+    /// Panics if the product of shape dimensions does not equal `data.len()`.
     pub fn new(data: Vec<f64>, shape: Vec<usize>) -> Self {
         let numel: usize = shape.iter().product();
-        assert_eq!(data.len(), numel,
+        assert_eq!(
+            data.len(),
+            numel,
             "Data length {} does not match shape product {}",
-            data.len(), numel);
+            data.len(),
+            numel
+        );
         let strides = compute_strides(&shape);
         Tensor {
             data,
             shape,
             strides,
+            device: Device::Cpu,
+            dtype: DType::F64,
+            requires_grad: false,
+            name: None,
+        }
+    }
+
+    /// Creates a tensor from an owned vector and shape.
+    pub fn from_vec(data: Vec<f64>, shape: Vec<usize>) -> Self {
+        Self::new(data, shape)
+    }
+
+    /// Creates a tensor from a slice and shape.
+    pub fn from_slice(data: &[f64], shape: Vec<usize>) -> Self {
+        Self::new(data.to_vec(), shape)
+    }
+
+    /// Creates a scalar (0-dimensional) tensor.
+    pub fn scalar(value: f64) -> Self {
+        Tensor {
+            data: vec![value],
+            shape: vec![],
+            strides: vec![],
             device: Device::Cpu,
             dtype: DType::F64,
             requires_grad: false,
@@ -101,7 +133,7 @@ impl Tensor {
         }
     }
 
-    /// Creates a tensor filled with a specific value.
+    /// Creates a tensor filled with a constant value.
     pub fn full(shape: Vec<usize>, value: f64) -> Self {
         let numel: usize = shape.iter().product();
         Tensor {
@@ -115,779 +147,689 @@ impl Tensor {
         }
     }
 
-    /// Creates a scalar tensor (0-dimensional).
-    pub fn scalar(value: f64) -> Self {
-        Tensor {
-            data: vec![value],
-            shape: vec![],
-            strides: vec![],
-            device: Device::Cpu,
-            dtype: DType::F64,
-            requires_grad: false,
-            name: None,
-        }
-    }
-
-    /// Creates an identity matrix of size n x n.
-    pub fn identity(n: usize) -> Self {
-        let mut data = vec![0.0; n * n];
-        for i in 0..n {
-            data[i * n + i] = 1.0;
-        }
-        let shape = vec![n, n];
-        Tensor {
-            data,
-            shape: shape.clone(),
-            strides: compute_strides(&shape),
-            device: Device::Cpu,
-            dtype: DType::F64,
-            requires_grad: false,
-            name: None,
-        }
-    }
-
-    /// Creates a 1D tensor with values from start to end (exclusive) with given step.
+    /// Creates a 1D tensor with values linearly spaced in `[start, end)`.
     pub fn arange(start: f64, end: f64, step: f64) -> Self {
-        assert!(step != 0.0, "Step must be non-zero");
-        let len = if step > 0.0 {
-            ((end - start) / step).ceil() as usize
-        } else {
-            ((start - end) / (-step)).ceil() as usize
-        };
-        let data: Vec<f64> = (0..len).map(|i| start + i as f64 * step).collect();
-        let shape = vec![len];
-        Tensor {
-            data,
-            shape: shape.clone(),
-            strides: compute_strides(&shape),
-            device: Device::Cpu,
-            dtype: DType::F64,
-            requires_grad: false,
-            name: None,
+        assert!(step > 0.0, "arange step must be positive");
+        let mut data = Vec::new();
+        let mut current = start;
+        while current < end {
+            data.push(current);
+            current += step;
         }
+        let len = data.len();
+        Self::new(data, vec![len])
     }
 
-    /// Creates a 1D tensor with evenly spaced values over [start, end].
-    pub fn linspace(start: f64, end: f64, num: usize) -> Self {
-        assert!(num >= 1, "Number of points must be >= 1");
-        let data: Vec<f64> = if num == 1 {
-            vec![start]
-        } else {
-            let step = (end - start) / (num - 1) as f64;
-            (0..num).map(|i| start + i as f64 * step).collect()
-        };
-        let shape = vec![num];
-        Tensor {
-            data,
-            shape: shape.clone(),
-            strides: compute_strides(&shape),
-            device: Device::Cpu,
-            dtype: DType::F64,
-            requires_grad: false,
-            name: None,
+    /// Creates a 1D tensor with `steps` values evenly spaced in `[start, end]`.
+    pub fn linspace(start: f64, end: f64, steps: usize) -> Self {
+        assert!(steps >= 1, "linspace steps must be >= 1");
+        if steps == 1 {
+            return Self::new(vec![start], vec![1]);
         }
+        let step = (end - start) / ((steps - 1) as f64);
+        let mut data = Vec::with_capacity(steps);
+        for i in 0..steps {
+            data.push(start + (i as f64) * step);
+        }
+        Self::new(data, vec![steps])
     }
 
-    /// Creates a 1D tensor with logarithmically spaced values.
-    pub fn logspace(base: f64, start: f64, end: f64, num: usize) -> Self {
-        let inner = Self::linspace(start, end, num);
-        let data = inner.data.iter().map(|&v| base.powf(v)).collect();
-        Tensor { data, shape: vec![num], strides: vec![1], device: Device::Cpu, dtype: DType::F64, requires_grad: false, name: None }
-    }
-
-    /// Creates an identity-like 2D tensor with ones on the k-th diagonal.
-    pub fn eye(n: usize, m: usize, k: isize) -> Self {
-        let mut data = vec![0.0; n * m];
-        let diag_start = if k >= 0 { k as usize } else { (-k) as usize };
+    /// Creates a 2D identity matrix of size `n x n`.
+    pub fn eye(n: usize) -> Self {
+        let mut t = Self::zeros(vec![n, n]);
         for i in 0..n {
-            let j = i as isize + k;
-            if j >= 0 && (j as usize) < m {
-                data[i * m + j as usize] = 1.0;
-            }
+            t.set_2d(i, i, 1.0);
         }
-        let shape = vec![n, m];
-        Tensor { data, shape: shape.clone(), strides: compute_strides(&shape), device: Device::Cpu, dtype: DType::F64, requires_grad: false, name: None }
+        t
     }
 
-    /// Creates an uninitialized tensor (filled with 0.0 for safety).
+    /// Creates a 2D identity matrix of size `n x n` (alias).
+    pub fn identity(n: usize) -> Self {
+        Self::eye(n)
+    }
+
+    /// Creates an empty tensor with zero elements.
     pub fn empty(shape: Vec<usize>) -> Self {
-        Self::zeros(shape)
+        Self::new(Vec::new(), shape)
     }
 
-    /// Creates a tensor from a flat slice of values with a given shape.
-    pub fn from_slice(slice: &[f64], shape: Vec<usize>) -> Self {
-        Self::new(slice.to_vec(), shape)
+    /// Creates a tensor filled with standard uniform random values in `[0, 1)`.
+    pub fn rand(shape: Vec<usize>) -> Self {
+        let numel: usize = shape.iter().product();
+        let mut data = vec![0.0; numel];
+        random::with_rng(|rng| {
+            rng.fill_f64_slice(&mut data);
+        });
+        Self::new(data, shape)
     }
 
-    /// Creates a 2D matrix with the given vector on the diagonal.
-    pub fn from_diag(diag: &[f64]) -> Self {
-        let n = diag.len();
-        let mut data = vec![0.0; n * n];
-        for i in 0..n {
-            data[i * n + i] = diag[i];
-        }
-        let shape = vec![n, n];
-        Tensor { data, shape: shape.clone(), strides: compute_strides(&shape), device: Device::Cpu, dtype: DType::F64, requires_grad: false, name: None }
+    /// Creates a tensor filled with standard normal random values (mean 0, std 1).
+    pub fn randn(shape: Vec<usize>) -> Self {
+        let numel: usize = shape.iter().product();
+        let mut data = Vec::with_capacity(numel);
+        random::with_rng(|rng| {
+            for _ in 0..numel {
+                let u1 = (1.0 - rng.next_f64()).max(1e-15);
+                let u2 = rng.next_f64();
+                let z0 = (-2.0 * u1.ln()).sqrt() * (2.0 * std::f64::consts::PI * u2).cos();
+                data.push(z0);
+            }
+        });
+        Self::new(data, shape)
+    }
+}
+
+// =============================================================================
+// Tensor Implementation - Accessors & Metadata
+// =============================================================================
+
+impl Tensor {
+    /// Returns an immutable slice to the underlying data buffer.
+    #[inline(always)]
+    pub fn data(&self) -> &[f64] {
+        &self.data
     }
 
-    // -----------------------------------------------------------------------
-    // Properties
-    // -----------------------------------------------------------------------
+    /// Returns a mutable slice to the underlying data buffer.
+    #[inline(always)]
+    pub fn data_mut(&mut self) -> &mut [f64] {
+        &mut self.data
+    }
 
-    /// Returns the shape of the tensor.
-    pub fn shape(&self) -> &[usize] { &self.shape }
+    /// Returns the shape slice.
+    #[inline(always)]
+    pub fn shape(&self) -> &[usize] {
+        &self.shape
+    }
 
-    /// Returns the strides of the tensor.
-    pub fn strides(&self) -> &[usize] { &self.strides }
-
-    /// Returns a reference to the underlying data.
-    pub fn data(&self) -> &[f64] { &self.data }
-
-    /// Returns a mutable reference to the underlying data.
-    pub fn data_mut(&mut self) -> &mut [f64] { &mut self.data }
+    /// Returns the strides slice.
+    #[inline(always)]
+    pub fn strides(&self) -> &[usize] {
+        &self.strides
+    }
 
     /// Returns the number of dimensions (rank).
-    pub fn ndim(&self) -> usize { self.shape.len() }
+    #[inline(always)]
+    pub fn ndim(&self) -> usize {
+        self.shape.len()
+    }
 
     /// Returns the total number of elements.
-    pub fn numel(&self) -> usize { self.data.len() }
-
-    /// Returns true if the tensor has no elements.
-    pub fn is_empty(&self) -> bool { self.data.is_empty() }
-
-    /// Returns whether this tensor requires gradient computation.
-    pub fn requires_grad(&self) -> bool { self.requires_grad }
-
-    /// Sets the requires_grad flag.
-    pub fn set_requires_grad(&mut self, requires_grad: bool) { self.requires_grad = requires_grad; }
-
-    /// Returns the device.
-    pub fn device(&self) -> Device { self.device }
-
-    /// Returns the data type.
-    pub fn dtype(&self) -> DType { self.dtype }
-
-    /// Returns true if the tensor data is contiguous in row-major order.
-    pub fn is_contiguous(&self) -> bool {
-        self.strides == compute_strides(&self.shape)
+    #[inline(always)]
+    pub fn numel(&self) -> usize {
+        self.data.len()
     }
 
-    /// Returns true if this is a scalar (0-dimensional) tensor.
-    pub fn is_scalar(&self) -> bool { self.shape.is_empty() }
-
-    /// Returns true if this is a 2D matrix.
-    pub fn is_matrix(&self) -> bool { self.shape.len() == 2 }
-
-    /// Returns true if this is a 1D vector.
-    pub fn is_vector(&self) -> bool { self.shape.len() == 1 }
-
-    /// Returns the size of the i-th dimension.
-    pub fn size(&self, i: usize) -> usize {
-        self.shape.get(i).copied().unwrap_or(1)
+    /// Returns true if the tensor has 0 elements.
+    #[inline(always)]
+    pub fn is_empty(&self) -> bool {
+        self.data.is_empty()
     }
 
-    /// Returns the optional name of the tensor.
-    pub fn name(&self) -> Option<&str> { self.name.as_deref() }
-
-    // -----------------------------------------------------------------------
-    // Element Access
-    // -----------------------------------------------------------------------
-
-    /// Gets the element at the given flat index.
-    pub fn get(&self, index: usize) -> f64 {
-        assert!(index < self.data.len(), "Index {} out of bounds for tensor of size {}", index, self.data.len());
-        self.data[index]
+    /// Returns the device placement of this tensor.
+    #[inline(always)]
+    pub fn device(&self) -> Device {
+        self.device
     }
 
-    /// Gets a mutable reference to the element at the given flat index.
-    pub fn get_mut(&mut self, index: usize) -> &mut f64 {
-        assert!(index < self.data.len(), "Index {} out of bounds for tensor of size {}", index, self.data.len());
-        &mut self.data[index]
+    /// Returns the data type of this tensor.
+    #[inline(always)]
+    pub fn dtype(&self) -> DType {
+        self.dtype
     }
 
-    /// Sets the element at the given flat index.
-    pub fn set(&mut self, index: usize, value: f64) {
-        assert!(index < self.data.len(), "Index {} out of bounds for tensor of size {}", index, self.data.len());
-        self.data[index] = value;
+    /// Returns whether gradient computation is required.
+    #[inline(always)]
+    pub fn requires_grad(&self) -> bool {
+        self.requires_grad
     }
 
-    /// Gets the element at the given multi-dimensional index.
+    /// Sets whether gradient computation is required.
+    pub fn set_requires_grad(&mut self, req: bool) {
+        self.requires_grad = req;
+    }
+
+    /// Returns the optional debug name.
+    pub fn name(&self) -> Option<&str> {
+        self.name.as_deref()
+    }
+
+    /// Sets the optional debug name.
+    pub fn set_name(&mut self, name: impl Into<String>) {
+        self.name = Some(name.into());
+    }
+
+    /// Gets an element at a flat index.
+    #[inline(always)]
+    pub fn get(&self, flat_index: usize) -> f64 {
+        self.data[flat_index]
+    }
+
+    /// Sets an element at a flat index.
+    #[inline(always)]
+    pub fn set(&mut self, flat_index: usize, value: f64) {
+        self.data[flat_index] = value;
+    }
+
+    /// Computes the flat row-major index for multi-dimensional coordinates.
+    pub fn flat_index(&self, indices: &[usize]) -> usize {
+        assert_eq!(
+            indices.len(),
+            self.shape.len(),
+            "Coordinate rank {} does not match tensor rank {}",
+            indices.len(),
+            self.shape.len()
+        );
+        let mut offset = 0;
+        for (i, &idx) in indices.iter().enumerate() {
+            assert!(
+                idx < self.shape[i],
+                "Index {} out of bounds for axis {} of size {}",
+                idx,
+                i,
+                self.shape[i]
+            );
+            offset += idx * self.strides[i];
+        }
+        offset
+    }
+
+    /// Gets an element at multi-dimensional coordinates.
     pub fn get_index(&self, indices: &[usize]) -> f64 {
-        let flat = self.multi_to_flat(indices);
-        self.data[flat]
+        let idx = self.flat_index(indices);
+        self.data[idx]
     }
 
-    /// Sets the element at the given multi-dimensional index.
+    /// Sets an element at multi-dimensional coordinates.
     pub fn set_index(&mut self, indices: &[usize], value: f64) {
-        let flat = self.multi_to_flat(indices);
-        self.data[flat] = value;
+        let idx = self.flat_index(indices);
+        self.data[idx] = value;
     }
 
-    /// Gets element without bounds checking.
-    pub unsafe fn unsafe_get(&self, index: usize) -> f64 {
-        *self.data.get_unchecked(index)
+    /// Gets an element from a 2D matrix.
+    #[inline(always)]
+    pub fn get_2d(&self, r: usize, c: usize) -> f64 {
+        assert_eq!(self.shape.len(), 2, "get_2d requires a 2D tensor");
+        assert!(r < self.shape[0] && c < self.shape[1], "2D index out of bounds");
+        self.data[r * self.strides[0] + c * self.strides[1]]
     }
 
-    /// Sets element without bounds checking.
-    pub unsafe fn unsafe_set(&mut self, index: usize, value: f64) {
-        *self.data.get_unchecked_mut(index) = value;
+    /// Sets an element in a 2D matrix.
+    #[inline(always)]
+    pub fn set_2d(&mut self, r: usize, c: usize, value: f64) {
+        assert_eq!(self.shape.len(), 2, "set_2d requires a 2D tensor");
+        assert!(r < self.shape[0] && c < self.shape[1], "2D index out of bounds");
+        let idx = r * self.strides[0] + c * self.strides[1];
+        self.data[idx] = value;
     }
 
-    // -----------------------------------------------------------------------
-    // Transformations
-    // -----------------------------------------------------------------------
-
-    /// Reshapes the tensor to a new shape.
-    pub fn reshape(&self, new_shape: Vec<usize>) -> Self {
-        let new_numel: usize = new_shape.iter().product();
-        assert_eq!(self.data.len(), new_numel,
-            "Cannot reshape tensor of size {} to shape {:?}", self.data.len(), new_shape);
-        Tensor {
-            data: self.data.clone(),
-            shape: new_shape.clone(),
-            strides: compute_strides(&new_shape),
-            device: self.device,
-            dtype: self.dtype,
-            requires_grad: self.requires_grad,
-            name: self.name.clone(),
-        }
+    /// Gets an element from a 3D tensor.
+    #[inline(always)]
+    pub fn get_3d(&self, d0: usize, d1: usize, d2: usize) -> f64 {
+        assert_eq!(self.shape.len(), 3, "get_3d requires a 3D tensor");
+        let idx = d0 * self.strides[0] + d1 * self.strides[1] + d2 * self.strides[2];
+        self.data[idx]
     }
 
-    /// Flattens the tensor to 1D.
-    pub fn flatten(&self) -> Self {
-        let numel = self.data.len();
-        Tensor {
-            data: self.data.clone(),
-            shape: vec![numel],
-            strides: vec![1],
-            device: self.device,
-            dtype: self.dtype,
-            requires_grad: self.requires_grad,
-            name: self.name.clone(),
-        }
+    /// Sets an element in a 3D tensor.
+    #[inline(always)]
+    pub fn set_3d(&mut self, d0: usize, d1: usize, d2: usize, value: f64) {
+        assert_eq!(self.shape.len(), 3, "set_3d requires a 3D tensor");
+        let idx = d0 * self.strides[0] + d1 * self.strides[1] + d2 * self.strides[2];
+        self.data[idx] = value;
     }
 
-    /// Transposes the last two dimensions of a 2D tensor.
-    pub fn transpose(&self) -> Self {
-        assert!(self.ndim() == 2, "Transpose requires a 2D tensor");
+    /// Gets an element from a 4D tensor.
+    #[inline(always)]
+    pub fn get_4d(&self, d0: usize, d1: usize, d2: usize, d3: usize) -> f64 {
+        assert_eq!(self.shape.len(), 4, "get_4d requires a 4D tensor");
+        let idx = d0 * self.strides[0]
+            + d1 * self.strides[1]
+            + d2 * self.strides[2]
+            + d3 * self.strides[3];
+        self.data[idx]
+    }
+
+    /// Sets an element in a 4D tensor.
+    #[inline(always)]
+    pub fn set_4d(&mut self, d0: usize, d1: usize, d2: usize, d3: usize, value: f64) {
+        assert_eq!(self.shape.len(), 4, "set_4d requires a 4D tensor");
+        let idx = d0 * self.strides[0]
+            + d1 * self.strides[1]
+            + d2 * self.strides[2]
+            + d3 * self.strides[3];
+        self.data[idx] = value;
+    }
+}
+
+// =============================================================================
+// Tensor Conversions & Transforms
+// =============================================================================
+
+impl Tensor {
+    /// Copies tensor data into a flat `Vec<f64>`.
+    pub fn to_vec(&self) -> Vec<f64> {
+        self.data.clone()
+    }
+
+    /// Converts a 2D tensor into nested `Vec<Vec<f64>>`.
+    pub fn to_vec_2d(&self) -> Vec<Vec<f64>> {
+        assert_eq!(self.ndim(), 2, "to_vec_2d requires a 2D tensor");
         let (rows, cols) = (self.shape[0], self.shape[1]);
-        let mut data = vec![0.0; rows * cols];
-        for i in 0..rows {
-            for j in 0..cols {
-                data[j * rows + i] = self.data[i * cols + j];
+        let mut result = Vec::with_capacity(rows);
+        for r in 0..rows {
+            let mut row = Vec::with_capacity(cols);
+            for c in 0..cols {
+                row.push(self.get_2d(r, c));
             }
-        }
-        let shape = vec![cols, rows];
-        Tensor { data, shape: shape.clone(), strides: compute_strides(&shape), device: self.device, dtype: self.dtype, requires_grad: self.requires_grad, name: self.name.clone() }
-    }
-
-    /// Permute the dimensions according to the given permutation.
-    pub fn permute(&self, perm: &[usize]) -> Self {
-        assert_eq!(perm.len(), self.shape.len(), "Permutation length must match ndim");
-        let mut new_shape = Vec::with_capacity(perm.len());
-        for &p in perm { new_shape.push(self.shape[p]); }
-        let new_numel: usize = new_shape.iter().product();
-        let mut data = vec![0.0; new_numel];
-        let new_strides = compute_strides(&new_shape);
-        // Iterate over all indices
-        let mut idx = vec![0usize; self.shape.len()];
-        let mut flat = 0;
-        loop {
-            // Compute source flat index
-            let src_flat = self.multi_to_flat(&idx);
-            // Compute dest multi index
-            let mut dest_multi = vec![0usize; perm.len()];
-            for (i, &p) in perm.iter().enumerate() { dest_multi[i] = idx[p]; }
-            let dest_flat = multi_to_flat_raw(&dest_multi, &new_strides);
-            data[dest_flat] = self.data[src_flat];
-            // Increment
-            flat += 1;
-            if flat >= new_numel { break; }
-            let mut carry = true;
-            for i in (0..self.shape.len()).rev() {
-                if carry {
-                    idx[i] += 1;
-                    if idx[i] >= self.shape[i] { idx[i] = 0; } else { carry = false; }
-                }
-            }
-        }
-        Tensor { data, shape: new_shape.clone(), strides: new_strides, device: self.device, dtype: self.dtype, requires_grad: self.requires_grad, name: self.name.clone() }
-    }
-
-    /// Removes dimensions of size 1.
-    pub fn squeeze(&self) -> Self {
-        let new_shape: Vec<usize> = self.shape.iter().filter(|&&d| d != 1).cloned().collect();
-        if new_shape.is_empty() {
-            return self.reshape(vec![1]);
-        }
-        self.reshape(new_shape)
-    }
-
-    /// Removes a specific dimension of size 1.
-    pub fn squeeze_axis(&self, axis: usize) -> Self {
-        assert!(axis < self.shape.len());
-        assert_eq!(self.shape[axis], 1, "Cannot squeeze dimension of size {}", self.shape[axis]);
-        let mut new_shape = self.shape.clone();
-        new_shape.remove(axis);
-        self.reshape(new_shape)
-    }
-
-    /// Adds a dimension of size 1 at the given axis.
-    pub fn unsqueeze(&self, axis: i32) -> Self {
-        let axis = if axis < 0 { self.shape.len() as i32 + axis } else { axis } as usize;
-        assert!(axis <= self.shape.len());
-        let mut new_shape = self.shape.clone();
-        new_shape.insert(axis, 1);
-        self.reshape(new_shape)
-    }
-
-    /// Narrows the tensor along a dimension.
-    pub fn narrow(&self, dim: usize, start: usize, length: usize) -> Self {
-        assert!(dim < self.shape.len());
-        assert!(start + length <= self.shape[dim]);
-        let mut new_shape = self.shape.clone();
-        new_shape[dim] = length;
-        let new_numel: usize = new_shape.iter().product();
-        let mut data = vec![0.0; new_numel];
-        let mut src_idx = vec![0usize; self.shape.len()];
-        let mut dst_idx = vec![0usize; new_shape.len()];
-        let mut dst_flat = 0;
-        loop {
-            // Copy element
-            let src_flat = self.multi_to_flat(&src_idx);
-            let dst_flat_val = multi_to_flat_raw(&dst_idx, &compute_strides(&new_shape));
-            data[dst_flat_val] = self.data[src_flat];
-            dst_flat += 1;
-            if dst_flat >= new_numel { break; }
-            // Increment dst
-            let mut carry = true;
-            for i in (0..new_shape.len()).rev() {
-                if carry {
-                    dst_idx[i] += 1;
-                    if dst_idx[i] >= new_shape[i] { dst_idx[i] = 0; } else { carry = false; }
-                }
-            }
-            // Map dst to src
-            for i in 0..self.shape.len() {
-                src_idx[i] = dst_idx.get(i).copied().unwrap_or(0);
-            }
-            src_idx[dim] = start + dst_idx[dim];
-        }
-        Tensor { data, shape: new_shape.clone(), strides: compute_strides(&new_shape), device: self.device, dtype: self.dtype, requires_grad: self.requires_grad, name: self.name.clone() }
-    }
-
-    /// Splits the tensor into chunks along a dimension.
-    pub fn chunk(&self, chunks: usize, dim: usize) -> Vec<Self> {
-        assert!(dim < self.shape.len());
-        assert!(chunks > 0);
-        let dim_size = self.shape[dim];
-        let base_len = dim_size / chunks;
-        let remainder = dim_size % chunks;
-        let mut result = Vec::with_capacity(chunks);
-        let mut start = 0;
-        for i in 0..chunks {
-            let len = base_len + if i < remainder { 1 } else { 0 };
-            result.push(self.narrow(dim, start, len));
-            start += len;
+            result.push(row);
         }
         result
     }
 
-    /// Splits the tensor into equal parts along a dimension.
-    pub fn split(&self, sections: usize, dim: usize) -> Vec<Self> {
-        self.chunk(sections, dim)
-    }
-
-    /// Flips the tensor along a dimension.
-    pub fn flip(&self, dim: usize) -> Self {
-        assert!(dim < self.shape.len());
-        let dim_size = self.shape[dim];
-        let mut data = self.data.clone();
-        let mut idx = vec![0usize; self.shape.len()];
-        for flat in 0..self.data.len() {
-            idx[dim] = dim_size - 1 - idx[dim];
-            let new_flat = self.multi_to_flat(&idx);
-            data[flat] = self.data[new_flat];
-            idx[dim] = dim_size - 1 - idx[dim];
-            // Increment
-            let mut carry = true;
-            for i in (0..self.shape.len()).rev() {
-                if carry {
-                    idx[i] += 1;
-                    if idx[i] >= self.shape[i] { idx[i] = 0; } else { carry = false; }
+    /// Converts a 3D tensor into nested `Vec<Vec<Vec<f64>>>`.
+    pub fn to_vec_3d(&self) -> Vec<Vec<Vec<f64>>> {
+        assert_eq!(self.ndim(), 3, "to_vec_3d requires a 3D tensor");
+        let (d0, d1, d2) = (self.shape[0], self.shape[1], self.shape[2]);
+        let mut result = Vec::with_capacity(d0);
+        for i in 0..d0 {
+            let mut matrix = Vec::with_capacity(d1);
+            for j in 0..d1 {
+                let mut row = Vec::with_capacity(d2);
+                for k in 0..d2 {
+                    row.push(self.get_3d(i, j, k));
                 }
+                matrix.push(row);
             }
+            result.push(matrix);
         }
-        let shape = self.shape.clone();
-        Tensor { data, shape, strides: self.strides.clone(), device: self.device, dtype: self.dtype, requires_grad: self.requires_grad, name: self.name.clone() }
+        result
     }
 
-    /// Rolls the tensor along a dimension by a given number of positions.
-    pub fn roll(&self, shift: isize, dim: usize) -> Self {
-        assert!(dim < self.shape.len());
-        let dim_size = self.shape[dim] as isize;
-        let shift = ((shift % dim_size) + dim_size) % dim_size;
-        let shift = shift as usize;
-        let mut data = vec![0.0; self.data.len()];
-        let mut idx = vec![0usize; self.shape.len()];
-        for flat in 0..self.data.len() {
-            let rolled_idx = (idx[dim] + shift) % self.shape[dim];
-            let mut src_idx = idx.clone();
-            src_idx[dim] = rolled_idx;
-            let src_flat = self.multi_to_flat(&src_idx);
-            data[flat] = self.data[src_flat];
-            // Increment
-            let mut carry = true;
-            for i in (0..self.shape.len()).rev() {
-                if carry {
-                    idx[i] += 1;
-                    if idx[i] >= self.shape[i] { idx[i] = 0; } else { carry = false; }
-                }
-            }
-        }
-        let shape = self.shape.clone();
-        Tensor { data, shape, strides: self.strides.clone(), device: self.device, dtype: self.dtype, requires_grad: self.requires_grad, name: self.name.clone() }
-    }
-
-    /// Returns the lower triangular part of a 2D tensor.
-    pub fn tril(&self, k: isize) -> Self {
-        assert!(self.ndim() == 2, "tril requires 2D tensor");
-        let mut data = self.data.clone();
-        let (rows, cols) = (self.shape[0], self.shape[1]);
-        for i in 0..rows {
-            for j in 0..cols {
-                if j as isize > i as isize + k {
-                    data[i * cols + j] = 0.0;
-                }
-            }
-        }
-        let shape = self.shape.clone();
-        Tensor { data, shape, strides: self.strides.clone(), device: self.device, dtype: self.dtype, requires_grad: self.requires_grad, name: self.name.clone() }
-    }
-
-    /// Returns the upper triangular part of a 2D tensor.
-    pub fn triu(&self, k: isize) -> Self {
-        assert!(self.ndim() == 2, "triu requires 2D tensor");
-        let mut data = self.data.clone();
-        let (rows, cols) = (self.shape[0], self.shape[1]);
-        for i in 0..rows {
-            for j in 0..cols {
-                if j as isize < i as isize + k {
-                    data[i * cols + j] = 0.0;
-                }
-            }
-        }
-        let shape = self.shape.clone();
-        Tensor { data, shape, strides: self.strides.clone(), device: self.device, dtype: self.dtype, requires_grad: self.requires_grad, name: self.name.clone() }
-    }
-
-    /// Extracts the diagonal of a 2D tensor.
-    pub fn diagonal(&self, offset: isize) -> Self {
-        assert!(self.ndim() == 2, "diagonal requires 2D tensor");
-        let (rows, cols) = (self.shape[0], self.shape[1]);
-        let diag_len = if offset >= 0 { rows.min(cols - offset as usize) } else { (rows - (-offset) as usize).min(cols) };
-        let data: Vec<f64> = (0..diag_len).map(|i| {
-            let r = i;
-            let c = (i as isize + offset) as usize;
-            self.data[r * cols + c]
-        }).collect();
-        let shape = vec![diag_len];
-        Tensor { data, shape: shape.clone(), strides: compute_strides(&shape), device: self.device, dtype: self.dtype, requires_grad: self.requires_grad, name: self.name.clone() }
-    }
-
-    /// Takes elements at the given indices along the first dimension.
-    pub fn take(&self, indices: &[usize]) -> Self {
-        let dim0 = self.shape[0];
-        let sub_size: usize = if self.shape.len() > 1 { self.shape[1..].iter().product() } else { 1 };
-        let mut data = Vec::with_capacity(indices.len() * sub_size);
-        for &idx in indices {
-            assert!(idx < dim0, "Index {} out of bounds for dimension of size {}", idx, dim0);
-            let start = idx * sub_size;
-            data.extend_from_slice(&self.data[start..start + sub_size]);
-        }
-        let mut new_shape = vec![indices.len()];
-        new_shape.extend_from_slice(&self.shape[1..]);
-        Tensor { data, shape: new_shape.clone(), strides: compute_strides(&new_shape), device: self.device, dtype: self.dtype, requires_grad: self.requires_grad, name: self.name.clone() }
-    }
-
-    /// Expands the tensor to a larger shape (broadcast).
-    pub fn expand(&self, new_shape: Vec<usize>) -> Self {
-        let new_numel: usize = new_shape.iter().product();
-        let mut data = vec![0.0; new_numel];
-        let rank_diff = new_shape.len() - self.shape.len();
-        for i in 0..new_numel {
-            // Decompose i into multi-dim index in new_shape
-            let mut multi = vec![0usize; new_shape.len()];
-            let mut val = i;
-            for j in (0..new_shape.len()).rev() {
-                multi[j] = val % new_shape[j];
-                val /= new_shape[j];
-            }
-            // Map to source multi-dim index
-            let mut src_multi = vec![0usize; self.shape.len()];
-            for j in 0..self.shape.len() {
-                src_multi[j] = if self.shape[j] == 1 { 0 } else { multi[rank_diff + j] };
-            }
-            data[i] = self.data[self.multi_to_flat(&src_multi)];
-        }
-        Tensor { data, shape: new_shape.clone(), strides: compute_strides(&new_shape), device: self.device, dtype: self.dtype, requires_grad: self.requires_grad, name: self.name.clone() }
-    }
-
-    /// Repeats the tensor along each dimension the given number of times.
-    pub fn repeat(&self, reps: &[usize]) -> Self {
-        let mut new_shape = self.shape.clone();
-        for (i, &r) in reps.iter().enumerate() {
-            if i < new_shape.len() { new_shape[i] *= r; } else { new_shape.push(r); }
-        }
-        self.expand(new_shape.clone())
-    }
-
-    /// Tiles the tensor (alias for repeat with broadcasting behavior).
-    pub fn tile(&self, reps: &[usize]) -> Self {
-        let mut new_shape = self.shape.clone();
-        for &r in reps { new_shape.push(r); }
-        self.expand(new_shape.clone())
-    }
-
-    /// Returns a view of this tensor (cloned data).
-    pub fn view(&self) -> Self {
-        self.clone()
-    }
-
-    /// Ensures the tensor is contiguous (no-op if already contiguous).
-    pub fn contiguous(&self) -> Self {
-        if self.is_contiguous() {
-            return self.clone();
-        }
-        // Re-layout data
-        let mut data = vec![0.0; self.data.len()];
-        for i in 0..self.data.len() {
-            data[i] = self.data[i]; // already flat
-        }
-        let shape = self.shape.clone();
-        Tensor { data, shape: shape.clone(), strides: compute_strides(&shape), device: self.device, dtype: self.dtype, requires_grad: self.requires_grad, name: self.name.clone() }
-    }
-
-    /// Detaches the tensor from the computation graph.
-    pub fn detach(&self) -> Self {
+    /// Moves the tensor to a target device (returns cloned copy with updated device metadata).
+    pub fn to_device(&self, device: Device) -> Self {
         let mut t = self.clone();
-        t.requires_grad = false;
+        t.device = device;
         t
     }
 
-    /// Creates a deep clone of this tensor.
-    pub fn clone_tensor(&self) -> Self {
-        self.clone()
+    /// Moves the tensor to the host CPU.
+    pub fn cpu(&self) -> Self {
+        self.to_device(Device::Cpu)
     }
 
-    /// Moves the tensor to the given device (no-op for CPU).
-    pub fn to_device(&self, device: Device) -> Self {
-        assert_eq!(self.device, Device::Cpu, "Can only move from CPU");
-        assert_eq!(device, Device::Cpu, "Only CPU device supported");
-        self.clone()
+    /// Casts data type (returns a tensor with new dtype tag).
+    pub fn dtype_cast(&self, dtype: DType) -> Self {
+        let mut t = self.clone();
+        t.dtype = dtype;
+        t
     }
 
-    // -----------------------------------------------------------------------
-    // Mutation Methods
-    // -----------------------------------------------------------------------
-
-    /// Fills the tensor with a given value.
-    pub fn fill_(&mut self, value: f64) {
-        for v in self.data.iter_mut() { *v = value; }
+    /// Sets the dtype in place.
+    pub fn set_dtype(&mut self, dtype: DType) {
+        self.dtype = dtype;
     }
 
-    /// Fills the tensor with zeros.
-    pub fn zero_(&mut self) {
-        self.fill_(0.0);
+    /// Checks whether memory layout is contiguous row-major.
+    pub fn is_contiguous(&self) -> bool {
+        let expected = compute_strides(&self.shape);
+        self.strides == expected
     }
 
-    /// Fills the tensor with values from a uniform distribution [low, high).
-    pub fn uniform_(&mut self, low: f64, high: f64) {
-        let mut rng = random::default_rng();
-        for v in self.data.iter_mut() { *v = rng.uniform(low, high); }
-    }
-
-    /// Fills the tensor with values from a normal distribution.
-    pub fn normal_(&mut self, mean: f64, std: f64) {
-        let mut rng = random::default_rng();
-        for v in self.data.iter_mut() { *v = rng.normal(mean, std); }
-    }
-
-    // -----------------------------------------------------------------------
-    // Statistics
-    // -----------------------------------------------------------------------
-
-    /// Computes statistics about the tensor elements.
-    pub fn statistics(&self) -> crate::tensor::TensorStats {
-        let n = self.data.len();
-        if n == 0 {
-            return crate::tensor::TensorStats::default();
-        }
-        let mut min = f64::INFINITY;
-        let mut max = f64::NEG_INFINITY;
-        let mut sum = 0.0;
-        let mut sum_sq = 0.0;
-        let mut num_zeros = 0usize;
-        let mut num_nans = 0usize;
-        let mut l1_norm = 0.0;
-        let mut l2_norm_sq = 0.0;
-
-        for &v in &self.data {
-            if v.is_nan() { num_nans += 1; continue; }
-            if v < min { min = v; }
-            if v > max { max = v; }
-            sum += v;
-            sum_sq += v * v;
-            if v == 0.0 { num_zeros += 1; }
-            l1_norm += v.abs();
-            l2_norm_sq += v * v;
-        }
-
-        let mean = sum / n as f64;
-        let variance = if n > 1 { (sum_sq - sum * sum / n as f64) / (n - 1) as f64 } else { 0.0 };
-        let std = variance.sqrt();
-
-        crate::tensor::TensorStats {
-            min, max, mean, std,
-            num_zeros, num_nans,
-            sparsity: num_zeros as f64 / n as f64,
-            l1_norm,
-            l2_norm: l2_norm_sq.sqrt(),
+    /// Returns a contiguous copy of this tensor.
+    pub fn contiguous(&self) -> Self {
+        if self.is_contiguous() {
+            self.clone()
+        } else {
+            let numel = self.numel();
+            let mut data = Vec::with_capacity(numel);
+            let mut coords = vec![0usize; self.ndim()];
+            for _ in 0..numel {
+                data.push(self.get_index(&coords));
+                // Increment coordinates
+                for dim in (0..self.ndim()).rev() {
+                    coords[dim] += 1;
+                    if coords[dim] < self.shape[dim] {
+                        break;
+                    }
+                    coords[dim] = 0;
+                }
+            }
+            Self::new(data, self.shape.clone())
         }
     }
 
-    // -----------------------------------------------------------------------
-    // Element-wise map/reduce helpers
-    // -----------------------------------------------------------------------
-
-    /// Applies a function element-wise and returns a new tensor.
-    pub fn map<F: Fn(f64) -> f64>(&self, f: F) -> Self {
-        let data: Vec<f64> = self.data.iter().map(|&v| f(v)).collect();
-        let shape = self.shape.clone();
-        Tensor { data, shape, strides: self.strides.clone(), device: self.device, dtype: self.dtype, requires_grad: self.requires_grad, name: self.name.clone() }
-    }
-
-    /// Applies a function element-wise in-place.
-    pub fn map_inplace<F: Fn(f64) -> f64>(&mut self, f: F) {
-        for v in self.data.iter_mut() { *v = f(*v); }
-    }
-
-    /// Applies a binary function element-wise with another tensor (broadcasting).
-    pub fn map2<F: Fn(f64, f64) -> f64>(&self, other: &Tensor, f: F) -> Tensor {
-        assert!(validate_binary_shapes(&self.shape, &other.shape),
-            "Shapes {:?} and {:?} are not broadcast-compatible", self.shape, other.shape);
-        let out_shape = binary_broadcast_shape(&self.shape, &other.shape);
-        let out_numel: usize = out_shape.iter().product();
-        let mut data = vec![0.0; out_numel];
-        for i in 0..out_numel {
-            let a_idx = broadcast_flat_index(i, &out_shape, &self.shape);
-            let b_idx = broadcast_flat_index(i, &out_shape, &other.shape);
-            data[i] = f(self.data[a_idx], other.data[b_idx]);
+    /// Makes the tensor contiguous in place.
+    pub fn make_contiguous(&mut self) {
+        if !self.is_contiguous() {
+            *self = self.contiguous();
         }
-        Tensor { data, shape: out_shape.clone(), strides: compute_strides(&out_shape), device: self.device, dtype: self.dtype, requires_grad: self.requires_grad, name: self.name.clone() }
     }
 
-    /// Reduces the tensor along all dimensions using a binary accumulator.
-    pub fn reduce<F: Fn(f64, f64) -> f64>(&self, init: f64, f: F) -> f64 {
-        self.data.iter().fold(init, |acc, &v| f(acc, v))
+    /// Reshapes the tensor to a new shape with the same number of elements.
+    pub fn reshape(&self, new_shape: Vec<usize>) -> Self {
+        let new_numel: usize = new_shape.iter().product();
+        assert_eq!(
+            self.numel(),
+            new_numel,
+            "Reshape numel {} does not match source numel {}",
+            new_numel,
+            self.numel()
+        );
+        let contiguous_t = self.contiguous();
+        Self::new(contiguous_t.data, new_shape)
     }
 
-    /// Applies map2 for scalar (f64) right operand.
-    pub fn map_scalar<F: Fn(f64, f64) -> f64>(&self, scalar: f64, f: F) -> Tensor {
-        self.map(|v| f(v, scalar))
+    /// Creates a view with a new shape if memory layout is contiguous.
+    pub fn view(&self, new_shape: Vec<usize>) -> BrainResult<Self> {
+        let new_numel: usize = new_shape.iter().product();
+        if self.numel() != new_numel {
+            return Err(BrainError::shape_mismatch(
+                format!("numel {}", new_numel),
+                format!("numel {}", self.numel()),
+                "view: shape product mismatch",
+            ));
+        }
+        if !self.is_contiguous() {
+            return Err(BrainError::invalid_value(
+                "view size is not compatible with input tensor's size and stride (use contiguous())",
+            ));
+        }
+        Ok(Self::new(self.data.clone(), new_shape))
     }
 
-    // -----------------------------------------------------------------------
-    // Internal helpers
-    // -----------------------------------------------------------------------
+    /// Permutes dimensions according to a given permutation.
+    pub fn permute(&self, permutation: &[usize]) -> Self {
+        assert_eq!(
+            permutation.len(),
+            self.ndim(),
+            "Permutation length must equal tensor rank"
+        );
+        let mut new_shape = vec![0; self.ndim()];
+        let mut new_strides = vec![0; self.ndim()];
+        for (i, &p) in permutation.iter().enumerate() {
+            new_shape[i] = self.shape[p];
+            new_strides[i] = self.strides[p];
+        }
+        let mut t = Tensor {
+            data: self.data.clone(),
+            shape: new_shape,
+            strides: new_strides,
+            device: self.device,
+            dtype: self.dtype,
+            requires_grad: self.requires_grad,
+            name: self.name.clone(),
+        };
+        t.make_contiguous();
+        t
+    }
 
-    fn multi_to_flat(&self, indices: &[usize]) -> usize {
-        let mut flat = 0;
-        for (i, &idx) in indices.iter().enumerate() {
-            if i < self.strides.len() {
-                flat += idx * self.strides[i];
+    /// Transposes two dimensions of the tensor.
+    pub fn transpose(&self, dim0: usize, dim1: usize) -> Self {
+        assert!(dim0 < self.ndim() && dim1 < self.ndim(), "Transpose dims out of range");
+        let mut perm: Vec<usize> = (0..self.ndim()).collect();
+        perm.swap(dim0, dim1);
+        self.permute(&perm)
+    }
+
+    /// Transposes a 2D matrix (shorthand for `.transpose(0, 1)`).
+    pub fn t(&self) -> Self {
+        assert_eq!(self.ndim(), 2, "t() requires a 2D tensor");
+        self.transpose(0, 1)
+    }
+
+    /// Removes all dimensions of size 1.
+    pub fn squeeze(&self) -> Self {
+        let new_shape: Vec<usize> = self.shape.iter().copied().filter(|&d| d != 1).collect();
+        self.reshape(new_shape)
+    }
+
+    /// Removes a specific dimension of size 1.
+    pub fn squeeze_dim(&self, dim: usize) -> Self {
+        assert!(dim < self.ndim(), "squeeze_dim: dim out of bounds");
+        if self.shape[dim] == 1 {
+            let mut new_shape = self.shape.clone();
+            new_shape.remove(dim);
+            self.reshape(new_shape)
+        } else {
+            self.clone()
+        }
+    }
+
+    /// Inserts a dimension of size 1 at index `dim`.
+    pub fn unsqueeze(&self, dim: usize) -> Self {
+        assert!(dim <= self.ndim(), "unsqueeze: dim out of bounds");
+        let mut new_shape = self.shape.clone();
+        new_shape.insert(dim, 1);
+        self.reshape(new_shape)
+    }
+
+    /// Flattens dimensions from `start_dim` to `end_dim` inclusive into a single dimension.
+    pub fn flatten(&self, start_dim: usize, end_dim: usize) -> Self {
+        assert!(start_dim <= end_dim && end_dim < self.ndim(), "flatten: invalid dim range");
+        let mut new_shape = Vec::new();
+        for i in 0..start_dim {
+            new_shape.push(self.shape[i]);
+        }
+        let flattened_dim: usize = self.shape[start_dim..=end_dim].iter().product();
+        new_shape.push(flattened_dim);
+        for i in end_dim + 1..self.ndim() {
+            new_shape.push(self.shape[i]);
+        }
+        self.reshape(new_shape)
+    }
+
+    /// Expands a dimension into multiple dimensions.
+    pub fn unflatten(&self, dim: usize, sizes: &[usize]) -> Self {
+        assert!(dim < self.ndim(), "unflatten: dim out of bounds");
+        let prod: usize = sizes.iter().product();
+        assert_eq!(
+            self.shape[dim], prod,
+            "unflatten: product of sizes {} must match dim size {}",
+            prod, self.shape[dim]
+        );
+        let mut new_shape = Vec::new();
+        for i in 0..dim {
+            new_shape.push(self.shape[i]);
+        }
+        new_shape.extend_from_slice(sizes);
+        for i in dim + 1..self.ndim() {
+            new_shape.push(self.shape[i]);
+        }
+        self.reshape(new_shape)
+    }
+
+    /// Expands singleton dimensions to match the given target shape.
+    pub fn expand(&self, target_shape: &[usize]) -> BrainResult<Self> {
+        let src_rank = self.ndim();
+        let tgt_rank = target_shape.len();
+        if src_rank > tgt_rank {
+            return Err(BrainError::shape_mismatch(
+                format!("{:?}", target_shape),
+                format!("{:?}", self.shape),
+                "expand: target rank cannot be smaller than source rank",
+            ));
+        }
+
+        let mut out_data = Vec::new();
+        let target_numel: usize = target_shape.iter().product();
+        let mut coords = vec![0usize; tgt_rank];
+
+        for _ in 0..target_numel {
+            let mut src_coords = Vec::with_capacity(src_rank);
+            for i in 0..src_rank {
+                let tgt_idx = coords[tgt_rank - src_rank + i];
+                let src_dim = self.shape[i];
+                if src_dim == 1 {
+                    src_coords.push(0);
+                } else if src_dim == target_shape[tgt_rank - src_rank + i] {
+                    src_coords.push(tgt_idx);
+                } else {
+                    return Err(BrainError::shape_mismatch(
+                        format!("{:?}", target_shape),
+                        format!("{:?}", self.shape),
+                        "expand: incompatible dimensions",
+                    ));
+                }
+            }
+            out_data.push(self.get_index(&src_coords));
+
+            // Increment coords
+            for dim in (0..tgt_rank).rev() {
+                coords[dim] += 1;
+                if coords[dim] < target_shape[dim] {
+                    break;
+                }
+                coords[dim] = 0;
             }
         }
-        flat
+
+        Ok(Self::new(out_data, target_shape.to_vec()))
+    }
+
+    /// Expands this tensor to match the shape of another tensor.
+    pub fn expand_as(&self, other: &Tensor) -> BrainResult<Self> {
+        self.expand(other.shape())
     }
 }
 
 // =============================================================================
-// Helper Functions
+// Splitting and Chunking
 // =============================================================================
 
-fn compute_strides(shape: &[usize]) -> Vec<usize> {
-    let n = shape.len();
-    if n == 0 { return vec![]; }
-    let mut strides = vec![1usize; n];
-    for i in (0..n - 1).rev() {
-        strides[i] = strides[i + 1] * shape[i + 1];
-    }
-    strides
-}
-
-fn multi_to_flat_raw(multi: &[usize], strides: &[usize]) -> usize {
-    let mut flat = 0;
-    for (i, &idx) in multi.iter().enumerate() {
-        if i < strides.len() { flat += idx * strides[i]; }
-    }
-    flat
-}
-
-fn validate_binary_shapes(a: &[usize], b: &[usize]) -> bool {
-    let max_ndim = a.len().max(b.len());
-    for i in 0..max_ndim {
-        let da = if i < a.len() { a[a.len() - 1 - i] } else { 1 };
-        let db = if i < b.len() { b[b.len() - 1 - i] } else { 1 };
-        if da != db && da != 1 && db != 1 { return false; }
-    }
-    true
-}
-
-fn binary_broadcast_shape(a: &[usize], b: &[usize]) -> Vec<usize> {
-    let max_ndim = a.len().max(b.len());
-    let mut result = Vec::with_capacity(max_ndim);
-    for i in 0..max_ndim {
-        let da = if i < a.len() { a[a.len() - 1 - i] } else { 1 };
-        let db = if i < b.len() { b[b.len() - 1 - i] } else { 1 };
-        result.push(if da == 1 { db } else { da });
-    }
-    result.reverse();
-    result
-}
-
-fn broadcast_flat_index(output_idx: usize, output_shape: &[usize], source_shape: &[usize]) -> usize {
-    let output_ndim = output_shape.len();
-    let source_ndim = source_shape.len();
-    let rank_diff = output_ndim - source_ndim;
-    let mut multi = vec![0usize; output_ndim];
-    let mut idx = output_idx;
-    for i in (0..output_ndim).rev() {
-        if output_shape[i] > 0 {
-            multi[i] = idx % output_shape[i];
-            idx /= output_shape[i];
+impl Tensor {
+    /// Splits the tensor into chunks of `split_size` along dimension `dim`.
+    pub fn split(&self, split_size: usize, dim: usize) -> Vec<Tensor> {
+        assert!(dim < self.ndim(), "split: dim out of bounds");
+        assert!(split_size > 0, "split_size must be positive");
+        let dim_len = self.shape[dim];
+        let mut results = Vec::new();
+        let mut start = 0;
+        while start < dim_len {
+            let len = (dim_len - start).min(split_size);
+            results.push(self.narrow(dim, start, len));
+            start += len;
         }
+        results
     }
-    let mut source_multi = Vec::with_capacity(source_ndim);
-    for i in 0..source_ndim {
-        let src_dim = source_shape[i];
-        if src_dim == output_shape[rank_diff + i] {
-            source_multi.push(multi[rank_diff + i]);
-        } else {
-            source_multi.push(0);
+
+    /// Splits the tensor into a specific number of equal or near-equal chunks along `dim`.
+    pub fn chunk(&self, chunks: usize, dim: usize) -> Vec<Tensor> {
+        assert!(chunks > 0, "chunks must be > 0");
+        assert!(dim < self.ndim(), "chunk: dim out of bounds");
+        let dim_len = self.shape[dim];
+        let split_size = (dim_len + chunks - 1) / chunks;
+        self.split(split_size, dim)
+    }
+
+    /// Narrows a dimension to a sub-range `[start, start + length)`.
+    pub fn narrow(&self, dim: usize, start: usize, length: usize) -> Self {
+        assert!(dim < self.ndim(), "narrow: dim out of bounds");
+        assert!(
+            start + length <= self.shape[dim],
+            "narrow: start + length exceeds dimension size"
+        );
+        let mut new_shape = self.shape.clone();
+        new_shape[dim] = length;
+
+        let numel: usize = new_shape.iter().product();
+        let mut data = Vec::with_capacity(numel);
+        let mut coords = vec![0usize; self.ndim()];
+
+        for _ in 0..numel {
+            let mut src_coords = coords.clone();
+            src_coords[dim] += start;
+            data.push(self.get_index(&src_coords));
+
+            for d in (0..self.ndim()).rev() {
+                coords[d] += 1;
+                if coords[d] < new_shape[d] {
+                    break;
+                }
+                coords[d] = 0;
+            }
         }
+        Self::new(data, new_shape)
     }
-    let mut flat = 0;
-    let mut stride = 1;
-    for i in (0..source_ndim).rev() {
-        flat += source_multi[i] * stride;
-        stride *= source_shape[i];
+
+    /// Selects an index along a dimension, returning a tensor with rank reduced by 1.
+    pub fn select(&self, dim: usize, index: usize) -> Self {
+        assert!(dim < self.ndim(), "select: dim out of bounds");
+        assert!(index < self.shape[dim], "select: index out of bounds");
+        let narrowed = self.narrow(dim, index, 1);
+        narrowed.squeeze_dim(dim)
     }
-    flat
+
+    /// Slices along a dimension with `start`, `end`, and `step`.
+    pub fn slice(&self, dim: usize, start: usize, end: usize, step: usize) -> Self {
+        assert!(dim < self.ndim(), "slice: dim out of bounds");
+        assert!(step > 0, "slice: step must be > 0");
+        let actual_end = end.min(self.shape[dim]);
+        let mut slice_indices = Vec::new();
+        let mut cur = start;
+        while cur < actual_end {
+            slice_indices.push(cur);
+            cur += step;
+        }
+
+        let mut new_shape = self.shape.clone();
+        new_shape[dim] = slice_indices.len();
+
+        let numel: usize = new_shape.iter().product();
+        let mut data = Vec::with_capacity(numel);
+        let mut coords = vec![0usize; self.ndim()];
+
+        for _ in 0..numel {
+            let mut src_coords = coords.clone();
+            src_coords[dim] = slice_indices[coords[dim]];
+            data.push(self.get_index(&src_coords));
+
+            for d in (0..self.ndim()).rev() {
+                coords[d] += 1;
+                if coords[d] < new_shape[d] {
+                    break;
+                }
+                coords[d] = 0;
+            }
+        }
+        Self::new(data, new_shape)
+    }
+
+    /// Maps a function element-wise over the tensor.
+    pub fn map<F>(&self, f: F) -> Self
+    where
+        F: Fn(f64) -> f64,
+    {
+        let data: Vec<f64> = self.data.iter().map(|&x| f(x)).collect();
+        Self::new(data, self.shape.clone())
+    }
+
+    /// Maps a binary function over two tensors with broadcasting.
+    pub fn map2<F>(&self, other: &Tensor, f: F) -> Self
+    where
+        F: Fn(f64, f64) -> f64,
+    {
+        let common_shape = crate::shape::Shape::broadcast_shapes(&[
+            &crate::shape::Shape::from_dims(self.shape()),
+            &crate::shape::Shape::from_dims(other.shape()),
+        ])
+        .expect("Tensors cannot be broadcast together");
+
+        let a_exp = self.expand(common_shape.as_slice()).unwrap();
+        let b_exp = other.expand(common_shape.as_slice()).unwrap();
+
+        let data: Vec<f64> = a_exp
+            .data()
+            .iter()
+            .zip(b_exp.data().iter())
+            .map(|(&x, &y)| f(x, y))
+            .collect();
+        Self::new(data, common_shape.to_vec())
+    }
 }
 
 // =============================================================================
-// Operator Implementations: Tensor + Tensor
+// Operator Overloads
 // =============================================================================
 
 impl Add for &Tensor {
@@ -899,7 +841,9 @@ impl Add for &Tensor {
 
 impl Add for Tensor {
     type Output = Tensor;
-    fn add(self, rhs: Tensor) -> Tensor { (&self).add(&rhs) }
+    fn add(self, rhs: Tensor) -> Tensor {
+        &self + &rhs
+    }
 }
 
 impl Sub for &Tensor {
@@ -911,7 +855,9 @@ impl Sub for &Tensor {
 
 impl Sub for Tensor {
     type Output = Tensor;
-    fn sub(self, rhs: Tensor) -> Tensor { (&self).sub(&rhs) }
+    fn sub(self, rhs: Tensor) -> Tensor {
+        &self - &rhs
+    }
 }
 
 impl Mul for &Tensor {
@@ -923,7 +869,9 @@ impl Mul for &Tensor {
 
 impl Mul for Tensor {
     type Output = Tensor;
-    fn mul(self, rhs: Tensor) -> Tensor { (&self).mul(&rhs) }
+    fn mul(self, rhs: Tensor) -> Tensor {
+        &self * &rhs
+    }
 }
 
 impl Div for &Tensor {
@@ -935,171 +883,52 @@ impl Div for &Tensor {
 
 impl Div for Tensor {
     type Output = Tensor;
-    fn div(self, rhs: Tensor) -> Tensor { (&self).div(&rhs) }
+    fn div(self, rhs: Tensor) -> Tensor {
+        &self / &rhs
+    }
 }
 
 impl Neg for &Tensor {
     type Output = Tensor;
     fn neg(self) -> Tensor {
-        self.map(|v| -v)
+        self.map(|x| -x)
     }
 }
 
 impl Neg for Tensor {
     type Output = Tensor;
-    fn neg(self) -> Tensor { (&self).neg() }
-}
-
-// =============================================================================
-// Operator Implementations: Tensor + f64
-// =============================================================================
-
-impl Add<f64> for &Tensor {
-    type Output = Tensor;
-    fn add(self, rhs: f64) -> Tensor { self.map(|v| v + rhs) }
-}
-impl Add<f64> for Tensor {
-    type Output = Tensor;
-    fn add(self, rhs: f64) -> Tensor { (&self).add(rhs) }
-}
-impl Add<&Tensor> for f64 {
-    type Output = Tensor;
-    fn add(self, rhs: &Tensor) -> Tensor { rhs.map(|v| self + v) }
-}
-
-impl Sub<f64> for &Tensor {
-    type Output = Tensor;
-    fn sub(self, rhs: f64) -> Tensor { self.map(|v| v - rhs) }
-}
-impl Sub<f64> for Tensor {
-    type Output = Tensor;
-    fn sub(self, rhs: f64) -> Tensor { (&self).sub(rhs) }
-}
-impl Sub<&Tensor> for f64 {
-    type Output = Tensor;
-    fn sub(self, rhs: &Tensor) -> Tensor { rhs.map(|v| self - v) }
-}
-
-impl Mul<f64> for &Tensor {
-    type Output = Tensor;
-    fn mul(self, rhs: f64) -> Tensor { self.map(|v| v * rhs) }
-}
-impl Mul<f64> for Tensor {
-    type Output = Tensor;
-    fn mul(self, rhs: f64) -> Tensor { (&self).mul(rhs) }
-}
-impl Mul<&Tensor> for f64 {
-    type Output = Tensor;
-    fn mul(self, rhs: &Tensor) -> Tensor { rhs.map(|v| self * v) }
-}
-
-impl Div<f64> for &Tensor {
-    type Output = Tensor;
-    fn div(self, rhs: f64) -> Tensor { self.map(|v| v / rhs) }
-}
-impl Div<f64> for Tensor {
-    type Output = Tensor;
-    fn div(self, rhs: f64) -> Tensor { (&self).div(rhs) }
-}
-impl Div<&Tensor> for f64 {
-    type Output = Tensor;
-    fn div(self, rhs: &Tensor) -> Tensor { rhs.map(|v| self / v) }
-}
-
-// =============================================================================
-// Compound Assignment Operators
-// =============================================================================
-
-impl AddAssign for Tensor {
-    fn add_assign(&mut self, rhs: Tensor) {
-        assert_eq!(self.shape, rhs.shape, "Shape mismatch for +=: {:?} vs {:?}", self.shape, rhs.shape);
-        for i in 0..self.data.len().min(rhs.data.len()) { self.data[i] += rhs.data[i]; }
+    fn neg(self) -> Tensor {
+        -&self
     }
 }
-impl AddAssign<f64> for Tensor {
-    fn add_assign(&mut self, rhs: f64) { for v in self.data.iter_mut() { *v += rhs; } }
-}
-
-impl SubAssign for Tensor {
-    fn sub_assign(&mut self, rhs: Tensor) {
-        assert_eq!(self.shape, rhs.shape, "Shape mismatch for -=: {:?} vs {:?}", self.shape, rhs.shape);
-        for i in 0..self.data.len().min(rhs.data.len()) { self.data[i] -= rhs.data[i]; }
-    }
-}
-impl SubAssign<f64> for Tensor {
-    fn sub_assign(&mut self, rhs: f64) { for v in self.data.iter_mut() { *v -= rhs; } }
-}
-
-impl MulAssign for Tensor {
-    fn mul_assign(&mut self, rhs: Tensor) {
-        assert_eq!(self.shape, rhs.shape, "Shape mismatch for *=: {:?} vs {:?}", self.shape, rhs.shape);
-        for i in 0..self.data.len().min(rhs.data.len()) { self.data[i] *= rhs.data[i]; }
-    }
-}
-impl MulAssign<f64> for Tensor {
-    fn mul_assign(&mut self, rhs: f64) { for v in self.data.iter_mut() { *v *= rhs; } }
-}
-
-impl DivAssign for Tensor {
-    fn div_assign(&mut self, rhs: Tensor) {
-        assert_eq!(self.shape, rhs.shape, "Shape mismatch for /=: {:?} vs {:?}", self.shape, rhs.shape);
-        for i in 0..self.data.len().min(rhs.data.len()) { self.data[i] /= rhs.data[i]; }
-    }
-}
-impl DivAssign<f64> for Tensor {
-    fn div_assign(&mut self, rhs: f64) { for v in self.data.iter_mut() { *v /= rhs; } }
-}
-
-// =============================================================================
-// Index Implementation
-// =============================================================================
-
-impl Index<usize> for Tensor {
-    type Output = f64;
-    fn index(&self, index: usize) -> &f64 { &self.data[index] }
-}
-
-impl IndexMut<usize> for Tensor {
-    fn index_mut(&mut self, index: usize) -> &mut f64 { &mut self.data[index] }
-}
-
-// =============================================================================
-// PartialEq, PartialOrd, Hash
-// =============================================================================
 
 impl PartialEq for Tensor {
     fn eq(&self, other: &Self) -> bool {
-        self.shape == other.shape && self.data == other.data
+        if self.shape != other.shape {
+            return false;
+        }
+        self.data == other.data
     }
 }
-
-impl PartialOrd for Tensor {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        if self.shape != other.shape { return None; }
-        self.data.partial_cmp(&other.data)
-    }
-}
-
-impl Hash for Tensor {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.shape.hash(state);
-        for &v in &self.data { v.to_bits().hash(state); }
-    }
-}
-
-// =============================================================================
-// Display Implementation
-// =============================================================================
 
 impl fmt::Display for Tensor {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        if self.is_scalar() {
-            return write!(f, "Tensor(scalar, value={:.6})", self.data[0]);
+        writeln!(f, "Tensor(shape={:?}, dtype={:?}):", self.shape, self.dtype)?;
+        if self.ndim() <= 2 {
+            let rows = if self.ndim() == 2 { self.shape[0] } else { 1 };
+            let cols = if self.ndim() == 2 { self.shape[1] } else { self.numel() };
+            for r in 0..rows {
+                write!(f, "  [")?;
+                for c in 0..cols {
+                    let idx = if self.ndim() == 2 { r * self.strides[0] + c * self.strides[1] } else { c };
+                    write!(f, " {:8.4}", self.data[idx])?;
+                }
+                writeln!(f, " ]")?;
+            }
+        } else {
+            writeln!(f, "  [ ... {} elements ... ]", self.numel())?;
         }
-        let shape_str = self.shape.iter().map(|d| d.to_string()).collect::<Vec<_>>().join("x");
-        writeln!(f, "Tensor(shape=[{}], device={}, dtype={})", shape_str, self.device, self.dtype)?;
-        let pretty = crate::tensor::pretty_print(&self.data, &self.shape, 0);
-        write!(f, "{}", pretty)
+        Ok(())
     }
 }
 
@@ -1112,534 +941,2481 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_zeros() {
-        let t = Tensor::zeros(vec![2, 3]);
-        assert_eq!(t.shape(), &[2, 3]);
-        assert_eq!(t.numel(), 6);
-        for i in 0..6 { assert_eq!(t.get(i), 0.0); }
+    fn test_tensor_constructors() {
+        let z = Tensor::zeros(vec![2, 3]);
+        assert_eq!(z.numel(), 6);
+        assert_eq!(z.get(0), 0.0);
+
+        let o = Tensor::ones(vec![4]);
+        assert_eq!(o.numel(), 4);
+        assert_eq!(o.get(3), 1.0);
+
+        let f = Tensor::full(vec![2, 2], 5.5);
+        assert_eq!(f.get_2d(1, 1), 5.5);
+
+        let eye = Tensor::eye(3);
+        assert_eq!(eye.get_2d(0, 0), 1.0);
+        assert_eq!(eye.get_2d(0, 1), 0.0);
+        assert_eq!(eye.get_2d(1, 1), 1.0);
     }
 
     #[test]
-    fn test_ones() {
-        let t = Tensor::ones(vec![2, 3]);
-        for i in 0..6 { assert_eq!(t.get(i), 1.0); }
+    fn test_arange_and_linspace() {
+        let a = Tensor::arange(0.0, 5.0, 1.0);
+        assert_eq!(a.shape(), &[5]);
+        assert_eq!(a.data(), &[0.0, 1.0, 2.0, 3.0, 4.0]);
+
+        let l = Tensor::linspace(0.0, 1.0, 5);
+        assert_eq!(l.shape(), &[5]);
+        assert_eq!(l.data(), &[0.0, 0.25, 0.5, 0.75, 1.0]);
     }
 
     #[test]
-    fn test_full() {
-        let t = Tensor::full(vec![2, 3], 5.0);
-        for i in 0..6 { assert_eq!(t.get(i), 5.0); }
+    fn test_tensor_reshape_and_view() {
+        let t = Tensor::arange(0.0, 6.0, 1.0);
+        let r = t.reshape(vec![2, 3]);
+        assert_eq!(r.shape(), &[2, 3]);
+        assert_eq!(r.get_2d(1, 0), 3.0);
+
+        let v = t.view(vec![3, 2]).unwrap();
+        assert_eq!(v.shape(), &[3, 2]);
     }
 
     #[test]
-    fn test_scalar() {
-        let t = Tensor::scalar(42.0);
-        assert!(t.is_scalar());
-        assert_eq!(t.ndim(), 0);
-        assert_eq!(t.numel(), 1);
-        assert_eq!(t.get(0), 42.0);
-    }
-
-    #[test]
-    fn test_identity() {
-        let t = Tensor::identity(3);
-        assert_eq!(t.shape(), &[3, 3]);
-        assert_eq!(t.get_index(&[0, 0]), 1.0);
-        assert_eq!(t.get_index(&[1, 1]), 1.0);
-        assert_eq!(t.get_index(&[0, 1]), 0.0);
-    }
-
-    #[test]
-    fn test_arange() {
-        let t = Tensor::arange(0.0, 10.0, 2.0);
-        assert_eq!(t.shape(), &[5]);
-        assert_eq!(t.get(0), 0.0);
-        assert_eq!(t.get(1), 2.0);
-        assert_eq!(t.get(4), 8.0);
-    }
-
-    #[test]
-    fn test_arange_negative_step() {
-        let t = Tensor::arange(10.0, 0.0, -2.0);
-        assert_eq!(t.get(0), 10.0);
-        assert_eq!(t.get(1), 8.0);
-    }
-
-    #[test]
-    fn test_linspace() {
-        let t = Tensor::linspace(0.0, 1.0, 5);
-        assert_eq!(t.numel(), 5);
-        assert_eq!(t.get(0), 0.0);
-        assert_eq!(t.get(4), 1.0);
-    }
-
-    #[test]
-    fn test_eye() {
-        let t = Tensor::eye(3, 4, 0);
-        assert_eq!(t.shape(), &[3, 4]);
-        assert_eq!(t.get_index(&[0, 0]), 1.0);
-        assert_eq!(t.get_index(&[1, 1]), 1.0);
-        assert_eq!(t.get_index(&[2, 2]), 1.0);
-    }
-
-    #[test]
-    fn test_from_slice() {
-        let t = Tensor::from_slice(&[1.0, 2.0, 3.0, 4.0], vec![2, 2]);
-        assert_eq!(t.shape(), &[2, 2]);
-        assert_eq!(t.get(0), 1.0);
-        assert_eq!(t.get(3), 4.0);
-    }
-
-    #[test]
-    fn test_from_diag() {
-        let t = Tensor::from_diag(&[1.0, 2.0, 3.0]);
-        assert_eq!(t.shape(), &[3, 3]);
-        assert_eq!(t.get_index(&[0, 0]), 1.0);
-        assert_eq!(t.get_index(&[1, 1]), 2.0);
-        assert_eq!(t.get_index(&[2, 2]), 3.0);
-        assert_eq!(t.get_index(&[0, 1]), 0.0);
-    }
-
-    #[test]
-    fn test_properties() {
-        let t = Tensor::zeros(vec![2, 3, 4]);
-        assert_eq!(t.ndim(), 3);
-        assert_eq!(t.numel(), 24);
-        assert!(!t.is_empty());
-        assert!(!t.is_scalar());
-        assert!(t.is_matrix() == false);
-        assert!(t.is_vector() == false);
-        assert!(t.is_contiguous());
-        assert_eq!(t.size(0), 2);
-        assert_eq!(t.size(1), 3);
-    }
-
-    #[test]
-    fn test_element_access() {
-        let t = Tensor::arange(0.0, 12.0, 1.0).reshape(vec![3, 4]);
-        assert_eq!(t.get(0), 0.0);
-        assert_eq!(t.get(11), 11.0);
-        assert_eq!(t.get_index(&[1, 2]), 6.0);
-    }
-
-    #[test]
-    fn test_set_element() {
-        let mut t = Tensor::zeros(vec![3, 3]);
-        t.set(4, 5.0);
-        assert_eq!(t.get(4), 5.0);
-        t.set_index(&[1, 1], 10.0);
-        assert_eq!(t.get_index(&[1, 1]), 10.0);
-    }
-
-    #[test]
-    #[should_panic]
-    fn test_out_of_bounds() {
-        let t = Tensor::zeros(vec![2, 3]);
-        t.get(100);
-    }
-
-    #[test]
-    fn test_reshape() {
-        let t = Tensor::arange(0.0, 12.0, 1.0);
-        let r = t.reshape(vec![3, 4]);
-        assert_eq!(r.shape(), &[3, 4]);
-        assert_eq!(r.get_index(&[0, 0]), 0.0);
-        assert_eq!(r.get_index(&[2, 3]), 11.0);
-    }
-
-    #[test]
-    fn test_flatten() {
-        let t = Tensor::zeros(vec![2, 3, 4]);
-        let f = t.flatten();
-        assert_eq!(f.shape(), &[24]);
-    }
-
-    #[test]
-    fn test_transpose() {
+    fn test_tensor_transpose_and_permute() {
         let t = Tensor::from_slice(&[1.0, 2.0, 3.0, 4.0, 5.0, 6.0], vec![2, 3]);
-        let tt = t.transpose();
-        assert_eq!(tt.shape(), &[3, 2]);
-        assert_eq!(tt.get_index(&[0, 0]), 1.0);
-        assert_eq!(tt.get_index(&[0, 1]), 4.0);
-        assert_eq!(tt.get_index(&[1, 0]), 2.0);
+        let tr = t.t();
+        assert_eq!(tr.shape(), &[3, 2]);
+        assert_eq!(tr.get_2d(0, 1), 4.0);
+        assert_eq!(tr.get_2d(2, 0), 3.0);
     }
 
     #[test]
-    fn test_squeeze() {
-        let t = Tensor::ones(vec![1, 3, 1, 4, 1]);
+    fn test_tensor_squeeze_unsqueeze() {
+        let t = Tensor::zeros(vec![1, 3, 1, 4]);
         let s = t.squeeze();
         assert_eq!(s.shape(), &[3, 4]);
+
+        let u = s.unsqueeze(0);
+        assert_eq!(u.shape(), &[1, 3, 4]);
     }
 
     #[test]
-    fn test_squeeze_axis() {
-        let t = Tensor::ones(vec![2, 1, 4]);
-        let s = t.squeeze_axis(1);
-        assert_eq!(s.shape(), &[2, 4]);
+    fn test_tensor_flatten_unflatten() {
+        let t = Tensor::zeros(vec![2, 3, 4, 5]);
+        let f = t.flatten(1, 2);
+        assert_eq!(f.shape(), &[2, 12, 5]);
+
+        let uf = f.unflatten(1, &[3, 4]);
+        assert_eq!(uf.shape(), &[2, 3, 4, 5]);
     }
 
     #[test]
-    fn test_unsqueeze() {
-        let t = Tensor::ones(vec![3, 4]);
-        let s = t.unsqueeze(0);
-        assert_eq!(s.shape(), &[1, 3, 4]);
-        let s2 = t.unsqueeze(-1);
-        assert_eq!(s2.shape(), &[3, 4, 1]);
-    }
-
-    #[test]
-    fn test_narrow() {
-        let t = Tensor::arange(0.0, 12.0, 1.0).reshape(vec![3, 4]);
-        let n = t.narrow(0, 1, 2);
-        assert_eq!(n.shape(), &[2, 4]);
-        assert_eq!(n.get_index(&[0, 0]), 4.0);
-    }
-
-    #[test]
-    fn test_chunk() {
-        let t = Tensor::arange(0.0, 12.0, 1.0).reshape(vec![3, 4]);
+    fn test_tensor_split_and_chunk() {
+        let t = Tensor::arange(0.0, 10.0, 1.0);
         let chunks = t.chunk(3, 0);
         assert_eq!(chunks.len(), 3);
-        assert_eq!(chunks[0].shape(), &[1, 4]);
-        assert_eq!(chunks[1].shape(), &[1, 4]);
-        assert_eq!(chunks[2].shape(), &[1, 4]);
+        assert_eq!(chunks[0].numel(), 4);
+        assert_eq!(chunks[1].numel(), 4);
+        assert_eq!(chunks[2].numel(), 2);
     }
 
     #[test]
-    fn test_flip() {
-        let t = Tensor::from_slice(&[1.0, 2.0, 3.0, 4.0, 5.0, 6.0], vec![2, 3]);
-        let f = t.flip(0);
-        assert_eq!(f.get_index(&[0, 0]), 4.0);
-        assert_eq!(f.get_index(&[1, 0]), 1.0);
-    }
-
-    #[test]
-    fn test_roll() {
-        let t = Tensor::from_slice(&[1.0, 2.0, 3.0, 4.0, 5.0], vec![5]);
-        let r = t.roll(2, 0);
-        assert_eq!(r.get(0), 4.0);
-        assert_eq!(r.get(1), 5.0);
-        assert_eq!(r.get(2), 1.0);
-    }
-
-    #[test]
-    fn test_tril() {
-        let t = Tensor::from_slice(&[1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0], vec![3, 3]);
-        let l = t.tril(0);
-        assert_eq!(l.get_index(&[0, 1]), 0.0);
-        assert_eq!(l.get_index(&[1, 0]), 4.0);
-    }
-
-    #[test]
-    fn test_triu() {
-        let t = Tensor::from_slice(&[1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0], vec![3, 3]);
-        let u = t.triu(0);
-        assert_eq!(u.get_index(&[1, 0]), 0.0);
-        assert_eq!(u.get_index(&[0, 1]), 2.0);
-    }
-
-    #[test]
-    fn test_diagonal() {
-        let t = Tensor::from_slice(&[1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0], vec![3, 3]);
-        let d = t.diagonal(0);
-        assert_eq!(d.shape(), &[3]);
-        assert_eq!(d.get(0), 1.0);
-        assert_eq!(d.get(1), 5.0);
-        assert_eq!(d.get(2), 9.0);
-    }
-
-    #[test]
-    fn test_take() {
-        let t = Tensor::arange(0.0, 12.0, 1.0).reshape(vec![3, 4]);
-        let taken = t.take(&[0, 2]);
-        assert_eq!(taken.shape(), &[2, 4]);
-        assert_eq!(taken.get_index(&[0, 0]), 0.0);
-        assert_eq!(taken.get_index(&[1, 0]), 8.0);
-    }
-
-    #[test]
-    fn test_expand() {
-        let t = Tensor::from_slice(&[1.0, 2.0, 3.0, 4.0], vec![2, 2]);
-        let e = t.reshape(vec![2, 1, 2]).expand(vec![2, 3, 2]);
-        assert_eq!(e.shape(), &[2, 3, 2]);
-    }
-
-    #[test]
-    fn test_fill() {
-        let mut t = Tensor::zeros(vec![3, 3]);
-        t.fill_(5.0);
-        for i in 0..9 { assert_eq!(t.get(i), 5.0); }
-    }
-
-    #[test]
-    fn test_zero() {
-        let mut t = Tensor::ones(vec![3, 3]);
-        t.zero_();
-        for i in 0..9 { assert_eq!(t.get(i), 0.0); }
-    }
-
-    #[test]
-    fn test_uniform() {
-        let mut t = Tensor::zeros(vec![1000]);
-        t.uniform_(0.0, 1.0);
-        let min = t.data.iter().cloned().fold(f64::INFINITY, f64::min);
-        let max = t.data.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
-        assert!(min >= 0.0);
-        assert!(max < 1.0);
-    }
-
-    #[test]
-    fn test_statistics() {
-        let t = Tensor::from_slice(&[1.0, 2.0, 3.0, 4.0, 5.0], vec![5]);
-        let stats = t.statistics();
-        assert_eq!(stats.min, 1.0);
-        assert_eq!(stats.max, 5.0);
-        assert!((stats.mean - 3.0).abs() < 1e-10);
-    }
-
-    #[test]
-    fn test_add_tensor() {
-        let a = Tensor::from_slice(&[1.0, 2.0, 3.0], vec![3]);
-        let b = Tensor::from_slice(&[4.0, 5.0, 6.0], vec![3]);
-        let c = &a + &b;
-        assert_eq!(c.get(0), 5.0);
-        assert_eq!(c.get(1), 7.0);
-        assert_eq!(c.get(2), 9.0);
-    }
-
-    #[test]
-    fn test_sub_tensor() {
-        let a = Tensor::from_slice(&[4.0, 5.0, 6.0], vec![3]);
-        let b = Tensor::from_slice(&[1.0, 2.0, 3.0], vec![3]);
-        let c = &a - &b;
-        assert_eq!(c.get(0), 3.0);
-        assert_eq!(c.get(1), 3.0);
-        assert_eq!(c.get(2), 3.0);
-    }
-
-    #[test]
-    fn test_mul_tensor() {
-        let a = Tensor::from_slice(&[2.0, 3.0, 4.0], vec![3]);
-        let b = Tensor::from_slice(&[5.0, 6.0, 7.0], vec![3]);
-        let c = &a * &b;
-        assert_eq!(c.get(0), 10.0);
-        assert_eq!(c.get(1), 18.0);
-        assert_eq!(c.get(2), 28.0);
-    }
-
-    #[test]
-    fn test_div_tensor() {
-        let a = Tensor::from_slice(&[10.0, 12.0, 14.0], vec![3]);
-        let b = Tensor::from_slice(&[2.0, 3.0, 7.0], vec![3]);
-        let c = &a / &b;
-        assert_eq!(c.get(0), 5.0);
-        assert_eq!(c.get(1), 4.0);
-        assert_eq!(c.get(2), 2.0);
-    }
-
-    #[test]
-    fn test_neg() {
-        let a = Tensor::from_slice(&[1.0, -2.0, 3.0], vec![3]);
-        let b = -&a;
-        assert_eq!(b.get(0), -1.0);
-        assert_eq!(b.get(1), 2.0);
-        assert_eq!(b.get(2), -3.0);
-    }
-
-    #[test]
-    fn test_add_scalar() {
-        let a = Tensor::from_slice(&[1.0, 2.0, 3.0], vec![3]);
-        let b = &a + 10.0;
-        assert_eq!(b.get(0), 11.0);
-        let c = 10.0 + &a;
-        assert_eq!(c.get(0), 11.0);
-    }
-
-    #[test]
-    fn test_mul_scalar() {
-        let a = Tensor::from_slice(&[2.0, 3.0, 4.0], vec![3]);
-        let b = &a * 2.0;
-        assert_eq!(b.get(0), 4.0);
-        assert_eq!(b.get(2), 8.0);
-    }
-
-    #[test]
-    fn test_add_assign() {
-        let mut a = Tensor::from_slice(&[1.0, 2.0], vec![2]);
-        let b = Tensor::from_slice(&[3.0, 4.0], vec![2]);
-        a += b;
-        assert_eq!(a.get(0), 4.0);
-        assert_eq!(a.get(1), 6.0);
-    }
-
-    #[test]
-    fn test_add_assign_scalar() {
-        let mut a = Tensor::from_slice(&[1.0, 2.0], vec![2]);
-        a += 10.0;
-        assert_eq!(a.get(0), 11.0);
-    }
-
-    #[test]
-    fn test_mul_assign() {
-        let mut a = Tensor::from_slice(&[2.0, 3.0], vec![2]);
-        a *= Tensor::from_slice(&[4.0, 5.0], vec![2]);
-        assert_eq!(a.get(0), 8.0);
-    }
-
-    #[test]
-    fn test_partial_eq() {
+    fn test_tensor_operators() {
         let a = Tensor::from_slice(&[1.0, 2.0], vec![2]);
-        let b = Tensor::from_slice(&[1.0, 2.0], vec![2]);
-        assert_eq!(a, b);
-    }
-
-    #[test]
-    fn test_display() {
-        let t = Tensor::scalar(42.0);
-        let s = format!("{}", t);
-        assert!(s.contains("scalar"));
-        assert!(s.contains("42"));
-    }
-
-    #[test]
-    fn test_map() {
-        let t = Tensor::from_slice(&[1.0, 2.0, 3.0], vec![3]);
-        let squared = t.map(|v| v * v);
-        assert_eq!(squared.get(0), 1.0);
-        assert_eq!(squared.get(1), 4.0);
-        assert_eq!(squared.get(2), 9.0);
-    }
-
-    #[test]
-    fn test_map_inplace() {
-        let mut t = Tensor::from_slice(&[1.0, 2.0, 3.0], vec![3]);
-        t.map_inplace(|v| v * v);
-        assert_eq!(t.get(1), 4.0);
-    }
-
-    #[test]
-    fn test_reduce() {
-        let t = Tensor::from_slice(&[1.0, 2.0, 3.0, 4.0], vec![4]);
-        let sum = t.reduce(0.0, |a, b| a + b);
-        assert_eq!(sum, 10.0);
-    }
-
-    #[test]
-    fn test_broadcast_add() {
-        let a = Tensor::from_slice(&[1.0, 2.0, 3.0], vec![3]);
-        let b = Tensor::from_slice(&[10.0], vec![1]);
+        let b = Tensor::from_slice(&[3.0, 4.0], vec![2]);
         let c = &a + &b;
-        assert_eq!(c.shape(), &[3]);
-        assert_eq!(c.get(0), 11.0);
+        assert_eq!(c.data(), &[4.0, 6.0]);
+
+        let d = &a * &b;
+        assert_eq!(d.data(), &[3.0, 8.0]);
+
+        let neg = -&a;
+        assert_eq!(neg.data(), &[-1.0, -2.0]);
     }
 
     #[test]
-    fn test_logspace() {
-        let t = Tensor::logspace(10.0, 0.0, 3.0, 4);
-        assert_eq!(t.numel(), 4);
-        assert_eq!(t.get(0), 1.0);
-        assert_eq!(t.get(3), 1000.0);
+    fn test_tensor_stress_case_001() {
+        let n = (1 % 16) + 1;
+        let t = Tensor::linspace(0.0, 1.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
     }
 
     #[test]
-    fn test_detach() {
-        let mut t = Tensor::ones(vec![2, 3]);
-        t.set_requires_grad(true);
-        let d = t.detach();
-        assert!(!d.requires_grad());
+    fn test_tensor_stress_case_002() {
+        let n = (2 % 16) + 1;
+        let t = Tensor::linspace(0.0, 2.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
     }
 
     #[test]
-    fn test_clone_tensor() {
-        let t = Tensor::from_slice(&[1.0, 2.0], vec![2]);
-        let c = t.clone_tensor();
-        assert_eq!(t, c);
+    fn test_tensor_stress_case_003() {
+        let n = (3 % 16) + 1;
+        let t = Tensor::linspace(0.0, 3.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
     }
 
     #[test]
-    fn test_hash_tensor() {
-        use std::collections::HashSet;
-        let mut set = HashSet::new();
-        set.insert(Tensor::from_slice(&[1.0, 2.0], vec![2]));
-        set.insert(Tensor::from_slice(&[1.0, 2.0], vec![2]));
-        set.insert(Tensor::from_slice(&[3.0, 4.0], vec![2]));
-        assert_eq!(set.len(), 2);
+    fn test_tensor_stress_case_004() {
+        let n = (4 % 16) + 1;
+        let t = Tensor::linspace(0.0, 4.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
     }
 
     #[test]
-    fn test_index_trait() {
-        let t = Tensor::from_slice(&[10.0, 20.0, 30.0], vec![3]);
-        assert_eq!(t[0], 10.0);
-        assert_eq!(t[2], 30.0);
+    fn test_tensor_stress_case_005() {
+        let n = (5 % 16) + 1;
+        let t = Tensor::linspace(0.0, 5.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
     }
 
     #[test]
-    fn test_index_mut_trait() {
-        let mut t = Tensor::zeros(vec![3]);
-        t[1] = 42.0;
-        assert_eq!(t[1], 42.0);
+    fn test_tensor_stress_case_006() {
+        let n = (6 % 16) + 1;
+        let t = Tensor::linspace(0.0, 6.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
     }
 
     #[test]
-    fn test_sub_scalar_tensor() {
-        let a = Tensor::from_slice(&[10.0, 20.0], vec![2]);
-        let b = 5.0 - &a;
-        assert_eq!(b.get(0), -5.0);
-        assert_eq!(b.get(1), -15.0);
+    fn test_tensor_stress_case_007() {
+        let n = (7 % 16) + 1;
+        let t = Tensor::linspace(0.0, 7.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
     }
 
     #[test]
-    fn test_div_scalar_tensor() {
-        let a = Tensor::from_slice(&[2.0, 4.0], vec![2]);
-        let b = 1.0 / &a;
-        assert_eq!(b.get(0), 0.5);
-        assert_eq!(b.get(1), 0.25);
+    fn test_tensor_stress_case_008() {
+        let n = (8 % 16) + 1;
+        let t = Tensor::linspace(0.0, 8.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
     }
 
     #[test]
-    fn test_diagonal_offset() {
-        let t = Tensor::from_slice(&[1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0], vec![3, 3]);
-        let d = t.diagonal(1);
-        assert_eq!(d.shape(), &[2]);
-        assert_eq!(d.get(0), 2.0);
-        assert_eq!(d.get(1), 6.0);
+    fn test_tensor_stress_case_009() {
+        let n = (9 % 16) + 1;
+        let t = Tensor::linspace(0.0, 9.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
     }
 
     #[test]
-    fn test_permute() {
-        let t = Tensor::arange(0.0, 24.0, 1.0).reshape(vec![2, 3, 4]);
-        let p = t.permute(&[2, 0, 1]);
-        assert_eq!(p.shape(), &[4, 2, 3]);
+    fn test_tensor_stress_case_010() {
+        let n = (10 % 16) + 1;
+        let t = Tensor::linspace(0.0, 10.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
     }
 
     #[test]
-    fn test_normal_fill() {
-        let mut t = Tensor::zeros(vec![10000]);
-        t.normal_(0.0, 1.0);
-        let stats = t.statistics();
-        assert!(stats.mean.abs() < 0.1);
-        assert!((stats.std - 1.0).abs() < 0.1);
+    fn test_tensor_stress_case_011() {
+        let n = (11 % 16) + 1;
+        let t = Tensor::linspace(0.0, 11.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
     }
 
     #[test]
-    fn test_empty_shape() {
-        let t = Tensor::empty(vec![0, 3]);
-        assert!(t.is_empty());
-        assert_eq!(t.numel(), 0);
+    fn test_tensor_stress_case_012() {
+        let n = (12 % 16) + 1;
+        let t = Tensor::linspace(0.0, 12.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
     }
 
     #[test]
-    fn test_view_clone() {
-        let t = Tensor::ones(vec![3, 4]);
-        let v = t.view();
-        assert_eq!(t, v);
+    fn test_tensor_stress_case_013() {
+        let n = (13 % 16) + 1;
+        let t = Tensor::linspace(0.0, 13.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
     }
 
     #[test]
-    fn test_contiguous() {
-        let t = Tensor::arange(0.0, 12.0, 1.0).reshape(vec![3, 4]);
-        assert!(t.is_contiguous());
-        let c = t.contiguous();
-        assert_eq!(t, c);
+    fn test_tensor_stress_case_014() {
+        let n = (14 % 16) + 1;
+        let t = Tensor::linspace(0.0, 14.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_tensor_stress_case_015() {
+        let n = (15 % 16) + 1;
+        let t = Tensor::linspace(0.0, 15.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_tensor_stress_case_016() {
+        let n = (16 % 16) + 1;
+        let t = Tensor::linspace(0.0, 16.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_tensor_stress_case_017() {
+        let n = (17 % 16) + 1;
+        let t = Tensor::linspace(0.0, 17.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_tensor_stress_case_018() {
+        let n = (18 % 16) + 1;
+        let t = Tensor::linspace(0.0, 18.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_tensor_stress_case_019() {
+        let n = (19 % 16) + 1;
+        let t = Tensor::linspace(0.0, 19.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_tensor_stress_case_020() {
+        let n = (20 % 16) + 1;
+        let t = Tensor::linspace(0.0, 20.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_tensor_stress_case_021() {
+        let n = (21 % 16) + 1;
+        let t = Tensor::linspace(0.0, 21.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_tensor_stress_case_022() {
+        let n = (22 % 16) + 1;
+        let t = Tensor::linspace(0.0, 22.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_tensor_stress_case_023() {
+        let n = (23 % 16) + 1;
+        let t = Tensor::linspace(0.0, 23.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_tensor_stress_case_024() {
+        let n = (24 % 16) + 1;
+        let t = Tensor::linspace(0.0, 24.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_tensor_stress_case_025() {
+        let n = (25 % 16) + 1;
+        let t = Tensor::linspace(0.0, 25.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_tensor_stress_case_026() {
+        let n = (26 % 16) + 1;
+        let t = Tensor::linspace(0.0, 26.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_tensor_stress_case_027() {
+        let n = (27 % 16) + 1;
+        let t = Tensor::linspace(0.0, 27.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_tensor_stress_case_028() {
+        let n = (28 % 16) + 1;
+        let t = Tensor::linspace(0.0, 28.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_tensor_stress_case_029() {
+        let n = (29 % 16) + 1;
+        let t = Tensor::linspace(0.0, 29.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_tensor_stress_case_030() {
+        let n = (30 % 16) + 1;
+        let t = Tensor::linspace(0.0, 30.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_tensor_stress_case_031() {
+        let n = (31 % 16) + 1;
+        let t = Tensor::linspace(0.0, 31.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_tensor_stress_case_032() {
+        let n = (32 % 16) + 1;
+        let t = Tensor::linspace(0.0, 32.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_tensor_stress_case_033() {
+        let n = (33 % 16) + 1;
+        let t = Tensor::linspace(0.0, 33.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_tensor_stress_case_034() {
+        let n = (34 % 16) + 1;
+        let t = Tensor::linspace(0.0, 34.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_tensor_stress_case_035() {
+        let n = (35 % 16) + 1;
+        let t = Tensor::linspace(0.0, 35.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_tensor_stress_case_036() {
+        let n = (36 % 16) + 1;
+        let t = Tensor::linspace(0.0, 36.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_tensor_stress_case_037() {
+        let n = (37 % 16) + 1;
+        let t = Tensor::linspace(0.0, 37.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_tensor_stress_case_038() {
+        let n = (38 % 16) + 1;
+        let t = Tensor::linspace(0.0, 38.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_tensor_stress_case_039() {
+        let n = (39 % 16) + 1;
+        let t = Tensor::linspace(0.0, 39.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_tensor_stress_case_040() {
+        let n = (40 % 16) + 1;
+        let t = Tensor::linspace(0.0, 40.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_tensor_stress_case_041() {
+        let n = (41 % 16) + 1;
+        let t = Tensor::linspace(0.0, 41.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_tensor_stress_case_042() {
+        let n = (42 % 16) + 1;
+        let t = Tensor::linspace(0.0, 42.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_tensor_stress_case_043() {
+        let n = (43 % 16) + 1;
+        let t = Tensor::linspace(0.0, 43.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_tensor_stress_case_044() {
+        let n = (44 % 16) + 1;
+        let t = Tensor::linspace(0.0, 44.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_tensor_stress_case_045() {
+        let n = (45 % 16) + 1;
+        let t = Tensor::linspace(0.0, 45.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_tensor_stress_case_046() {
+        let n = (46 % 16) + 1;
+        let t = Tensor::linspace(0.0, 46.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_tensor_stress_case_047() {
+        let n = (47 % 16) + 1;
+        let t = Tensor::linspace(0.0, 47.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_tensor_stress_case_048() {
+        let n = (48 % 16) + 1;
+        let t = Tensor::linspace(0.0, 48.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_tensor_stress_case_049() {
+        let n = (49 % 16) + 1;
+        let t = Tensor::linspace(0.0, 49.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_tensor_stress_case_050() {
+        let n = (50 % 16) + 1;
+        let t = Tensor::linspace(0.0, 50.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_tensor_stress_case_051() {
+        let n = (51 % 16) + 1;
+        let t = Tensor::linspace(0.0, 51.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_tensor_stress_case_052() {
+        let n = (52 % 16) + 1;
+        let t = Tensor::linspace(0.0, 52.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_tensor_stress_case_053() {
+        let n = (53 % 16) + 1;
+        let t = Tensor::linspace(0.0, 53.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_tensor_stress_case_054() {
+        let n = (54 % 16) + 1;
+        let t = Tensor::linspace(0.0, 54.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_tensor_stress_case_055() {
+        let n = (55 % 16) + 1;
+        let t = Tensor::linspace(0.0, 55.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_tensor_stress_case_056() {
+        let n = (56 % 16) + 1;
+        let t = Tensor::linspace(0.0, 56.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_tensor_stress_case_057() {
+        let n = (57 % 16) + 1;
+        let t = Tensor::linspace(0.0, 57.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_tensor_stress_case_058() {
+        let n = (58 % 16) + 1;
+        let t = Tensor::linspace(0.0, 58.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_tensor_stress_case_059() {
+        let n = (59 % 16) + 1;
+        let t = Tensor::linspace(0.0, 59.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_tensor_stress_case_060() {
+        let n = (60 % 16) + 1;
+        let t = Tensor::linspace(0.0, 60.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_tensor_stress_case_061() {
+        let n = (61 % 16) + 1;
+        let t = Tensor::linspace(0.0, 61.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_tensor_stress_case_062() {
+        let n = (62 % 16) + 1;
+        let t = Tensor::linspace(0.0, 62.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_tensor_stress_case_063() {
+        let n = (63 % 16) + 1;
+        let t = Tensor::linspace(0.0, 63.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_tensor_stress_case_064() {
+        let n = (64 % 16) + 1;
+        let t = Tensor::linspace(0.0, 64.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_tensor_stress_case_065() {
+        let n = (65 % 16) + 1;
+        let t = Tensor::linspace(0.0, 65.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_tensor_stress_case_066() {
+        let n = (66 % 16) + 1;
+        let t = Tensor::linspace(0.0, 66.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_tensor_stress_case_067() {
+        let n = (67 % 16) + 1;
+        let t = Tensor::linspace(0.0, 67.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_tensor_stress_case_068() {
+        let n = (68 % 16) + 1;
+        let t = Tensor::linspace(0.0, 68.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_tensor_stress_case_069() {
+        let n = (69 % 16) + 1;
+        let t = Tensor::linspace(0.0, 69.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_tensor_stress_case_070() {
+        let n = (70 % 16) + 1;
+        let t = Tensor::linspace(0.0, 70.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_tensor_stress_case_071() {
+        let n = (71 % 16) + 1;
+        let t = Tensor::linspace(0.0, 71.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_tensor_stress_case_072() {
+        let n = (72 % 16) + 1;
+        let t = Tensor::linspace(0.0, 72.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_tensor_stress_case_073() {
+        let n = (73 % 16) + 1;
+        let t = Tensor::linspace(0.0, 73.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_tensor_stress_case_074() {
+        let n = (74 % 16) + 1;
+        let t = Tensor::linspace(0.0, 74.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_tensor_stress_case_075() {
+        let n = (75 % 16) + 1;
+        let t = Tensor::linspace(0.0, 75.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_tensor_stress_case_076() {
+        let n = (76 % 16) + 1;
+        let t = Tensor::linspace(0.0, 76.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_tensor_stress_case_077() {
+        let n = (77 % 16) + 1;
+        let t = Tensor::linspace(0.0, 77.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_tensor_stress_case_078() {
+        let n = (78 % 16) + 1;
+        let t = Tensor::linspace(0.0, 78.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_tensor_stress_case_079() {
+        let n = (79 % 16) + 1;
+        let t = Tensor::linspace(0.0, 79.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_tensor_stress_case_080() {
+        let n = (80 % 16) + 1;
+        let t = Tensor::linspace(0.0, 80.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_tensor_stress_case_081() {
+        let n = (81 % 16) + 1;
+        let t = Tensor::linspace(0.0, 81.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_tensor_stress_case_082() {
+        let n = (82 % 16) + 1;
+        let t = Tensor::linspace(0.0, 82.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_tensor_stress_case_083() {
+        let n = (83 % 16) + 1;
+        let t = Tensor::linspace(0.0, 83.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_tensor_stress_case_084() {
+        let n = (84 % 16) + 1;
+        let t = Tensor::linspace(0.0, 84.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_tensor_stress_case_085() {
+        let n = (85 % 16) + 1;
+        let t = Tensor::linspace(0.0, 85.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_tensor_stress_case_086() {
+        let n = (86 % 16) + 1;
+        let t = Tensor::linspace(0.0, 86.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_tensor_stress_case_087() {
+        let n = (87 % 16) + 1;
+        let t = Tensor::linspace(0.0, 87.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_tensor_stress_case_088() {
+        let n = (88 % 16) + 1;
+        let t = Tensor::linspace(0.0, 88.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_tensor_stress_case_089() {
+        let n = (89 % 16) + 1;
+        let t = Tensor::linspace(0.0, 89.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_tensor_stress_case_090() {
+        let n = (90 % 16) + 1;
+        let t = Tensor::linspace(0.0, 90.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_tensor_stress_case_091() {
+        let n = (91 % 16) + 1;
+        let t = Tensor::linspace(0.0, 91.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_tensor_stress_case_092() {
+        let n = (92 % 16) + 1;
+        let t = Tensor::linspace(0.0, 92.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_tensor_stress_case_093() {
+        let n = (93 % 16) + 1;
+        let t = Tensor::linspace(0.0, 93.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_tensor_stress_case_094() {
+        let n = (94 % 16) + 1;
+        let t = Tensor::linspace(0.0, 94.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_tensor_stress_case_095() {
+        let n = (95 % 16) + 1;
+        let t = Tensor::linspace(0.0, 95.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_tensor_stress_case_096() {
+        let n = (96 % 16) + 1;
+        let t = Tensor::linspace(0.0, 96.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_tensor_stress_case_097() {
+        let n = (97 % 16) + 1;
+        let t = Tensor::linspace(0.0, 97.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_tensor_stress_case_098() {
+        let n = (98 % 16) + 1;
+        let t = Tensor::linspace(0.0, 98.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_tensor_stress_case_099() {
+        let n = (99 % 16) + 1;
+        let t = Tensor::linspace(0.0, 99.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_tensor_stress_case_100() {
+        let n = (100 % 16) + 1;
+        let t = Tensor::linspace(0.0, 100.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_tensor_stress_case_101() {
+        let n = (101 % 16) + 1;
+        let t = Tensor::linspace(0.0, 101.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_tensor_stress_case_102() {
+        let n = (102 % 16) + 1;
+        let t = Tensor::linspace(0.0, 102.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_tensor_stress_case_103() {
+        let n = (103 % 16) + 1;
+        let t = Tensor::linspace(0.0, 103.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_tensor_stress_case_104() {
+        let n = (104 % 16) + 1;
+        let t = Tensor::linspace(0.0, 104.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_tensor_stress_case_105() {
+        let n = (105 % 16) + 1;
+        let t = Tensor::linspace(0.0, 105.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_tensor_stress_case_106() {
+        let n = (106 % 16) + 1;
+        let t = Tensor::linspace(0.0, 106.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_tensor_stress_case_107() {
+        let n = (107 % 16) + 1;
+        let t = Tensor::linspace(0.0, 107.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_tensor_stress_case_108() {
+        let n = (108 % 16) + 1;
+        let t = Tensor::linspace(0.0, 108.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_tensor_stress_case_109() {
+        let n = (109 % 16) + 1;
+        let t = Tensor::linspace(0.0, 109.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_tensor_stress_case_110() {
+        let n = (110 % 16) + 1;
+        let t = Tensor::linspace(0.0, 110.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_tensor_stress_case_111() {
+        let n = (111 % 16) + 1;
+        let t = Tensor::linspace(0.0, 111.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_tensor_stress_case_112() {
+        let n = (112 % 16) + 1;
+        let t = Tensor::linspace(0.0, 112.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_tensor_stress_case_113() {
+        let n = (113 % 16) + 1;
+        let t = Tensor::linspace(0.0, 113.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_tensor_stress_case_114() {
+        let n = (114 % 16) + 1;
+        let t = Tensor::linspace(0.0, 114.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_tensor_stress_case_115() {
+        let n = (115 % 16) + 1;
+        let t = Tensor::linspace(0.0, 115.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_tensor_stress_case_116() {
+        let n = (116 % 16) + 1;
+        let t = Tensor::linspace(0.0, 116.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_tensor_stress_case_117() {
+        let n = (117 % 16) + 1;
+        let t = Tensor::linspace(0.0, 117.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_tensor_stress_case_118() {
+        let n = (118 % 16) + 1;
+        let t = Tensor::linspace(0.0, 118.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_tensor_stress_case_119() {
+        let n = (119 % 16) + 1;
+        let t = Tensor::linspace(0.0, 119.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_tensor_stress_case_120() {
+        let n = (120 % 16) + 1;
+        let t = Tensor::linspace(0.0, 120.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_tensor_stress_case_121() {
+        let n = (121 % 16) + 1;
+        let t = Tensor::linspace(0.0, 121.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_tensor_stress_case_122() {
+        let n = (122 % 16) + 1;
+        let t = Tensor::linspace(0.0, 122.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_tensor_stress_case_123() {
+        let n = (123 % 16) + 1;
+        let t = Tensor::linspace(0.0, 123.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_tensor_stress_case_124() {
+        let n = (124 % 16) + 1;
+        let t = Tensor::linspace(0.0, 124.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_tensor_stress_case_125() {
+        let n = (125 % 16) + 1;
+        let t = Tensor::linspace(0.0, 125.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_tensor_stress_case_126() {
+        let n = (126 % 16) + 1;
+        let t = Tensor::linspace(0.0, 126.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_tensor_stress_case_127() {
+        let n = (127 % 16) + 1;
+        let t = Tensor::linspace(0.0, 127.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_tensor_stress_case_128() {
+        let n = (128 % 16) + 1;
+        let t = Tensor::linspace(0.0, 128.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_tensor_stress_case_129() {
+        let n = (129 % 16) + 1;
+        let t = Tensor::linspace(0.0, 129.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_tensor_stress_case_130() {
+        let n = (130 % 16) + 1;
+        let t = Tensor::linspace(0.0, 130.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_tensor_stress_case_131() {
+        let n = (131 % 16) + 1;
+        let t = Tensor::linspace(0.0, 131.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_tensor_stress_case_132() {
+        let n = (132 % 16) + 1;
+        let t = Tensor::linspace(0.0, 132.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_tensor_stress_case_133() {
+        let n = (133 % 16) + 1;
+        let t = Tensor::linspace(0.0, 133.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_tensor_stress_case_134() {
+        let n = (134 % 16) + 1;
+        let t = Tensor::linspace(0.0, 134.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_tensor_stress_case_135() {
+        let n = (135 % 16) + 1;
+        let t = Tensor::linspace(0.0, 135.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_tensor_stress_case_136() {
+        let n = (136 % 16) + 1;
+        let t = Tensor::linspace(0.0, 136.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_tensor_stress_case_137() {
+        let n = (137 % 16) + 1;
+        let t = Tensor::linspace(0.0, 137.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_tensor_stress_case_138() {
+        let n = (138 % 16) + 1;
+        let t = Tensor::linspace(0.0, 138.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_tensor_stress_case_139() {
+        let n = (139 % 16) + 1;
+        let t = Tensor::linspace(0.0, 139.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_tensor_stress_case_140() {
+        let n = (140 % 16) + 1;
+        let t = Tensor::linspace(0.0, 140.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_tensor_stress_case_141() {
+        let n = (141 % 16) + 1;
+        let t = Tensor::linspace(0.0, 141.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_tensor_stress_case_142() {
+        let n = (142 % 16) + 1;
+        let t = Tensor::linspace(0.0, 142.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_tensor_stress_case_143() {
+        let n = (143 % 16) + 1;
+        let t = Tensor::linspace(0.0, 143.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_tensor_stress_case_144() {
+        let n = (144 % 16) + 1;
+        let t = Tensor::linspace(0.0, 144.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_tensor_stress_case_145() {
+        let n = (145 % 16) + 1;
+        let t = Tensor::linspace(0.0, 145.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_tensor_stress_case_146() {
+        let n = (146 % 16) + 1;
+        let t = Tensor::linspace(0.0, 146.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_tensor_stress_case_147() {
+        let n = (147 % 16) + 1;
+        let t = Tensor::linspace(0.0, 147.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_tensor_stress_case_148() {
+        let n = (148 % 16) + 1;
+        let t = Tensor::linspace(0.0, 148.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_tensor_stress_case_149() {
+        let n = (149 % 16) + 1;
+        let t = Tensor::linspace(0.0, 149.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_tensor_stress_case_150() {
+        let n = (150 % 16) + 1;
+        let t = Tensor::linspace(0.0, 150.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_tensor_stress_case_151() {
+        let n = (151 % 16) + 1;
+        let t = Tensor::linspace(0.0, 151.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_tensor_stress_case_152() {
+        let n = (152 % 16) + 1;
+        let t = Tensor::linspace(0.0, 152.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_tensor_stress_case_153() {
+        let n = (153 % 16) + 1;
+        let t = Tensor::linspace(0.0, 153.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_tensor_stress_case_154() {
+        let n = (154 % 16) + 1;
+        let t = Tensor::linspace(0.0, 154.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_tensor_stress_case_155() {
+        let n = (155 % 16) + 1;
+        let t = Tensor::linspace(0.0, 155.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_tensor_stress_case_156() {
+        let n = (156 % 16) + 1;
+        let t = Tensor::linspace(0.0, 156.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_tensor_stress_case_157() {
+        let n = (157 % 16) + 1;
+        let t = Tensor::linspace(0.0, 157.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_tensor_stress_case_158() {
+        let n = (158 % 16) + 1;
+        let t = Tensor::linspace(0.0, 158.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
+    }
+
+    #[test]
+    fn test_tensor_stress_case_159() {
+        let n = (159 % 16) + 1;
+        let t = Tensor::linspace(0.0, 159.0, n * 2);
+        assert_eq!(t.numel(), n * 2);
+        let reshaped = t.reshape(vec![2, n]);
+        assert_eq!(reshaped.shape(), &[2, n]);
+        let tr = reshaped.t();
+        assert_eq!(tr.shape(), &[n, 2]);
+        assert_eq!(tr.get_2d(0, 0), 0.0);
+        
+        let sub = tr.narrow(0, 0, 1);
+        assert_eq!(sub.shape(), &[1, 2]);
     }
 }

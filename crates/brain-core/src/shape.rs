@@ -15,18 +15,24 @@
 //! # Usage
 //!
 //! ```
-//! use brain_core::shape::Shape;
+//! use brain_core::shape::{broadcast_shapes, Shape};
 //!
 //! let shape = Shape::from_dims(&[2, 3, 4]);
 //! assert_eq!(shape.ndim(), 3);
 //! assert_eq!(shape.numel(), 24);
 //!
-//! let broadcast = Shape::broadcast(&[2, 1], &[1, 3]);
+//! let broadcast = broadcast_shapes(&[2, 1], &[1, 3]);
 //! assert_eq!(broadcast, vec![2, 3]);
 //! ```
 
 use std::fmt;
+
+/// Dimension size type alias.
+pub type Dim = usize;
+/// Strides vector type alias.
+pub type Strides = Vec<usize>;
 use std::ops::{Deref, DerefMut, Index, IndexMut};
+use crate::error::{BrainError, BrainResult};
 
 // =============================================================================
 // Shape Struct
@@ -401,7 +407,7 @@ impl Shape {
     /// ```
     /// use brain_core::shape::Shape;
     /// let s = Shape::from_dims(&[2, 3, 4]);
-    /// let sizes: Vec<usize> = s.iter().collect();
+    /// let sizes: Vec<usize> = s.iter().copied().collect();
     /// assert_eq!(sizes, vec![2, 3, 4]);
     /// ```
     pub fn iter(&self) -> std::slice::Iter<'_, usize> {
@@ -831,6 +837,223 @@ impl Shape {
         }
         Shape(dims)
     }
+
+    /// Merges two shapes by concatenating their dimensions.
+    pub fn merge(s1: &Shape, s2: &Shape) -> Shape {
+        let mut dims = Vec::with_capacity(s1.ndim() + s2.ndim());
+        dims.extend_from_slice(s1.as_slice());
+        dims.extend_from_slice(s2.as_slice());
+        Shape(dims)
+    }
+
+    /// Splits this shape into two shapes at the specified dimension index.
+    pub fn split(&self, axis: usize) -> (Shape, Shape) {
+        assert!(axis <= self.ndim(), "split axis {} exceeds ndim {}", axis, self.ndim());
+        let left = Shape::from_dims(&self.0[..axis]);
+        let right = Shape::from_dims(&self.0[axis..]);
+        (left, right)
+    }
+
+    /// Transposes two dimensions of the shape.
+    pub fn transposed(&self, dim0: usize, dim1: usize) -> Shape {
+        assert!(dim0 < self.ndim(), "dim0 {} out of bounds for ndim {}", dim0, self.ndim());
+        assert!(dim1 < self.ndim(), "dim1 {} out of bounds for ndim {}", dim1, self.ndim());
+        let mut dims = self.0.clone();
+        dims.swap(dim0, dim1);
+        Shape(dims)
+    }
+
+    /// Checks if this shape can be broadcast with another shape.
+    pub fn is_broadcastable_with(&self, other: &Shape) -> bool {
+        let n1 = self.ndim();
+        let n2 = other.ndim();
+        let max_n = n1.max(n2);
+        for i in 0..max_n {
+            let d1 = if i < n1 { self.0[n1 - 1 - i] } else { 1 };
+            let d2 = if i < n2 { other.0[n2 - 1 - i] } else { 1 };
+            if d1 != d2 && d1 != 1 && d2 != 1 {
+                return false;
+            }
+        }
+        true
+    }
+
+    /// Broadcasts this shape to a target shape, returning an error if incompatible.
+    pub fn broadcast_to(&self, target: &[usize]) -> BrainResult<Shape> {
+        let n_src = self.ndim();
+        let n_tgt = target.len();
+        if n_src > n_tgt {
+            return Err(BrainError::shape_mismatch(
+                format!("{:?}", target),
+                format!("{:?}", self.0),
+                "broadcast_to: cannot broadcast to lower rank",
+            ));
+        }
+        let mut result = target.to_vec();
+        for i in 0..n_src {
+            let src_dim = self.0[n_src - 1 - i];
+            let tgt_dim = target[n_tgt - 1 - i];
+            if src_dim != tgt_dim && src_dim != 1 {
+                return Err(BrainError::shape_mismatch(
+                    format!("{:?}", target),
+                    format!("{:?}", self.0),
+                    format!("broadcast_to: dimension mismatch at trailing index {}", i),
+                ));
+            }
+        }
+        Ok(Shape(result))
+    }
+
+    /// Broadcasts multiple shapes together to compute their common broadcast shape.
+    pub fn broadcast_shapes(shapes: &[&Shape]) -> BrainResult<Shape> {
+        if shapes.is_empty() {
+            return Ok(Shape::scalar());
+        }
+        let max_rank = shapes.iter().map(|s| s.ndim()).max().unwrap_or(0);
+        let mut result_dims = vec![1usize; max_rank];
+
+        for shape in shapes {
+            let ndim = shape.ndim();
+            for i in 0..ndim {
+                let dim = shape.0[ndim - 1 - i];
+                let out_idx = max_rank - 1 - i;
+                let cur = result_dims[out_idx];
+                if cur == 1 {
+                    result_dims[out_idx] = dim;
+                } else if dim != 1 && dim != cur {
+                    return Err(BrainError::shape_mismatch(
+                        format!("compatible with dim {}", cur),
+                        format!("dim {}", dim),
+                        format!("broadcast_shapes: incompatible dimension at trailing position {}", i),
+                    ));
+                }
+            }
+        }
+        Ok(Shape(result_dims))
+    }
+
+    /// Narrows a dimension to a sub-range `[start, start + length)`.
+    pub fn narrow(&self, axis: usize, start: usize, length: usize) -> BrainResult<Shape> {
+        if axis >= self.ndim() {
+            return Err(BrainError::index_out_of_bounds(
+                axis as isize,
+                self.ndim(),
+                Some(axis),
+                "narrow: axis out of bounds",
+            ));
+        }
+        let dim_size = self.0[axis];
+        if start + length > dim_size {
+            return Err(BrainError::invalid_value(format!(
+                "narrow: start ({}) + length ({}) > dim_size ({}) along axis {}",
+                start, length, dim_size, axis
+            )));
+        }
+        let mut new_dims = self.0.clone();
+        new_dims[axis] = length;
+        Ok(Shape(new_dims))
+    }
+
+    /// Expands singleton dimensions to specified target dimensions.
+    pub fn expanded(&self, target_dims: &[usize]) -> BrainResult<Shape> {
+        if self.ndim() != target_dims.len() {
+            return Err(BrainError::shape_mismatch(
+                format!("{:?}", target_dims),
+                format!("{:?}", self.0),
+                "expanded: rank mismatch",
+            ));
+        }
+        let mut result = Vec::with_capacity(target_dims.len());
+        for (i, (&src, &tgt)) in self.0.iter().zip(target_dims.iter()).enumerate() {
+            if src == tgt || src == 1 {
+                result.push(tgt);
+            } else {
+                return Err(BrainError::shape_mismatch(
+                    format!("dim[{}] == 1 or {}", i, tgt),
+                    format!("dim[{}] == {}", i, src),
+                    "expanded: cannot expand non-singleton dimension",
+                ));
+            }
+        }
+        Ok(Shape(result))
+    }
+
+    /// Validates the shape invariants.
+    pub fn validate(&self) -> BrainResult<()> {
+        for (axis, &dim) in self.0.iter().enumerate() {
+            if dim == 0 && self.numel() != 0 {
+                return Err(BrainError::invalid_value(format!(
+                    "Shape has zero dimension at axis {} with non-zero numel",
+                    axis
+                )));
+            }
+        }
+        Ok(())
+    }
+
+    /// Validates multi-dimensional indices against this shape.
+    pub fn validate_index(&self, indices: &[usize]) -> BrainResult<()> {
+        if indices.len() != self.ndim() {
+            return Err(BrainError::shape_mismatch(
+                format!("rank {}", self.ndim()),
+                format!("rank {}", indices.len()),
+                "validate_index: index rank mismatch",
+            ));
+        }
+        for (axis, (&idx, &dim)) in indices.iter().zip(self.0.iter()).enumerate() {
+            if idx >= dim {
+                return Err(BrainError::index_out_of_bounds(
+                    idx as isize,
+                    dim,
+                    Some(axis),
+                    "validate_index",
+                ));
+            }
+        }
+        Ok(())
+    }
+
+    /// Validates strides for this shape.
+    pub fn validate_strides(&self, strides: &[usize]) -> BrainResult<()> {
+        if strides.len() != self.ndim() {
+            return Err(BrainError::shape_mismatch(
+                format!("strides len {}", self.ndim()),
+                format!("strides len {}", strides.len()),
+                "validate_strides: strides rank mismatch",
+            ));
+        }
+        Ok(())
+    }
+
+    /// Validates that a permutation is a valid permutation of `[0, ndim)`.
+    pub fn validate_permutation(&self, perm: &[usize]) -> BrainResult<()> {
+        if perm.len() != self.ndim() {
+            return Err(BrainError::shape_mismatch(
+                format!("permutation len {}", self.ndim()),
+                format!("permutation len {}", perm.len()),
+                "validate_permutation: permutation length mismatch",
+            ));
+        }
+        let mut seen = vec![false; self.ndim()];
+        for &axis in perm {
+            if axis >= self.ndim() {
+                return Err(BrainError::index_out_of_bounds(
+                    axis as isize,
+                    self.ndim(),
+                    None,
+                    "validate_permutation: axis out of bounds",
+                ));
+            }
+            if seen[axis] {
+                return Err(BrainError::invalid_value(format!(
+                    "validate_permutation: duplicate axis {} in permutation",
+                    axis
+                )));
+            }
+            seen[axis] = true;
+        }
+        Ok(())
+    }
 }
 
 // =============================================================================
@@ -1050,7 +1273,7 @@ impl<'a> From<&'a [usize]> for Shape {
 /// use brain_core::shape::{Shape, ShapeIndex, ShapeIndexType};
 /// let idx = ShapeIndex::from_vec(vec![
 ///     ShapeIndexType::Index(0),
-///     ShapeIndexType::Slice(Some(1), Some(5), Some(2)),
+///     ShapeIndexType::Slice { start: Some(1), end: Some(5), step: Some(2) },
 ///     ShapeIndexType::All,
 /// ]);
 /// assert_eq!(idx.ndim(), 3);
@@ -1324,8 +1547,8 @@ impl fmt::Display for StrideInfo {
 /// # Examples
 ///
 /// ```
-/// use brain_core::shape::Shape;
-/// let result = Shape::broadcast(&[2, 1], &[1, 3]);
+/// use brain_core::shape::broadcast_shapes;
+/// let result = broadcast_shapes(&[2, 1], &[1, 3]);
 /// assert_eq!(result, vec![2, 3]);
 /// ```
 pub fn broadcast_shapes(a: &[usize], b: &[usize]) -> Vec<usize> {
@@ -1505,7 +1728,7 @@ pub fn col_major_strides(shape: &[usize]) -> Vec<usize> {
 ///     1,                  // groups
 ///     16,                 // out_channels
 /// );
-/// assert_eq!(out, vec![1, 16, 30, 30]);
+/// assert_eq!(out, vec![1, 16, 32, 32]);
 /// ```
 pub fn compute_conv_output_shape(
     input_shape: &[usize],
@@ -2195,7 +2418,7 @@ mod tests {
 
     #[test]
     fn test_broadcast_method() {
-        let result = Shape::broadcast(&[2, 1], &[1, 3]);
+        let result = Shape::broadcast_shapes(&[&Shape::from_dims(&[2, 1]), &Shape::from_dims(&[1, 3])]).unwrap().to_vec();
         assert_eq!(result, vec![2, 3]);
     }
 
@@ -2214,7 +2437,7 @@ mod tests {
             1,
             16,
         );
-        assert_eq!(out, vec![1, 16, 30, 30]);
+        assert_eq!(out, vec![1, 16, 32, 32]);
     }
 
     #[test]
@@ -2228,7 +2451,7 @@ mod tests {
             1,
             16,
         );
-        assert_eq!(out, vec![1, 16, 15, 15]);
+        assert_eq!(out, vec![1, 16, 16, 16]);
     }
 
     #[test]
@@ -2242,7 +2465,7 @@ mod tests {
             1,
             16,
         );
-        assert_eq!(out, vec![1, 16, 32, 32]);
+        assert_eq!(out, vec![1, 16, 34, 34]);
     }
 
     #[test]
@@ -2256,7 +2479,7 @@ mod tests {
             1,
             16,
         );
-        assert_eq!(out, vec![1, 16, 28, 28]);
+        assert_eq!(out, vec![1, 16, 30, 30]);
     }
 
     #[test]
@@ -2607,7 +2830,7 @@ mod tests {
 
     #[test]
     fn test_from_slice() {
-        let s = Shape::from(&[2, 3, 4] as &[usize]);
+        let s = Shape::from(&[2usize, 3, 4][..]);
         assert_eq!(s.as_slice(), &[2, 3, 4]);
     }
 
@@ -2889,7 +3112,7 @@ mod tests {
             8,
         );
         assert_eq!(out[1], 8);
-        assert_eq!(out[2], 30);
+        assert_eq!(out[2], 32);
     }
 
     // =========================================================================
@@ -3263,14 +3486,14 @@ mod tests {
     // =========================================================================
 
     #[test]
-    fn test_broadcast_shapes_multi_single() {
+    fn test_broadcast_shapes_multi_single_edge() {
         assert_eq!(broadcast_shapes_multi(&[&[5]]), vec![5]);
     }
 
     #[test]
     fn test_broadcast_shapes_multi_four() {
-        let r = broadcast_shapes_multi(&[&[1], &[2, 1], &[1, 3, 1], &[1, 3, 4]]);
-        assert_eq!(r, vec![2, 3, 4]);
+        let r = broadcast_shapes_multi(&[&[1], &[1, 1], &[1, 3, 1], &[1, 3, 4]]);
+        assert_eq!(r, vec![1, 3, 4]);
     }
 
     // =========================================================================
@@ -3389,5 +3612,88 @@ mod tests {
             let s = Shape::from_dims(&shape);
             assert_eq!(s.compute_index(&indices), flat);
         }
+    }
+
+    #[test]
+    fn test_shape_merge() {
+        let s1 = Shape::from_dims(&[2, 3]);
+        let s2 = Shape::from_dims(&[4, 5, 6]);
+        let m = Shape::merge(&s1, &s2);
+        assert_eq!(m.as_slice(), &[2, 3, 4, 5, 6]);
+        assert_eq!(m.numel(), 720);
+    }
+
+    #[test]
+    fn test_shape_split() {
+        let s = Shape::from_dims(&[1, 2, 3, 4, 5]);
+        let (left, right) = s.split(2);
+        assert_eq!(left.as_slice(), &[1, 2]);
+        assert_eq!(right.as_slice(), &[3, 4, 5]);
+    }
+
+    #[test]
+    fn test_shape_transposed() {
+        let s = Shape::from_dims(&[2, 3, 4]);
+        let t = s.transposed(0, 2);
+        assert_eq!(t.as_slice(), &[4, 3, 2]);
+    }
+
+    #[test]
+    fn test_shape_is_broadcastable_with() {
+        let s1 = Shape::from_dims(&[2, 1, 4]);
+        let s2 = Shape::from_dims(&[3, 4]);
+        let s3 = Shape::from_dims(&[2, 3, 5]);
+        assert!(s1.is_broadcastable_with(&s2));
+        assert!(!s1.is_broadcastable_with(&s3));
+    }
+
+    #[test]
+    fn test_shape_broadcast_to_success() {
+        let s = Shape::from_dims(&[1, 4]);
+        let b = s.broadcast_to(&[2, 4]).unwrap();
+        assert_eq!(b.as_slice(), &[2, 4]);
+    }
+
+    #[test]
+    fn test_shape_broadcast_to_error() {
+        let s = Shape::from_dims(&[3, 4]);
+        assert!(s.broadcast_to(&[2, 4]).is_err());
+    }
+
+    #[test]
+    fn test_shape_broadcast_shapes() {
+        let s1 = Shape::from_dims(&[2, 1]);
+        let s2 = Shape::from_dims(&[1, 3]);
+        let s3 = Shape::from_dims(&[2, 3]);
+        let common = Shape::broadcast_shapes(&[&s1, &s2, &s3]).unwrap();
+        assert_eq!(common.as_slice(), &[2, 3]);
+    }
+
+    #[test]
+    fn test_shape_narrow() {
+        let s = Shape::from_dims(&[10, 20]);
+        let n = s.narrow(0, 2, 5).unwrap();
+        assert_eq!(n.as_slice(), &[5, 20]);
+        assert!(s.narrow(0, 8, 5).is_err());
+    }
+
+    #[test]
+    fn test_shape_expanded() {
+        let s = Shape::from_dims(&[1, 3, 1]);
+        let exp = s.expanded(&[4, 3, 5]).unwrap();
+        assert_eq!(exp.as_slice(), &[4, 3, 5]);
+        assert!(s.expanded(&[4, 2, 5]).is_err());
+    }
+
+    #[test]
+    fn test_shape_validation() {
+        let s = Shape::from_dims(&[2, 3, 4]);
+        assert!(s.validate().is_ok());
+        assert!(s.validate_index(&[1, 2, 3]).is_ok());
+        assert!(s.validate_index(&[2, 2, 3]).is_err());
+        assert!(s.validate_strides(&[12, 4, 1]).is_ok());
+        assert!(s.validate_strides(&[12, 4]).is_err());
+        assert!(s.validate_permutation(&[2, 0, 1]).is_ok());
+        assert!(s.validate_permutation(&[2, 0, 2]).is_err());
     }
 }

@@ -14,18 +14,13 @@
 //!
 //! # Usage
 //!
-//! ```ignore
+//! ```
 //! use brain_core::device::Device;
 //!
 //! let cpu = Device::Cpu;
-//! let cuda0 = Device::cuda(0);
+//! let cuda0 = Device::Cuda(0);
 //! assert!(cpu.is_cpu());
 //! assert!(cuda0.is_cuda());
-//!
-//! // Device properties
-//! if let Some(props) = cuda0.properties() {
-//!     println!("GPU: {} ({} MB)", props.name, props.total_memory / 1024 / 1024);
-//! }
 //! ```
 
 use std::fmt;
@@ -613,6 +608,9 @@ impl Device {
         if s == "Cpu" {
             return Ok(Device::Cpu);
         }
+        if !s.contains('(') {
+            return Err(format!("unknown device type '{}'", s));
+        }
 
         // Parse "TypeName(index)" format
         let mut parts = s.splitn(2, '(');
@@ -980,7 +978,7 @@ impl Default for DeviceList {
 /// assert_eq!(props.name, "Test GPU");
 /// assert_eq!(props.total_memory_bytes(), 8589934592);
 /// ```
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct DeviceProperties {
     /// Human-readable device name.
     pub name: String,
@@ -1000,6 +998,22 @@ pub struct DeviceProperties {
     pub memory_bandwidth_gbs: Option<f64>,
     /// L2 cache size in bytes.
     pub l2_cache_size: Option<usize>,
+}
+
+impl Eq for DeviceProperties {}
+
+impl std::hash::Hash for DeviceProperties {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.name.hash(state);
+        self.total_memory.hash(state);
+        self.compute_capability.hash(state);
+        self.max_threads_per_block.hash(state);
+        self.max_shared_memory_per_block.hash(state);
+        self.num_sms.hash(state);
+        self.clock_speed_mhz.map(|v| v.to_bits()).hash(state);
+        self.memory_bandwidth_gbs.map(|v| v.to_bits()).hash(state);
+        self.l2_cache_size.hash(state);
+    }
 }
 
 impl DeviceProperties {
@@ -1037,10 +1051,13 @@ impl DeviceProperties {
         let bytes = self.total_memory as f64;
         const GB: f64 = 1024.0 * 1024.0 * 1024.0;
         const MB: f64 = 1024.0 * 1024.0;
+        const KB: f64 = 1024.0;
         if bytes >= GB {
             format!("{:.2} GB", bytes / GB)
         } else if bytes >= MB {
             format!("{:.2} MB", bytes / MB)
+        } else if bytes >= KB {
+            format!("{:.2} KB", bytes / KB)
         } else {
             format!("{} B", self.total_memory)
         }
@@ -1117,7 +1134,7 @@ impl fmt::Display for DeviceProperties {
 /// use brain_core::device::{current_device, Device};
 /// assert_eq!(current_device(), Device::Cpu);
 /// ```
-pub fn current_device() -> Device {
+pub fn default_device() -> Device {
     Device::Cpu
 }
 
@@ -1210,10 +1227,9 @@ pub fn is_device_available(device: Device) -> bool {
 ///
 /// # Examples
 ///
-/// ```ignore
-/// let _guard = DeviceGuard::set(Device::cuda(0));
-/// // Operations here run on cuda:0
-/// // When _guard is dropped, the previous device is restored
+/// ```
+/// use brain_core::device::{Device, DeviceGuard};
+/// let _guard = DeviceGuard::set(Device::Cpu).unwrap();
 /// ```
 pub struct DeviceGuard {
     _previous: Device,
@@ -1330,6 +1346,207 @@ impl DeviceSet {
     pub fn world_size(&self) -> usize {
         self.devices.len()
     }
+}
+
+// =============================================================================
+// DeviceInfo Struct
+// =============================================================================
+
+/// Comprehensive metadata and capabilities for a compute device.
+#[derive(Debug, Clone, PartialEq)]
+pub struct DeviceInfo {
+    /// The device handle.
+    pub device: Device,
+    /// Human-readable device name.
+    pub name: String,
+    /// Total device memory in bytes.
+    pub total_memory: usize,
+    /// Currently available/free device memory in bytes.
+    pub free_memory: usize,
+    /// Compute capability major/minor version (e.g. (8, 0) for Ampere).
+    pub compute_capability: (u32, u32),
+    /// Number of streaming multiprocessors / compute units.
+    pub compute_units: usize,
+    /// Maximum threads allowed per block/workgroup.
+    pub max_threads_per_block: usize,
+    /// Whether host and device share unified memory.
+    pub is_unified_memory: bool,
+    /// Whether the device supports FP16 half-precision ops.
+    pub supports_fp16: bool,
+    /// Whether the device supports BF16 bfloat16 ops.
+    pub supports_bf16: bool,
+    /// Whether the device supports INT8 quantized tensor cores.
+    pub supports_int8: bool,
+}
+
+impl DeviceInfo {
+    /// Creates a default `DeviceInfo` for the CPU.
+    pub fn cpu() -> Self {
+        DeviceInfo {
+            device: Device::Cpu,
+            name: "Host CPU".to_string(),
+            total_memory: usize::MAX,
+            free_memory: usize::MAX,
+            compute_capability: (1, 0),
+            compute_units: 1,
+            max_threads_per_block: 1,
+            is_unified_memory: true,
+            supports_fp16: true,
+            supports_bf16: true,
+            supports_int8: true,
+        }
+    }
+
+    /// Creates a simulated `DeviceInfo` for a CUDA device.
+    pub fn cuda(index: usize, name: impl Into<String>, memory_bytes: usize) -> Self {
+        DeviceInfo {
+            device: Device::cuda(index),
+            name: name.into(),
+            total_memory: memory_bytes,
+            free_memory: memory_bytes,
+            compute_capability: (8, 0),
+            compute_units: 108,
+            max_threads_per_block: 1024,
+            is_unified_memory: false,
+            supports_fp16: true,
+            supports_bf16: true,
+            supports_int8: true,
+        }
+    }
+
+    /// Returns the memory utilization ratio in `[0.0, 1.0]`.
+    pub fn memory_utilization(&self) -> f64 {
+        if self.total_memory == 0 || self.total_memory == usize::MAX {
+            0.0
+        } else {
+            let used = self.total_memory.saturating_sub(self.free_memory);
+            used as f64 / self.total_memory as f64
+        }
+    }
+}
+
+// =============================================================================
+// Thread-Local Device Context Stack
+// =============================================================================
+
+thread_local! {
+    static DEVICE_STACK: std::cell::RefCell<Vec<Device>> = const { std::cell::RefCell::new(Vec::new()) };
+}
+
+/// Returns the current active device for the calling thread.
+///
+/// Defaults to [`Device::Cpu`] if no device has been explicitly pushed.
+pub fn current_device() -> Device {
+    DEVICE_STACK.with(|s| s.borrow().last().copied().unwrap_or(Device::Cpu))
+}
+
+/// Sets the current device for the calling thread, overriding the active top of the stack.
+pub fn set_current_device(device: Device) {
+    DEVICE_STACK.with(|s| {
+        let mut stack = s.borrow_mut();
+        if stack.is_empty() {
+            stack.push(device);
+        } else {
+            let last = stack.len() - 1;
+            stack[last] = device;
+        }
+    });
+}
+
+/// Pushes a device onto the thread-local device stack.
+pub fn push_device(device: Device) {
+    DEVICE_STACK.with(|s| s.borrow_mut().push(device));
+}
+
+/// Pops the top device from the thread-local device stack, returning it.
+pub fn pop_device() -> Option<Device> {
+    DEVICE_STACK.with(|s| s.borrow_mut().pop())
+}
+
+/// Returns the current depth of the thread-local device stack.
+pub fn device_stack_depth() -> usize {
+    DEVICE_STACK.with(|s| s.borrow().len())
+}
+
+/// Executes a closure in the context of the given device, restoring the previous device afterwards.
+pub fn with_device<F, R>(device: Device, f: F) -> R
+where
+    F: FnOnce() -> R,
+{
+    push_device(device);
+    struct DeviceGuard;
+    impl Drop for DeviceGuard {
+        fn drop(&mut self) {
+            pop_device();
+        }
+    }
+    let _guard = DeviceGuard;
+    f()
+}
+
+// =============================================================================
+// Device Predicates & Utilities
+// =============================================================================
+
+/// Checks whether a device is an accelerator (CUDA, Metal, Vulkan, or TPU).
+pub fn is_accelerator(device: Device) -> bool {
+    !device.is_cpu()
+}
+
+/// Checks whether peer-to-peer memory access is supported between two devices.
+pub fn can_peer_access(dev1: Device, dev2: Device) -> bool {
+    if dev1 == dev2 {
+        return true;
+    }
+    match (dev1, dev2) {
+        (Device::Cuda(_), Device::Cuda(_)) => true,
+        (Device::Cpu, Device::Cpu) => true,
+        _ => false,
+    }
+}
+
+/// Checks whether two devices belong to the same hardware family.
+pub fn is_same_device_family(dev1: Device, dev2: Device) -> bool {
+    dev1.device_type() == dev2.device_type()
+}
+
+/// Checks whether moving data between two devices requires an explicit host transfer.
+pub fn requires_host_staging(src: Device, dst: Device) -> bool {
+    if src == dst {
+        false
+    } else {
+        !can_peer_access(src, dst)
+    }
+}
+
+// =============================================================================
+// Policy Hooks for Config
+// =============================================================================
+
+/// Policy for automatic device placement of tensors and layers.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+pub enum DevicePlacementPolicy {
+    /// Always place on the host CPU.
+    #[default]
+    CpuOnly,
+    /// Place on the first available GPU accelerator.
+    AutoGpu,
+    /// Round-robin distribution across all available GPUs.
+    RoundRobinGpu,
+    /// Require explicit device specification for every allocation.
+    ExplicitOnly,
+}
+
+/// Policy for device memory allocation and management.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+pub enum DeviceMemoryPolicy {
+    /// Pre-allocate a large memory pool upfront.
+    PreallocatePool { fraction: u8 },
+    /// Grow memory on demand with standard allocator.
+    #[default]
+    GrowOnDemand,
+    /// Use managed/unified virtual memory.
+    UnifiedMemory,
 }
 
 // =============================================================================
@@ -2308,7 +2525,7 @@ mod tests {
     // =========================================================================
 
     #[test]
-    fn test_device_type_all() {
+    fn test_device_type_all_ext() {
         assert_eq!(DeviceType::ALL.len(), 5);
         assert!(DeviceType::ALL.contains(&DeviceType::Cpu));
         assert!(DeviceType::ALL.contains(&DeviceType::Cuda));
@@ -2487,7 +2704,7 @@ mod tests {
     // =========================================================================
 
     #[test]
-    fn test_device_properties_display() {
+    fn test_device_properties_display_ext() {
         let mut props = DeviceProperties::new("Test GPU".to_string(), 8 * 1024 * 1024 * 1024);
         props.compute_capability = Some("sm_90".to_string());
         props.num_sms = 132;
@@ -2594,14 +2811,14 @@ mod tests {
     }
 
     #[test]
-    fn test_device_set_as_slice() {
+    fn test_device_set_as_slice_ext() {
         let set = DeviceSet::new(vec![Device::Cpu, Device::cuda(0)]);
         let slice = set.as_slice();
         assert_eq!(slice.len(), 2);
     }
 
     #[test]
-    fn test_device_set_iter() {
+    fn test_device_set_iter_ext() {
         let set = DeviceSet::new(vec![Device::cuda(0), Device::cuda(1)]);
         let devices: Vec<Device> = set.iter().copied().collect();
         assert_eq!(devices.len(), 2);
@@ -3027,5 +3244,74 @@ mod tests {
         use std::str::FromStr;
         let result: Result<Device, String> = "Invalid".parse();
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_device_info_cpu() {
+        let info = DeviceInfo::cpu();
+        assert_eq!(info.device, Device::Cpu);
+        assert!(info.is_unified_memory);
+        assert_eq!(info.memory_utilization(), 0.0);
+    }
+
+    #[test]
+    fn test_device_info_cuda() {
+        let mut info = DeviceInfo::cuda(0, "NVIDIA H100", 80 * 1024 * 1024 * 1024);
+        assert_eq!(info.device, Device::cuda(0));
+        assert!(!info.is_unified_memory);
+        assert_eq!(info.compute_capability, (8, 0));
+        info.free_memory = 40 * 1024 * 1024 * 1024;
+        assert!((info.memory_utilization() - 0.5).abs() < 1e-6);
+    }
+
+    #[test]
+    fn test_thread_local_device_stack() {
+        assert_eq!(current_device(), Device::Cpu);
+        push_device(Device::cuda(1));
+        assert_eq!(current_device(), Device::cuda(1));
+        push_device(Device::metal(0));
+        assert_eq!(current_device(), Device::metal(0));
+        assert_eq!(pop_device(), Some(Device::metal(0)));
+        assert_eq!(current_device(), Device::cuda(1));
+        assert_eq!(pop_device(), Some(Device::cuda(1)));
+        assert_eq!(current_device(), Device::Cpu);
+    }
+
+    #[test]
+    fn test_with_device_guard() {
+        assert_eq!(current_device(), Device::Cpu);
+        with_device(Device::cuda(3), || {
+            assert_eq!(current_device(), Device::cuda(3));
+            with_device(Device::vulkan(2), || {
+                assert_eq!(current_device(), Device::vulkan(2));
+            });
+            assert_eq!(current_device(), Device::cuda(3));
+        });
+        assert_eq!(current_device(), Device::Cpu);
+    }
+
+    #[test]
+    fn test_device_predicates() {
+        assert!(!is_accelerator(Device::Cpu));
+        assert!(is_accelerator(Device::cuda(0)));
+        assert!(is_accelerator(Device::metal(0)));
+
+        assert!(can_peer_access(Device::cuda(0), Device::cuda(1)));
+        assert!(!can_peer_access(Device::cuda(0), Device::metal(0)));
+
+        assert!(is_same_device_family(Device::cuda(0), Device::cuda(1)));
+        assert!(!is_same_device_family(Device::cuda(0), Device::Cpu));
+
+        assert!(!requires_host_staging(Device::cuda(0), Device::cuda(0)));
+        assert!(requires_host_staging(Device::cuda(0), Device::metal(0)));
+    }
+
+    #[test]
+    fn test_device_policies() {
+        let placement = DevicePlacementPolicy::default();
+        assert_eq!(placement, DevicePlacementPolicy::CpuOnly);
+
+        let mem = DeviceMemoryPolicy::default();
+        assert_eq!(mem, DeviceMemoryPolicy::GrowOnDemand);
     }
 }

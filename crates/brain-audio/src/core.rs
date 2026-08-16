@@ -1,7898 +1,513 @@
-//! # Core for brain-audio
+//! # Core Audio Primitives and Buffer Types
 //!
-//! Part of Brain framework - surpassing PyTorch & TensorFlow.
-//!
-//! ## Innovations over PyTorch
-//! - Zero-copy stride-based views (no Storage indirection)
-//! - Compile-time dtype checking (no runtime type dispatch)
-//! - RAII memory (no reference counting overhead)
-//!
-//! ## Innovations over TensorFlow
-//! - Clean eager-first API (no session/graph duality)
-//! - No legacy v1 baggage
-//! - Better errors via Rust Result types
-//!
+//! Provides fundamental audio representations:
+//! * [`AudioBuffer`] - Multi-channel audio sample buffer (channels × samples)
+//! * [`SampleRate`] - Strongly-typed sample rate with standard constants
+//! * [`Channels`] - Channel layout and channel count representations
+//! * [`AudioFormat`] - Audio sample bit-depth and representation formats
 
-use brain_core::{Tensor,Shape,Device,DType,BrainResult,BrainError};
+use brain_core::{BrainError, BrainResult, Tensor};
 use std::fmt;
-use std::collections::{HashMap,HashSet,VecDeque,BTreeMap,BinaryHeap};
-use std::marker::PhantomData;
-use std::cell::RefCell;
-use std::rc::Rc;
-use std::sync::{Arc,Mutex,RwLock,atomic::{AtomicUsize,Ordering}};
 
-/// Constant 0 for brain-audio module.
-pub const CORE_C0: f64 = 0.00031415926536;
-/// Constant 1 for brain-audio module.
-pub const CORE_C1: f64 = 0.00062831853072;
-/// Constant 2 for brain-audio module.
-pub const CORE_C2: f64 = 0.00094247779608;
-/// Constant 3 for brain-audio module.
-pub const CORE_C3: f64 = 0.00125663706144;
-/// Constant 4 for brain-audio module.
-pub const CORE_C4: f64 = 0.00157079632679;
-/// Constant 5 for brain-audio module.
-pub const CORE_C5: f64 = 0.00188495559215;
-/// Constant 6 for brain-audio module.
-pub const CORE_C6: f64 = 0.00219911485751;
-/// Constant 7 for brain-audio module.
-pub const CORE_C7: f64 = 0.00251327412287;
-/// Constant 8 for brain-audio module.
-pub const CORE_C8: f64 = 0.00282743338823;
-/// Constant 9 for brain-audio module.
-pub const CORE_C9: f64 = 0.00314159265359;
-/// Constant 10 for brain-audio module.
-pub const CORE_C10: f64 = 0.00345575191895;
-/// Constant 11 for brain-audio module.
-pub const CORE_C11: f64 = 0.00376991118431;
-/// Constant 12 for brain-audio module.
-pub const CORE_C12: f64 = 0.00408407044967;
-/// Constant 13 for brain-audio module.
-pub const CORE_C13: f64 = 0.00439822971503;
-/// Constant 14 for brain-audio module.
-pub const CORE_C14: f64 = 0.00471238898038;
-/// Constant 15 for brain-audio module.
-pub const CORE_C15: f64 = 0.00502654824574;
-/// Constant 16 for brain-audio module.
-pub const CORE_C16: f64 = 0.0053407075111;
-/// Constant 17 for brain-audio module.
-pub const CORE_C17: f64 = 0.00565486677646;
-/// Constant 18 for brain-audio module.
-pub const CORE_C18: f64 = 0.00596902604182;
-/// Constant 19 for brain-audio module.
-pub const CORE_C19: f64 = 0.00628318530718;
-/// Constant 20 for brain-audio module.
-pub const CORE_C20: f64 = 0.00659734457254;
-/// Constant 21 for brain-audio module.
-pub const CORE_C21: f64 = 0.0069115038379;
-/// Constant 22 for brain-audio module.
-pub const CORE_C22: f64 = 0.00722566310326;
-/// Constant 23 for brain-audio module.
-pub const CORE_C23: f64 = 0.00753982236862;
-/// Constant 24 for brain-audio module.
-pub const CORE_C24: f64 = 0.00785398163397;
-/// Constant 25 for brain-audio module.
-pub const CORE_C25: f64 = 0.00816814089933;
-/// Constant 26 for brain-audio module.
-pub const CORE_C26: f64 = 0.00848230016469;
-/// Constant 27 for brain-audio module.
-pub const CORE_C27: f64 = 0.00879645943005;
-/// Constant 28 for brain-audio module.
-pub const CORE_C28: f64 = 0.00911061869541;
-/// Constant 29 for brain-audio module.
-pub const CORE_C29: f64 = 0.00942477796077;
-/// Constant 30 for brain-audio module.
-pub const CORE_C30: f64 = 0.00973893722613;
-/// Constant 31 for brain-audio module.
-pub const CORE_C31: f64 = 0.01005309649149;
-/// Constant 32 for brain-audio module.
-pub const CORE_C32: f64 = 0.01036725575685;
-/// Constant 33 for brain-audio module.
-pub const CORE_C33: f64 = 0.01068141502221;
-/// Constant 34 for brain-audio module.
-pub const CORE_C34: f64 = 0.01099557428756;
-/// Constant 35 for brain-audio module.
-pub const CORE_C35: f64 = 0.01130973355292;
-/// Constant 36 for brain-audio module.
-pub const CORE_C36: f64 = 0.01162389281828;
-/// Constant 37 for brain-audio module.
-pub const CORE_C37: f64 = 0.01193805208364;
-/// Constant 38 for brain-audio module.
-pub const CORE_C38: f64 = 0.012252211349;
-/// Constant 39 for brain-audio module.
-pub const CORE_C39: f64 = 0.01256637061436;
+/// Strongly-typed audio sample rate in Hertz (Hz).
+///
+/// # Examples
+///
+/// ```
+/// use brain_audio::core::SampleRate;
+/// let sr = SampleRate::new(16000).unwrap();
+/// assert_eq!(sr.hz(), 16000);
+/// assert_eq!(sr.duration_seconds(32000), 2.0);
+/// ```
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct SampleRate(pub u32);
+
+impl SampleRate {
+    /// 8 kHz standard telephony rate.
+    pub const CD_8K: Self = SampleRate(8000);
+    /// 16 kHz standard wideband speech / ASR rate.
+    pub const SPEECH_16K: Self = SampleRate(16000);
+    /// 22.05 kHz half-CD sample rate.
+    pub const HALF_CD_22K: Self = SampleRate(22050);
+    /// 24 kHz speech synthesis / high-quality codec rate.
+    pub const AUDIO_24K: Self = SampleRate(24000);
+    /// 32 kHz broadcast audio rate.
+    pub const BROADCAST_32K: Self = SampleRate(32000);
+    /// 44.1 kHz Red Book CD standard rate.
+    pub const CD_44K: Self = SampleRate(44100);
+    /// 48 kHz DVD / professional standard video audio rate.
+    pub const STUDIO_48K: Self = SampleRate(48000);
+    /// 88.2 kHz high-resolution audio rate.
+    pub const HIRES_88K: Self = SampleRate(88200);
+    /// 96 kHz studio master high-resolution rate.
+    pub const HIRES_96K: Self = SampleRate(96000);
+    /// 192 kHz ultra-high-resolution studio rate.
+    pub const HIRES_192K: Self = SampleRate(192000);
+
+    /// Creates a new SampleRate instance with validity check.
+    pub fn new(hz: u32) -> BrainResult<Self> {
+        if hz == 0 {
+            return Err(BrainError::invalid_value("sample rate must be non-zero"));
+        }
+        if hz > 1_000_000 {
+            return Err(BrainError::invalid_value("sample rate exceeds 1 MHz limit"));
+        }
+        Ok(SampleRate(hz))
+    }
+
+    /// Returns sample rate as u32 integer.
+    #[inline]
+    pub fn hz(&self) -> u32 {
+        self.0
+    }
+
+    /// Returns sample rate as f64 float.
+    #[inline]
+    pub fn as_f64(&self) -> f64 {
+        self.0 as f64
+    }
+
+    /// Calculates duration in seconds for a given number of samples.
+    #[inline]
+    pub fn duration_seconds(&self, num_samples: usize) -> f64 {
+        num_samples as f64 / self.as_f64()
+    }
+
+    /// Calculates number of samples corresponding to a duration in seconds.
+    #[inline]
+    pub fn samples_from_duration(&self, duration_sec: f64) -> usize {
+        (duration_sec * self.as_f64()).round() as usize
+    }
+
+    /// Calculates the Nyquist frequency (half the sample rate).
+    #[inline]
+    pub fn nyquist_hz(&self) -> f64 {
+        self.as_f64() / 2.0
+    }
+}
+
+impl fmt::Display for SampleRate {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{} Hz", self.0)
+    }
+}
+
+/// Channel count and layout specification.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct Channels(pub u16);
+
+impl Channels {
+    /// Mono channel layout (1 channel).
+    pub const MONO: Self = Channels(1);
+    /// Stereo channel layout (2 channels).
+    pub const STEREO: Self = Channels(2);
+    /// 2.1 channel layout (3 channels).
+    pub const STEREO_SUB: Self = Channels(3);
+    /// Quadraphonic channel layout (4 channels).
+    pub const QUAD: Self = Channels(4);
+    /// 5.1 surround sound layout (6 channels).
+    pub const SURROUND_5_1: Self = Channels(6);
+    /// 7.1 surround sound layout (8 channels).
+    pub const SURROUND_7_1: Self = Channels(8);
 
-/// Struct CORE_S0 for brain-audio data handling.
-/// Contains fields for the 0-th computation variant.
-#[derive(Debug,Clone,PartialEq)]
-pub struct CORE_S0 {
-    /// Field 0: weight parameter.
-    pub f0: f64,
-    /// Field 1: bias parameter.
-    pub f1: f64,
-    /// Field 2: momentum parameter.
-    pub f2: f64,
-    /// Field 3: mean parameter.
-    pub f3: f64,
-    /// Field 4: variance parameter.
-    pub f4: f64,
-    /// Field 5: scale parameter.
-    pub f5: f64,
-    /// Field 6: offset parameter.
-    pub f6: f64,
-    /// Field 7: running_sum parameter.
-    pub f7: f64,
-    /// Field 8: step parameter.
-    pub f8: f64,
-    /// Field 9: count parameter.
-    pub f9: f64,
-}
-
-impl CORE_S0 {
-    pub fn new() -> Self { Self { f0: 0.1, f1: 0.2, f2: 0.3, f3: 0.4, f4: 0.5, f5: 0.6, f6: 0.7, f7: 0.8, f8: 0.9, f9: 1.0, } }
-    /// Method compute_0 for CORE_S0.
-    pub fn compute_0(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.003;
-        r /= self.f3 * 0.004;
-        r += self.f4 * 0.005;
-        r -= self.f5 * 0.006;
-        r *= self.f6 * 0.007;
-        r /= self.f7 * 0.008;
-        r += self.f8 * 0.009;
-        r -= self.f9 * 0.01;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_1 for CORE_S0.
-    pub fn compute_1(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.004;
-        r /= self.f3 * 0.005;
-        r += self.f4 * 0.006;
-        r -= self.f5 * 0.007;
-        r *= self.f6 * 0.008;
-        r /= self.f7 * 0.009;
-        r += self.f8 * 0.01;
-        r -= self.f9 * 0.011;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_2 for CORE_S0.
-    pub fn compute_2(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.005;
-        r /= self.f3 * 0.006;
-        r += self.f4 * 0.007;
-        r -= self.f5 * 0.008;
-        r *= self.f6 * 0.009;
-        r /= self.f7 * 0.01;
-        r += self.f8 * 0.011;
-        r -= self.f9 * 0.012;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_3 for CORE_S0.
-    pub fn compute_3(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.006;
-        r /= self.f3 * 0.007;
-        r += self.f4 * 0.008;
-        r -= self.f5 * 0.009;
-        r *= self.f6 * 0.01;
-        r /= self.f7 * 0.011;
-        r += self.f8 * 0.012;
-        r -= self.f9 * 0.013;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_4 for CORE_S0.
-    pub fn compute_4(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.007;
-        r /= self.f3 * 0.008;
-        r += self.f4 * 0.009;
-        r -= self.f5 * 0.01;
-        r *= self.f6 * 0.011;
-        r /= self.f7 * 0.012;
-        r += self.f8 * 0.013;
-        r -= self.f9 * 0.014;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_5 for CORE_S0.
-    pub fn compute_5(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.008;
-        r /= self.f3 * 0.009;
-        r += self.f4 * 0.01;
-        r -= self.f5 * 0.011;
-        r *= self.f6 * 0.012;
-        r /= self.f7 * 0.013;
-        r += self.f8 * 0.014;
-        r -= self.f9 * 0.015;
-        r.max(-1e15).min(1e15)
-    }
-}
-
-/// Struct CORE_S1 for brain-audio data handling.
-/// Contains fields for the 1-th computation variant.
-#[derive(Debug,Clone,PartialEq)]
-pub struct CORE_S1 {
-    /// Field 0: weight parameter.
-    pub f0: f64,
-    /// Field 1: bias parameter.
-    pub f1: f64,
-    /// Field 2: momentum parameter.
-    pub f2: f64,
-    /// Field 3: mean parameter.
-    pub f3: f64,
-    /// Field 4: variance parameter.
-    pub f4: f64,
-    /// Field 5: scale parameter.
-    pub f5: f64,
-    /// Field 6: offset parameter.
-    pub f6: f64,
-    /// Field 7: running_sum parameter.
-    pub f7: f64,
-    /// Field 8: step parameter.
-    pub f8: f64,
-    /// Field 9: count parameter.
-    pub f9: f64,
-}
-
-impl CORE_S1 {
-    pub fn new() -> Self { Self { f0: 0.1, f1: 0.2, f2: 0.3, f3: 0.4, f4: 0.5, f5: 0.6, f6: 0.7, f7: 0.8, f8: 0.9, f9: 1.0, } }
-    /// Method compute_0 for CORE_S1.
-    pub fn compute_0(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.003;
-        r /= self.f3 * 0.004;
-        r += self.f4 * 0.005;
-        r -= self.f5 * 0.006;
-        r *= self.f6 * 0.007;
-        r /= self.f7 * 0.008;
-        r += self.f8 * 0.009;
-        r -= self.f9 * 0.01;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_1 for CORE_S1.
-    pub fn compute_1(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.004;
-        r /= self.f3 * 0.005;
-        r += self.f4 * 0.006;
-        r -= self.f5 * 0.007;
-        r *= self.f6 * 0.008;
-        r /= self.f7 * 0.009;
-        r += self.f8 * 0.01;
-        r -= self.f9 * 0.011;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_2 for CORE_S1.
-    pub fn compute_2(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.005;
-        r /= self.f3 * 0.006;
-        r += self.f4 * 0.007;
-        r -= self.f5 * 0.008;
-        r *= self.f6 * 0.009;
-        r /= self.f7 * 0.01;
-        r += self.f8 * 0.011;
-        r -= self.f9 * 0.012;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_3 for CORE_S1.
-    pub fn compute_3(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.006;
-        r /= self.f3 * 0.007;
-        r += self.f4 * 0.008;
-        r -= self.f5 * 0.009;
-        r *= self.f6 * 0.01;
-        r /= self.f7 * 0.011;
-        r += self.f8 * 0.012;
-        r -= self.f9 * 0.013;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_4 for CORE_S1.
-    pub fn compute_4(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.007;
-        r /= self.f3 * 0.008;
-        r += self.f4 * 0.009;
-        r -= self.f5 * 0.01;
-        r *= self.f6 * 0.011;
-        r /= self.f7 * 0.012;
-        r += self.f8 * 0.013;
-        r -= self.f9 * 0.014;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_5 for CORE_S1.
-    pub fn compute_5(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.008;
-        r /= self.f3 * 0.009;
-        r += self.f4 * 0.01;
-        r -= self.f5 * 0.011;
-        r *= self.f6 * 0.012;
-        r /= self.f7 * 0.013;
-        r += self.f8 * 0.014;
-        r -= self.f9 * 0.015;
-        r.max(-1e15).min(1e15)
-    }
-}
-
-/// Struct CORE_S2 for brain-audio data handling.
-/// Contains fields for the 2-th computation variant.
-#[derive(Debug,Clone,PartialEq)]
-pub struct CORE_S2 {
-    /// Field 0: weight parameter.
-    pub f0: f64,
-    /// Field 1: bias parameter.
-    pub f1: f64,
-    /// Field 2: momentum parameter.
-    pub f2: f64,
-    /// Field 3: mean parameter.
-    pub f3: f64,
-    /// Field 4: variance parameter.
-    pub f4: f64,
-    /// Field 5: scale parameter.
-    pub f5: f64,
-    /// Field 6: offset parameter.
-    pub f6: f64,
-    /// Field 7: running_sum parameter.
-    pub f7: f64,
-    /// Field 8: step parameter.
-    pub f8: f64,
-    /// Field 9: count parameter.
-    pub f9: f64,
-}
-
-impl CORE_S2 {
-    pub fn new() -> Self { Self { f0: 0.1, f1: 0.2, f2: 0.3, f3: 0.4, f4: 0.5, f5: 0.6, f6: 0.7, f7: 0.8, f8: 0.9, f9: 1.0, } }
-    /// Method compute_0 for CORE_S2.
-    pub fn compute_0(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.003;
-        r /= self.f3 * 0.004;
-        r += self.f4 * 0.005;
-        r -= self.f5 * 0.006;
-        r *= self.f6 * 0.007;
-        r /= self.f7 * 0.008;
-        r += self.f8 * 0.009;
-        r -= self.f9 * 0.01;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_1 for CORE_S2.
-    pub fn compute_1(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.004;
-        r /= self.f3 * 0.005;
-        r += self.f4 * 0.006;
-        r -= self.f5 * 0.007;
-        r *= self.f6 * 0.008;
-        r /= self.f7 * 0.009;
-        r += self.f8 * 0.01;
-        r -= self.f9 * 0.011;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_2 for CORE_S2.
-    pub fn compute_2(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.005;
-        r /= self.f3 * 0.006;
-        r += self.f4 * 0.007;
-        r -= self.f5 * 0.008;
-        r *= self.f6 * 0.009;
-        r /= self.f7 * 0.01;
-        r += self.f8 * 0.011;
-        r -= self.f9 * 0.012;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_3 for CORE_S2.
-    pub fn compute_3(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.006;
-        r /= self.f3 * 0.007;
-        r += self.f4 * 0.008;
-        r -= self.f5 * 0.009;
-        r *= self.f6 * 0.01;
-        r /= self.f7 * 0.011;
-        r += self.f8 * 0.012;
-        r -= self.f9 * 0.013;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_4 for CORE_S2.
-    pub fn compute_4(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.007;
-        r /= self.f3 * 0.008;
-        r += self.f4 * 0.009;
-        r -= self.f5 * 0.01;
-        r *= self.f6 * 0.011;
-        r /= self.f7 * 0.012;
-        r += self.f8 * 0.013;
-        r -= self.f9 * 0.014;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_5 for CORE_S2.
-    pub fn compute_5(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.008;
-        r /= self.f3 * 0.009;
-        r += self.f4 * 0.01;
-        r -= self.f5 * 0.011;
-        r *= self.f6 * 0.012;
-        r /= self.f7 * 0.013;
-        r += self.f8 * 0.014;
-        r -= self.f9 * 0.015;
-        r.max(-1e15).min(1e15)
-    }
-}
-
-/// Struct CORE_S3 for brain-audio data handling.
-/// Contains fields for the 3-th computation variant.
-#[derive(Debug,Clone,PartialEq)]
-pub struct CORE_S3 {
-    /// Field 0: weight parameter.
-    pub f0: f64,
-    /// Field 1: bias parameter.
-    pub f1: f64,
-    /// Field 2: momentum parameter.
-    pub f2: f64,
-    /// Field 3: mean parameter.
-    pub f3: f64,
-    /// Field 4: variance parameter.
-    pub f4: f64,
-    /// Field 5: scale parameter.
-    pub f5: f64,
-    /// Field 6: offset parameter.
-    pub f6: f64,
-    /// Field 7: running_sum parameter.
-    pub f7: f64,
-    /// Field 8: step parameter.
-    pub f8: f64,
-    /// Field 9: count parameter.
-    pub f9: f64,
-}
-
-impl CORE_S3 {
-    pub fn new() -> Self { Self { f0: 0.1, f1: 0.2, f2: 0.3, f3: 0.4, f4: 0.5, f5: 0.6, f6: 0.7, f7: 0.8, f8: 0.9, f9: 1.0, } }
-    /// Method compute_0 for CORE_S3.
-    pub fn compute_0(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.003;
-        r /= self.f3 * 0.004;
-        r += self.f4 * 0.005;
-        r -= self.f5 * 0.006;
-        r *= self.f6 * 0.007;
-        r /= self.f7 * 0.008;
-        r += self.f8 * 0.009;
-        r -= self.f9 * 0.01;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_1 for CORE_S3.
-    pub fn compute_1(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.004;
-        r /= self.f3 * 0.005;
-        r += self.f4 * 0.006;
-        r -= self.f5 * 0.007;
-        r *= self.f6 * 0.008;
-        r /= self.f7 * 0.009;
-        r += self.f8 * 0.01;
-        r -= self.f9 * 0.011;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_2 for CORE_S3.
-    pub fn compute_2(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.005;
-        r /= self.f3 * 0.006;
-        r += self.f4 * 0.007;
-        r -= self.f5 * 0.008;
-        r *= self.f6 * 0.009;
-        r /= self.f7 * 0.01;
-        r += self.f8 * 0.011;
-        r -= self.f9 * 0.012;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_3 for CORE_S3.
-    pub fn compute_3(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.006;
-        r /= self.f3 * 0.007;
-        r += self.f4 * 0.008;
-        r -= self.f5 * 0.009;
-        r *= self.f6 * 0.01;
-        r /= self.f7 * 0.011;
-        r += self.f8 * 0.012;
-        r -= self.f9 * 0.013;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_4 for CORE_S3.
-    pub fn compute_4(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.007;
-        r /= self.f3 * 0.008;
-        r += self.f4 * 0.009;
-        r -= self.f5 * 0.01;
-        r *= self.f6 * 0.011;
-        r /= self.f7 * 0.012;
-        r += self.f8 * 0.013;
-        r -= self.f9 * 0.014;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_5 for CORE_S3.
-    pub fn compute_5(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.008;
-        r /= self.f3 * 0.009;
-        r += self.f4 * 0.01;
-        r -= self.f5 * 0.011;
-        r *= self.f6 * 0.012;
-        r /= self.f7 * 0.013;
-        r += self.f8 * 0.014;
-        r -= self.f9 * 0.015;
-        r.max(-1e15).min(1e15)
-    }
-}
-
-/// Struct CORE_S4 for brain-audio data handling.
-/// Contains fields for the 4-th computation variant.
-#[derive(Debug,Clone,PartialEq)]
-pub struct CORE_S4 {
-    /// Field 0: weight parameter.
-    pub f0: f64,
-    /// Field 1: bias parameter.
-    pub f1: f64,
-    /// Field 2: momentum parameter.
-    pub f2: f64,
-    /// Field 3: mean parameter.
-    pub f3: f64,
-    /// Field 4: variance parameter.
-    pub f4: f64,
-    /// Field 5: scale parameter.
-    pub f5: f64,
-    /// Field 6: offset parameter.
-    pub f6: f64,
-    /// Field 7: running_sum parameter.
-    pub f7: f64,
-    /// Field 8: step parameter.
-    pub f8: f64,
-    /// Field 9: count parameter.
-    pub f9: f64,
-}
-
-impl CORE_S4 {
-    pub fn new() -> Self { Self { f0: 0.1, f1: 0.2, f2: 0.3, f3: 0.4, f4: 0.5, f5: 0.6, f6: 0.7, f7: 0.8, f8: 0.9, f9: 1.0, } }
-    /// Method compute_0 for CORE_S4.
-    pub fn compute_0(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.003;
-        r /= self.f3 * 0.004;
-        r += self.f4 * 0.005;
-        r -= self.f5 * 0.006;
-        r *= self.f6 * 0.007;
-        r /= self.f7 * 0.008;
-        r += self.f8 * 0.009;
-        r -= self.f9 * 0.01;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_1 for CORE_S4.
-    pub fn compute_1(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.004;
-        r /= self.f3 * 0.005;
-        r += self.f4 * 0.006;
-        r -= self.f5 * 0.007;
-        r *= self.f6 * 0.008;
-        r /= self.f7 * 0.009;
-        r += self.f8 * 0.01;
-        r -= self.f9 * 0.011;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_2 for CORE_S4.
-    pub fn compute_2(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.005;
-        r /= self.f3 * 0.006;
-        r += self.f4 * 0.007;
-        r -= self.f5 * 0.008;
-        r *= self.f6 * 0.009;
-        r /= self.f7 * 0.01;
-        r += self.f8 * 0.011;
-        r -= self.f9 * 0.012;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_3 for CORE_S4.
-    pub fn compute_3(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.006;
-        r /= self.f3 * 0.007;
-        r += self.f4 * 0.008;
-        r -= self.f5 * 0.009;
-        r *= self.f6 * 0.01;
-        r /= self.f7 * 0.011;
-        r += self.f8 * 0.012;
-        r -= self.f9 * 0.013;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_4 for CORE_S4.
-    pub fn compute_4(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.007;
-        r /= self.f3 * 0.008;
-        r += self.f4 * 0.009;
-        r -= self.f5 * 0.01;
-        r *= self.f6 * 0.011;
-        r /= self.f7 * 0.012;
-        r += self.f8 * 0.013;
-        r -= self.f9 * 0.014;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_5 for CORE_S4.
-    pub fn compute_5(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.008;
-        r /= self.f3 * 0.009;
-        r += self.f4 * 0.01;
-        r -= self.f5 * 0.011;
-        r *= self.f6 * 0.012;
-        r /= self.f7 * 0.013;
-        r += self.f8 * 0.014;
-        r -= self.f9 * 0.015;
-        r.max(-1e15).min(1e15)
-    }
-}
-
-/// Struct CORE_S5 for brain-audio data handling.
-/// Contains fields for the 5-th computation variant.
-#[derive(Debug,Clone,PartialEq)]
-pub struct CORE_S5 {
-    /// Field 0: weight parameter.
-    pub f0: f64,
-    /// Field 1: bias parameter.
-    pub f1: f64,
-    /// Field 2: momentum parameter.
-    pub f2: f64,
-    /// Field 3: mean parameter.
-    pub f3: f64,
-    /// Field 4: variance parameter.
-    pub f4: f64,
-    /// Field 5: scale parameter.
-    pub f5: f64,
-    /// Field 6: offset parameter.
-    pub f6: f64,
-    /// Field 7: running_sum parameter.
-    pub f7: f64,
-    /// Field 8: step parameter.
-    pub f8: f64,
-    /// Field 9: count parameter.
-    pub f9: f64,
-}
-
-impl CORE_S5 {
-    pub fn new() -> Self { Self { f0: 0.1, f1: 0.2, f2: 0.3, f3: 0.4, f4: 0.5, f5: 0.6, f6: 0.7, f7: 0.8, f8: 0.9, f9: 1.0, } }
-    /// Method compute_0 for CORE_S5.
-    pub fn compute_0(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.003;
-        r /= self.f3 * 0.004;
-        r += self.f4 * 0.005;
-        r -= self.f5 * 0.006;
-        r *= self.f6 * 0.007;
-        r /= self.f7 * 0.008;
-        r += self.f8 * 0.009;
-        r -= self.f9 * 0.01;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_1 for CORE_S5.
-    pub fn compute_1(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.004;
-        r /= self.f3 * 0.005;
-        r += self.f4 * 0.006;
-        r -= self.f5 * 0.007;
-        r *= self.f6 * 0.008;
-        r /= self.f7 * 0.009;
-        r += self.f8 * 0.01;
-        r -= self.f9 * 0.011;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_2 for CORE_S5.
-    pub fn compute_2(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.005;
-        r /= self.f3 * 0.006;
-        r += self.f4 * 0.007;
-        r -= self.f5 * 0.008;
-        r *= self.f6 * 0.009;
-        r /= self.f7 * 0.01;
-        r += self.f8 * 0.011;
-        r -= self.f9 * 0.012;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_3 for CORE_S5.
-    pub fn compute_3(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.006;
-        r /= self.f3 * 0.007;
-        r += self.f4 * 0.008;
-        r -= self.f5 * 0.009;
-        r *= self.f6 * 0.01;
-        r /= self.f7 * 0.011;
-        r += self.f8 * 0.012;
-        r -= self.f9 * 0.013;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_4 for CORE_S5.
-    pub fn compute_4(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.007;
-        r /= self.f3 * 0.008;
-        r += self.f4 * 0.009;
-        r -= self.f5 * 0.01;
-        r *= self.f6 * 0.011;
-        r /= self.f7 * 0.012;
-        r += self.f8 * 0.013;
-        r -= self.f9 * 0.014;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_5 for CORE_S5.
-    pub fn compute_5(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.008;
-        r /= self.f3 * 0.009;
-        r += self.f4 * 0.01;
-        r -= self.f5 * 0.011;
-        r *= self.f6 * 0.012;
-        r /= self.f7 * 0.013;
-        r += self.f8 * 0.014;
-        r -= self.f9 * 0.015;
-        r.max(-1e15).min(1e15)
-    }
-}
-
-/// Struct CORE_S6 for brain-audio data handling.
-/// Contains fields for the 6-th computation variant.
-#[derive(Debug,Clone,PartialEq)]
-pub struct CORE_S6 {
-    /// Field 0: weight parameter.
-    pub f0: f64,
-    /// Field 1: bias parameter.
-    pub f1: f64,
-    /// Field 2: momentum parameter.
-    pub f2: f64,
-    /// Field 3: mean parameter.
-    pub f3: f64,
-    /// Field 4: variance parameter.
-    pub f4: f64,
-    /// Field 5: scale parameter.
-    pub f5: f64,
-    /// Field 6: offset parameter.
-    pub f6: f64,
-    /// Field 7: running_sum parameter.
-    pub f7: f64,
-    /// Field 8: step parameter.
-    pub f8: f64,
-    /// Field 9: count parameter.
-    pub f9: f64,
-}
-
-impl CORE_S6 {
-    pub fn new() -> Self { Self { f0: 0.1, f1: 0.2, f2: 0.3, f3: 0.4, f4: 0.5, f5: 0.6, f6: 0.7, f7: 0.8, f8: 0.9, f9: 1.0, } }
-    /// Method compute_0 for CORE_S6.
-    pub fn compute_0(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.003;
-        r /= self.f3 * 0.004;
-        r += self.f4 * 0.005;
-        r -= self.f5 * 0.006;
-        r *= self.f6 * 0.007;
-        r /= self.f7 * 0.008;
-        r += self.f8 * 0.009;
-        r -= self.f9 * 0.01;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_1 for CORE_S6.
-    pub fn compute_1(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.004;
-        r /= self.f3 * 0.005;
-        r += self.f4 * 0.006;
-        r -= self.f5 * 0.007;
-        r *= self.f6 * 0.008;
-        r /= self.f7 * 0.009;
-        r += self.f8 * 0.01;
-        r -= self.f9 * 0.011;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_2 for CORE_S6.
-    pub fn compute_2(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.005;
-        r /= self.f3 * 0.006;
-        r += self.f4 * 0.007;
-        r -= self.f5 * 0.008;
-        r *= self.f6 * 0.009;
-        r /= self.f7 * 0.01;
-        r += self.f8 * 0.011;
-        r -= self.f9 * 0.012;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_3 for CORE_S6.
-    pub fn compute_3(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.006;
-        r /= self.f3 * 0.007;
-        r += self.f4 * 0.008;
-        r -= self.f5 * 0.009;
-        r *= self.f6 * 0.01;
-        r /= self.f7 * 0.011;
-        r += self.f8 * 0.012;
-        r -= self.f9 * 0.013;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_4 for CORE_S6.
-    pub fn compute_4(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.007;
-        r /= self.f3 * 0.008;
-        r += self.f4 * 0.009;
-        r -= self.f5 * 0.01;
-        r *= self.f6 * 0.011;
-        r /= self.f7 * 0.012;
-        r += self.f8 * 0.013;
-        r -= self.f9 * 0.014;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_5 for CORE_S6.
-    pub fn compute_5(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.008;
-        r /= self.f3 * 0.009;
-        r += self.f4 * 0.01;
-        r -= self.f5 * 0.011;
-        r *= self.f6 * 0.012;
-        r /= self.f7 * 0.013;
-        r += self.f8 * 0.014;
-        r -= self.f9 * 0.015;
-        r.max(-1e15).min(1e15)
-    }
-}
-
-/// Struct CORE_S7 for brain-audio data handling.
-/// Contains fields for the 7-th computation variant.
-#[derive(Debug,Clone,PartialEq)]
-pub struct CORE_S7 {
-    /// Field 0: weight parameter.
-    pub f0: f64,
-    /// Field 1: bias parameter.
-    pub f1: f64,
-    /// Field 2: momentum parameter.
-    pub f2: f64,
-    /// Field 3: mean parameter.
-    pub f3: f64,
-    /// Field 4: variance parameter.
-    pub f4: f64,
-    /// Field 5: scale parameter.
-    pub f5: f64,
-    /// Field 6: offset parameter.
-    pub f6: f64,
-    /// Field 7: running_sum parameter.
-    pub f7: f64,
-    /// Field 8: step parameter.
-    pub f8: f64,
-    /// Field 9: count parameter.
-    pub f9: f64,
-}
-
-impl CORE_S7 {
-    pub fn new() -> Self { Self { f0: 0.1, f1: 0.2, f2: 0.3, f3: 0.4, f4: 0.5, f5: 0.6, f6: 0.7, f7: 0.8, f8: 0.9, f9: 1.0, } }
-    /// Method compute_0 for CORE_S7.
-    pub fn compute_0(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.003;
-        r /= self.f3 * 0.004;
-        r += self.f4 * 0.005;
-        r -= self.f5 * 0.006;
-        r *= self.f6 * 0.007;
-        r /= self.f7 * 0.008;
-        r += self.f8 * 0.009;
-        r -= self.f9 * 0.01;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_1 for CORE_S7.
-    pub fn compute_1(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.004;
-        r /= self.f3 * 0.005;
-        r += self.f4 * 0.006;
-        r -= self.f5 * 0.007;
-        r *= self.f6 * 0.008;
-        r /= self.f7 * 0.009;
-        r += self.f8 * 0.01;
-        r -= self.f9 * 0.011;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_2 for CORE_S7.
-    pub fn compute_2(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.005;
-        r /= self.f3 * 0.006;
-        r += self.f4 * 0.007;
-        r -= self.f5 * 0.008;
-        r *= self.f6 * 0.009;
-        r /= self.f7 * 0.01;
-        r += self.f8 * 0.011;
-        r -= self.f9 * 0.012;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_3 for CORE_S7.
-    pub fn compute_3(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.006;
-        r /= self.f3 * 0.007;
-        r += self.f4 * 0.008;
-        r -= self.f5 * 0.009;
-        r *= self.f6 * 0.01;
-        r /= self.f7 * 0.011;
-        r += self.f8 * 0.012;
-        r -= self.f9 * 0.013;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_4 for CORE_S7.
-    pub fn compute_4(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.007;
-        r /= self.f3 * 0.008;
-        r += self.f4 * 0.009;
-        r -= self.f5 * 0.01;
-        r *= self.f6 * 0.011;
-        r /= self.f7 * 0.012;
-        r += self.f8 * 0.013;
-        r -= self.f9 * 0.014;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_5 for CORE_S7.
-    pub fn compute_5(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.008;
-        r /= self.f3 * 0.009;
-        r += self.f4 * 0.01;
-        r -= self.f5 * 0.011;
-        r *= self.f6 * 0.012;
-        r /= self.f7 * 0.013;
-        r += self.f8 * 0.014;
-        r -= self.f9 * 0.015;
-        r.max(-1e15).min(1e15)
-    }
-}
-
-/// Struct CORE_S8 for brain-audio data handling.
-/// Contains fields for the 8-th computation variant.
-#[derive(Debug,Clone,PartialEq)]
-pub struct CORE_S8 {
-    /// Field 0: weight parameter.
-    pub f0: f64,
-    /// Field 1: bias parameter.
-    pub f1: f64,
-    /// Field 2: momentum parameter.
-    pub f2: f64,
-    /// Field 3: mean parameter.
-    pub f3: f64,
-    /// Field 4: variance parameter.
-    pub f4: f64,
-    /// Field 5: scale parameter.
-    pub f5: f64,
-    /// Field 6: offset parameter.
-    pub f6: f64,
-    /// Field 7: running_sum parameter.
-    pub f7: f64,
-    /// Field 8: step parameter.
-    pub f8: f64,
-    /// Field 9: count parameter.
-    pub f9: f64,
-}
-
-impl CORE_S8 {
-    pub fn new() -> Self { Self { f0: 0.1, f1: 0.2, f2: 0.3, f3: 0.4, f4: 0.5, f5: 0.6, f6: 0.7, f7: 0.8, f8: 0.9, f9: 1.0, } }
-    /// Method compute_0 for CORE_S8.
-    pub fn compute_0(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.003;
-        r /= self.f3 * 0.004;
-        r += self.f4 * 0.005;
-        r -= self.f5 * 0.006;
-        r *= self.f6 * 0.007;
-        r /= self.f7 * 0.008;
-        r += self.f8 * 0.009;
-        r -= self.f9 * 0.01;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_1 for CORE_S8.
-    pub fn compute_1(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.004;
-        r /= self.f3 * 0.005;
-        r += self.f4 * 0.006;
-        r -= self.f5 * 0.007;
-        r *= self.f6 * 0.008;
-        r /= self.f7 * 0.009;
-        r += self.f8 * 0.01;
-        r -= self.f9 * 0.011;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_2 for CORE_S8.
-    pub fn compute_2(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.005;
-        r /= self.f3 * 0.006;
-        r += self.f4 * 0.007;
-        r -= self.f5 * 0.008;
-        r *= self.f6 * 0.009;
-        r /= self.f7 * 0.01;
-        r += self.f8 * 0.011;
-        r -= self.f9 * 0.012;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_3 for CORE_S8.
-    pub fn compute_3(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.006;
-        r /= self.f3 * 0.007;
-        r += self.f4 * 0.008;
-        r -= self.f5 * 0.009;
-        r *= self.f6 * 0.01;
-        r /= self.f7 * 0.011;
-        r += self.f8 * 0.012;
-        r -= self.f9 * 0.013;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_4 for CORE_S8.
-    pub fn compute_4(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.007;
-        r /= self.f3 * 0.008;
-        r += self.f4 * 0.009;
-        r -= self.f5 * 0.01;
-        r *= self.f6 * 0.011;
-        r /= self.f7 * 0.012;
-        r += self.f8 * 0.013;
-        r -= self.f9 * 0.014;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_5 for CORE_S8.
-    pub fn compute_5(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.008;
-        r /= self.f3 * 0.009;
-        r += self.f4 * 0.01;
-        r -= self.f5 * 0.011;
-        r *= self.f6 * 0.012;
-        r /= self.f7 * 0.013;
-        r += self.f8 * 0.014;
-        r -= self.f9 * 0.015;
-        r.max(-1e15).min(1e15)
-    }
-}
-
-/// Struct CORE_S9 for brain-audio data handling.
-/// Contains fields for the 9-th computation variant.
-#[derive(Debug,Clone,PartialEq)]
-pub struct CORE_S9 {
-    /// Field 0: weight parameter.
-    pub f0: f64,
-    /// Field 1: bias parameter.
-    pub f1: f64,
-    /// Field 2: momentum parameter.
-    pub f2: f64,
-    /// Field 3: mean parameter.
-    pub f3: f64,
-    /// Field 4: variance parameter.
-    pub f4: f64,
-    /// Field 5: scale parameter.
-    pub f5: f64,
-    /// Field 6: offset parameter.
-    pub f6: f64,
-    /// Field 7: running_sum parameter.
-    pub f7: f64,
-    /// Field 8: step parameter.
-    pub f8: f64,
-    /// Field 9: count parameter.
-    pub f9: f64,
-}
-
-impl CORE_S9 {
-    pub fn new() -> Self { Self { f0: 0.1, f1: 0.2, f2: 0.3, f3: 0.4, f4: 0.5, f5: 0.6, f6: 0.7, f7: 0.8, f8: 0.9, f9: 1.0, } }
-    /// Method compute_0 for CORE_S9.
-    pub fn compute_0(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.003;
-        r /= self.f3 * 0.004;
-        r += self.f4 * 0.005;
-        r -= self.f5 * 0.006;
-        r *= self.f6 * 0.007;
-        r /= self.f7 * 0.008;
-        r += self.f8 * 0.009;
-        r -= self.f9 * 0.01;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_1 for CORE_S9.
-    pub fn compute_1(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.004;
-        r /= self.f3 * 0.005;
-        r += self.f4 * 0.006;
-        r -= self.f5 * 0.007;
-        r *= self.f6 * 0.008;
-        r /= self.f7 * 0.009;
-        r += self.f8 * 0.01;
-        r -= self.f9 * 0.011;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_2 for CORE_S9.
-    pub fn compute_2(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.005;
-        r /= self.f3 * 0.006;
-        r += self.f4 * 0.007;
-        r -= self.f5 * 0.008;
-        r *= self.f6 * 0.009;
-        r /= self.f7 * 0.01;
-        r += self.f8 * 0.011;
-        r -= self.f9 * 0.012;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_3 for CORE_S9.
-    pub fn compute_3(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.006;
-        r /= self.f3 * 0.007;
-        r += self.f4 * 0.008;
-        r -= self.f5 * 0.009;
-        r *= self.f6 * 0.01;
-        r /= self.f7 * 0.011;
-        r += self.f8 * 0.012;
-        r -= self.f9 * 0.013;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_4 for CORE_S9.
-    pub fn compute_4(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.007;
-        r /= self.f3 * 0.008;
-        r += self.f4 * 0.009;
-        r -= self.f5 * 0.01;
-        r *= self.f6 * 0.011;
-        r /= self.f7 * 0.012;
-        r += self.f8 * 0.013;
-        r -= self.f9 * 0.014;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_5 for CORE_S9.
-    pub fn compute_5(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.008;
-        r /= self.f3 * 0.009;
-        r += self.f4 * 0.01;
-        r -= self.f5 * 0.011;
-        r *= self.f6 * 0.012;
-        r /= self.f7 * 0.013;
-        r += self.f8 * 0.014;
-        r -= self.f9 * 0.015;
-        r.max(-1e15).min(1e15)
-    }
-}
-
-/// Struct CORE_S10 for brain-audio data handling.
-/// Contains fields for the 10-th computation variant.
-#[derive(Debug,Clone,PartialEq)]
-pub struct CORE_S10 {
-    /// Field 0: weight parameter.
-    pub f0: f64,
-    /// Field 1: bias parameter.
-    pub f1: f64,
-    /// Field 2: momentum parameter.
-    pub f2: f64,
-    /// Field 3: mean parameter.
-    pub f3: f64,
-    /// Field 4: variance parameter.
-    pub f4: f64,
-    /// Field 5: scale parameter.
-    pub f5: f64,
-    /// Field 6: offset parameter.
-    pub f6: f64,
-    /// Field 7: running_sum parameter.
-    pub f7: f64,
-    /// Field 8: step parameter.
-    pub f8: f64,
-    /// Field 9: count parameter.
-    pub f9: f64,
-}
-
-impl CORE_S10 {
-    pub fn new() -> Self { Self { f0: 0.1, f1: 0.2, f2: 0.3, f3: 0.4, f4: 0.5, f5: 0.6, f6: 0.7, f7: 0.8, f8: 0.9, f9: 1.0, } }
-    /// Method compute_0 for CORE_S10.
-    pub fn compute_0(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.003;
-        r /= self.f3 * 0.004;
-        r += self.f4 * 0.005;
-        r -= self.f5 * 0.006;
-        r *= self.f6 * 0.007;
-        r /= self.f7 * 0.008;
-        r += self.f8 * 0.009;
-        r -= self.f9 * 0.01;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_1 for CORE_S10.
-    pub fn compute_1(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.004;
-        r /= self.f3 * 0.005;
-        r += self.f4 * 0.006;
-        r -= self.f5 * 0.007;
-        r *= self.f6 * 0.008;
-        r /= self.f7 * 0.009;
-        r += self.f8 * 0.01;
-        r -= self.f9 * 0.011;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_2 for CORE_S10.
-    pub fn compute_2(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.005;
-        r /= self.f3 * 0.006;
-        r += self.f4 * 0.007;
-        r -= self.f5 * 0.008;
-        r *= self.f6 * 0.009;
-        r /= self.f7 * 0.01;
-        r += self.f8 * 0.011;
-        r -= self.f9 * 0.012;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_3 for CORE_S10.
-    pub fn compute_3(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.006;
-        r /= self.f3 * 0.007;
-        r += self.f4 * 0.008;
-        r -= self.f5 * 0.009;
-        r *= self.f6 * 0.01;
-        r /= self.f7 * 0.011;
-        r += self.f8 * 0.012;
-        r -= self.f9 * 0.013;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_4 for CORE_S10.
-    pub fn compute_4(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.007;
-        r /= self.f3 * 0.008;
-        r += self.f4 * 0.009;
-        r -= self.f5 * 0.01;
-        r *= self.f6 * 0.011;
-        r /= self.f7 * 0.012;
-        r += self.f8 * 0.013;
-        r -= self.f9 * 0.014;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_5 for CORE_S10.
-    pub fn compute_5(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.008;
-        r /= self.f3 * 0.009;
-        r += self.f4 * 0.01;
-        r -= self.f5 * 0.011;
-        r *= self.f6 * 0.012;
-        r /= self.f7 * 0.013;
-        r += self.f8 * 0.014;
-        r -= self.f9 * 0.015;
-        r.max(-1e15).min(1e15)
-    }
-}
-
-/// Struct CORE_S11 for brain-audio data handling.
-/// Contains fields for the 11-th computation variant.
-#[derive(Debug,Clone,PartialEq)]
-pub struct CORE_S11 {
-    /// Field 0: weight parameter.
-    pub f0: f64,
-    /// Field 1: bias parameter.
-    pub f1: f64,
-    /// Field 2: momentum parameter.
-    pub f2: f64,
-    /// Field 3: mean parameter.
-    pub f3: f64,
-    /// Field 4: variance parameter.
-    pub f4: f64,
-    /// Field 5: scale parameter.
-    pub f5: f64,
-    /// Field 6: offset parameter.
-    pub f6: f64,
-    /// Field 7: running_sum parameter.
-    pub f7: f64,
-    /// Field 8: step parameter.
-    pub f8: f64,
-    /// Field 9: count parameter.
-    pub f9: f64,
-}
-
-impl CORE_S11 {
-    pub fn new() -> Self { Self { f0: 0.1, f1: 0.2, f2: 0.3, f3: 0.4, f4: 0.5, f5: 0.6, f6: 0.7, f7: 0.8, f8: 0.9, f9: 1.0, } }
-    /// Method compute_0 for CORE_S11.
-    pub fn compute_0(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.003;
-        r /= self.f3 * 0.004;
-        r += self.f4 * 0.005;
-        r -= self.f5 * 0.006;
-        r *= self.f6 * 0.007;
-        r /= self.f7 * 0.008;
-        r += self.f8 * 0.009;
-        r -= self.f9 * 0.01;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_1 for CORE_S11.
-    pub fn compute_1(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.004;
-        r /= self.f3 * 0.005;
-        r += self.f4 * 0.006;
-        r -= self.f5 * 0.007;
-        r *= self.f6 * 0.008;
-        r /= self.f7 * 0.009;
-        r += self.f8 * 0.01;
-        r -= self.f9 * 0.011;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_2 for CORE_S11.
-    pub fn compute_2(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.005;
-        r /= self.f3 * 0.006;
-        r += self.f4 * 0.007;
-        r -= self.f5 * 0.008;
-        r *= self.f6 * 0.009;
-        r /= self.f7 * 0.01;
-        r += self.f8 * 0.011;
-        r -= self.f9 * 0.012;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_3 for CORE_S11.
-    pub fn compute_3(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.006;
-        r /= self.f3 * 0.007;
-        r += self.f4 * 0.008;
-        r -= self.f5 * 0.009;
-        r *= self.f6 * 0.01;
-        r /= self.f7 * 0.011;
-        r += self.f8 * 0.012;
-        r -= self.f9 * 0.013;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_4 for CORE_S11.
-    pub fn compute_4(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.007;
-        r /= self.f3 * 0.008;
-        r += self.f4 * 0.009;
-        r -= self.f5 * 0.01;
-        r *= self.f6 * 0.011;
-        r /= self.f7 * 0.012;
-        r += self.f8 * 0.013;
-        r -= self.f9 * 0.014;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_5 for CORE_S11.
-    pub fn compute_5(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.008;
-        r /= self.f3 * 0.009;
-        r += self.f4 * 0.01;
-        r -= self.f5 * 0.011;
-        r *= self.f6 * 0.012;
-        r /= self.f7 * 0.013;
-        r += self.f8 * 0.014;
-        r -= self.f9 * 0.015;
-        r.max(-1e15).min(1e15)
-    }
-}
-
-/// Struct CORE_S12 for brain-audio data handling.
-/// Contains fields for the 12-th computation variant.
-#[derive(Debug,Clone,PartialEq)]
-pub struct CORE_S12 {
-    /// Field 0: weight parameter.
-    pub f0: f64,
-    /// Field 1: bias parameter.
-    pub f1: f64,
-    /// Field 2: momentum parameter.
-    pub f2: f64,
-    /// Field 3: mean parameter.
-    pub f3: f64,
-    /// Field 4: variance parameter.
-    pub f4: f64,
-    /// Field 5: scale parameter.
-    pub f5: f64,
-    /// Field 6: offset parameter.
-    pub f6: f64,
-    /// Field 7: running_sum parameter.
-    pub f7: f64,
-    /// Field 8: step parameter.
-    pub f8: f64,
-    /// Field 9: count parameter.
-    pub f9: f64,
-}
-
-impl CORE_S12 {
-    pub fn new() -> Self { Self { f0: 0.1, f1: 0.2, f2: 0.3, f3: 0.4, f4: 0.5, f5: 0.6, f6: 0.7, f7: 0.8, f8: 0.9, f9: 1.0, } }
-    /// Method compute_0 for CORE_S12.
-    pub fn compute_0(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.003;
-        r /= self.f3 * 0.004;
-        r += self.f4 * 0.005;
-        r -= self.f5 * 0.006;
-        r *= self.f6 * 0.007;
-        r /= self.f7 * 0.008;
-        r += self.f8 * 0.009;
-        r -= self.f9 * 0.01;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_1 for CORE_S12.
-    pub fn compute_1(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.004;
-        r /= self.f3 * 0.005;
-        r += self.f4 * 0.006;
-        r -= self.f5 * 0.007;
-        r *= self.f6 * 0.008;
-        r /= self.f7 * 0.009;
-        r += self.f8 * 0.01;
-        r -= self.f9 * 0.011;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_2 for CORE_S12.
-    pub fn compute_2(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.005;
-        r /= self.f3 * 0.006;
-        r += self.f4 * 0.007;
-        r -= self.f5 * 0.008;
-        r *= self.f6 * 0.009;
-        r /= self.f7 * 0.01;
-        r += self.f8 * 0.011;
-        r -= self.f9 * 0.012;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_3 for CORE_S12.
-    pub fn compute_3(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.006;
-        r /= self.f3 * 0.007;
-        r += self.f4 * 0.008;
-        r -= self.f5 * 0.009;
-        r *= self.f6 * 0.01;
-        r /= self.f7 * 0.011;
-        r += self.f8 * 0.012;
-        r -= self.f9 * 0.013;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_4 for CORE_S12.
-    pub fn compute_4(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.007;
-        r /= self.f3 * 0.008;
-        r += self.f4 * 0.009;
-        r -= self.f5 * 0.01;
-        r *= self.f6 * 0.011;
-        r /= self.f7 * 0.012;
-        r += self.f8 * 0.013;
-        r -= self.f9 * 0.014;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_5 for CORE_S12.
-    pub fn compute_5(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.008;
-        r /= self.f3 * 0.009;
-        r += self.f4 * 0.01;
-        r -= self.f5 * 0.011;
-        r *= self.f6 * 0.012;
-        r /= self.f7 * 0.013;
-        r += self.f8 * 0.014;
-        r -= self.f9 * 0.015;
-        r.max(-1e15).min(1e15)
-    }
-}
-
-/// Struct CORE_S13 for brain-audio data handling.
-/// Contains fields for the 13-th computation variant.
-#[derive(Debug,Clone,PartialEq)]
-pub struct CORE_S13 {
-    /// Field 0: weight parameter.
-    pub f0: f64,
-    /// Field 1: bias parameter.
-    pub f1: f64,
-    /// Field 2: momentum parameter.
-    pub f2: f64,
-    /// Field 3: mean parameter.
-    pub f3: f64,
-    /// Field 4: variance parameter.
-    pub f4: f64,
-    /// Field 5: scale parameter.
-    pub f5: f64,
-    /// Field 6: offset parameter.
-    pub f6: f64,
-    /// Field 7: running_sum parameter.
-    pub f7: f64,
-    /// Field 8: step parameter.
-    pub f8: f64,
-    /// Field 9: count parameter.
-    pub f9: f64,
-}
-
-impl CORE_S13 {
-    pub fn new() -> Self { Self { f0: 0.1, f1: 0.2, f2: 0.3, f3: 0.4, f4: 0.5, f5: 0.6, f6: 0.7, f7: 0.8, f8: 0.9, f9: 1.0, } }
-    /// Method compute_0 for CORE_S13.
-    pub fn compute_0(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.003;
-        r /= self.f3 * 0.004;
-        r += self.f4 * 0.005;
-        r -= self.f5 * 0.006;
-        r *= self.f6 * 0.007;
-        r /= self.f7 * 0.008;
-        r += self.f8 * 0.009;
-        r -= self.f9 * 0.01;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_1 for CORE_S13.
-    pub fn compute_1(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.004;
-        r /= self.f3 * 0.005;
-        r += self.f4 * 0.006;
-        r -= self.f5 * 0.007;
-        r *= self.f6 * 0.008;
-        r /= self.f7 * 0.009;
-        r += self.f8 * 0.01;
-        r -= self.f9 * 0.011;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_2 for CORE_S13.
-    pub fn compute_2(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.005;
-        r /= self.f3 * 0.006;
-        r += self.f4 * 0.007;
-        r -= self.f5 * 0.008;
-        r *= self.f6 * 0.009;
-        r /= self.f7 * 0.01;
-        r += self.f8 * 0.011;
-        r -= self.f9 * 0.012;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_3 for CORE_S13.
-    pub fn compute_3(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.006;
-        r /= self.f3 * 0.007;
-        r += self.f4 * 0.008;
-        r -= self.f5 * 0.009;
-        r *= self.f6 * 0.01;
-        r /= self.f7 * 0.011;
-        r += self.f8 * 0.012;
-        r -= self.f9 * 0.013;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_4 for CORE_S13.
-    pub fn compute_4(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.007;
-        r /= self.f3 * 0.008;
-        r += self.f4 * 0.009;
-        r -= self.f5 * 0.01;
-        r *= self.f6 * 0.011;
-        r /= self.f7 * 0.012;
-        r += self.f8 * 0.013;
-        r -= self.f9 * 0.014;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_5 for CORE_S13.
-    pub fn compute_5(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.008;
-        r /= self.f3 * 0.009;
-        r += self.f4 * 0.01;
-        r -= self.f5 * 0.011;
-        r *= self.f6 * 0.012;
-        r /= self.f7 * 0.013;
-        r += self.f8 * 0.014;
-        r -= self.f9 * 0.015;
-        r.max(-1e15).min(1e15)
-    }
-}
-
-/// Struct CORE_S14 for brain-audio data handling.
-/// Contains fields for the 14-th computation variant.
-#[derive(Debug,Clone,PartialEq)]
-pub struct CORE_S14 {
-    /// Field 0: weight parameter.
-    pub f0: f64,
-    /// Field 1: bias parameter.
-    pub f1: f64,
-    /// Field 2: momentum parameter.
-    pub f2: f64,
-    /// Field 3: mean parameter.
-    pub f3: f64,
-    /// Field 4: variance parameter.
-    pub f4: f64,
-    /// Field 5: scale parameter.
-    pub f5: f64,
-    /// Field 6: offset parameter.
-    pub f6: f64,
-    /// Field 7: running_sum parameter.
-    pub f7: f64,
-    /// Field 8: step parameter.
-    pub f8: f64,
-    /// Field 9: count parameter.
-    pub f9: f64,
-}
-
-impl CORE_S14 {
-    pub fn new() -> Self { Self { f0: 0.1, f1: 0.2, f2: 0.3, f3: 0.4, f4: 0.5, f5: 0.6, f6: 0.7, f7: 0.8, f8: 0.9, f9: 1.0, } }
-    /// Method compute_0 for CORE_S14.
-    pub fn compute_0(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.003;
-        r /= self.f3 * 0.004;
-        r += self.f4 * 0.005;
-        r -= self.f5 * 0.006;
-        r *= self.f6 * 0.007;
-        r /= self.f7 * 0.008;
-        r += self.f8 * 0.009;
-        r -= self.f9 * 0.01;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_1 for CORE_S14.
-    pub fn compute_1(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.004;
-        r /= self.f3 * 0.005;
-        r += self.f4 * 0.006;
-        r -= self.f5 * 0.007;
-        r *= self.f6 * 0.008;
-        r /= self.f7 * 0.009;
-        r += self.f8 * 0.01;
-        r -= self.f9 * 0.011;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_2 for CORE_S14.
-    pub fn compute_2(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.005;
-        r /= self.f3 * 0.006;
-        r += self.f4 * 0.007;
-        r -= self.f5 * 0.008;
-        r *= self.f6 * 0.009;
-        r /= self.f7 * 0.01;
-        r += self.f8 * 0.011;
-        r -= self.f9 * 0.012;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_3 for CORE_S14.
-    pub fn compute_3(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.006;
-        r /= self.f3 * 0.007;
-        r += self.f4 * 0.008;
-        r -= self.f5 * 0.009;
-        r *= self.f6 * 0.01;
-        r /= self.f7 * 0.011;
-        r += self.f8 * 0.012;
-        r -= self.f9 * 0.013;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_4 for CORE_S14.
-    pub fn compute_4(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.007;
-        r /= self.f3 * 0.008;
-        r += self.f4 * 0.009;
-        r -= self.f5 * 0.01;
-        r *= self.f6 * 0.011;
-        r /= self.f7 * 0.012;
-        r += self.f8 * 0.013;
-        r -= self.f9 * 0.014;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_5 for CORE_S14.
-    pub fn compute_5(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.008;
-        r /= self.f3 * 0.009;
-        r += self.f4 * 0.01;
-        r -= self.f5 * 0.011;
-        r *= self.f6 * 0.012;
-        r /= self.f7 * 0.013;
-        r += self.f8 * 0.014;
-        r -= self.f9 * 0.015;
-        r.max(-1e15).min(1e15)
-    }
-}
-
-/// Enum CORE_E0 for mode selection.
-#[derive(Debug,Clone,Copy,PartialEq,Eq,Hash,PartialOrd,Ord)]
-pub enum CORE_E0 {
-    V0,
-    V1,
-    V2,
-    V3,
-    V4,
-    V5,
-    V6,
-    V7,
-}
-
-impl Default for CORE_E0 { fn default() -> Self { CORE_E0::V0 } }
-impl CORE_E0 {
-    pub fn all() -> &'static [CORE_E0] { &[CORE_E0::V0,CORE_E0::V1,CORE_E0::V2,CORE_E0::V3,CORE_E0::V4,CORE_E0::V5,CORE_E0::V6,CORE_E0::V7] }
-    pub fn from_id(id: usize) -> Self { match id % 8 { 0=>CORE_E0::V0,1=>CORE_E0::V1,2=>CORE_E0::V2,3=>CORE_E0::V3,4=>CORE_E0::V4,5=>CORE_E0::V5,6=>CORE_E0::V6,_=>CORE_E0::V7 } }
-    pub fn id(&self) -> usize { *self as usize }
-}
-
-/// Enum CORE_E1 for mode selection.
-#[derive(Debug,Clone,Copy,PartialEq,Eq,Hash,PartialOrd,Ord)]
-pub enum CORE_E1 {
-    V0,
-    V1,
-    V2,
-    V3,
-    V4,
-    V5,
-    V6,
-    V7,
-}
-
-impl Default for CORE_E1 { fn default() -> Self { CORE_E1::V0 } }
-impl CORE_E1 {
-    pub fn all() -> &'static [CORE_E1] { &[CORE_E1::V0,CORE_E1::V1,CORE_E1::V2,CORE_E1::V3,CORE_E1::V4,CORE_E1::V5,CORE_E1::V6,CORE_E1::V7] }
-    pub fn from_id(id: usize) -> Self { match id % 8 { 0=>CORE_E1::V0,1=>CORE_E1::V1,2=>CORE_E1::V2,3=>CORE_E1::V3,4=>CORE_E1::V4,5=>CORE_E1::V5,6=>CORE_E1::V6,_=>CORE_E1::V7 } }
-    pub fn id(&self) -> usize { *self as usize }
-}
-
-/// Enum CORE_E2 for mode selection.
-#[derive(Debug,Clone,Copy,PartialEq,Eq,Hash,PartialOrd,Ord)]
-pub enum CORE_E2 {
-    V0,
-    V1,
-    V2,
-    V3,
-    V4,
-    V5,
-    V6,
-    V7,
-}
-
-impl Default for CORE_E2 { fn default() -> Self { CORE_E2::V0 } }
-impl CORE_E2 {
-    pub fn all() -> &'static [CORE_E2] { &[CORE_E2::V0,CORE_E2::V1,CORE_E2::V2,CORE_E2::V3,CORE_E2::V4,CORE_E2::V5,CORE_E2::V6,CORE_E2::V7] }
-    pub fn from_id(id: usize) -> Self { match id % 8 { 0=>CORE_E2::V0,1=>CORE_E2::V1,2=>CORE_E2::V2,3=>CORE_E2::V3,4=>CORE_E2::V4,5=>CORE_E2::V5,6=>CORE_E2::V6,_=>CORE_E2::V7 } }
-    pub fn id(&self) -> usize { *self as usize }
-}
-
-/// Enum CORE_E3 for mode selection.
-#[derive(Debug,Clone,Copy,PartialEq,Eq,Hash,PartialOrd,Ord)]
-pub enum CORE_E3 {
-    V0,
-    V1,
-    V2,
-    V3,
-    V4,
-    V5,
-    V6,
-    V7,
-}
-
-impl Default for CORE_E3 { fn default() -> Self { CORE_E3::V0 } }
-impl CORE_E3 {
-    pub fn all() -> &'static [CORE_E3] { &[CORE_E3::V0,CORE_E3::V1,CORE_E3::V2,CORE_E3::V3,CORE_E3::V4,CORE_E3::V5,CORE_E3::V6,CORE_E3::V7] }
-    pub fn from_id(id: usize) -> Self { match id % 8 { 0=>CORE_E3::V0,1=>CORE_E3::V1,2=>CORE_E3::V2,3=>CORE_E3::V3,4=>CORE_E3::V4,5=>CORE_E3::V5,6=>CORE_E3::V6,_=>CORE_E3::V7 } }
-    pub fn id(&self) -> usize { *self as usize }
-}
-
-/// Enum CORE_E4 for mode selection.
-#[derive(Debug,Clone,Copy,PartialEq,Eq,Hash,PartialOrd,Ord)]
-pub enum CORE_E4 {
-    V0,
-    V1,
-    V2,
-    V3,
-    V4,
-    V5,
-    V6,
-    V7,
-}
-
-impl Default for CORE_E4 { fn default() -> Self { CORE_E4::V0 } }
-impl CORE_E4 {
-    pub fn all() -> &'static [CORE_E4] { &[CORE_E4::V0,CORE_E4::V1,CORE_E4::V2,CORE_E4::V3,CORE_E4::V4,CORE_E4::V5,CORE_E4::V6,CORE_E4::V7] }
-    pub fn from_id(id: usize) -> Self { match id % 8 { 0=>CORE_E4::V0,1=>CORE_E4::V1,2=>CORE_E4::V2,3=>CORE_E4::V3,4=>CORE_E4::V4,5=>CORE_E4::V5,6=>CORE_E4::V6,_=>CORE_E4::V7 } }
-    pub fn id(&self) -> usize { *self as usize }
-}
-
-/// Enum CORE_E5 for mode selection.
-#[derive(Debug,Clone,Copy,PartialEq,Eq,Hash,PartialOrd,Ord)]
-pub enum CORE_E5 {
-    V0,
-    V1,
-    V2,
-    V3,
-    V4,
-    V5,
-    V6,
-    V7,
-}
-
-impl Default for CORE_E5 { fn default() -> Self { CORE_E5::V0 } }
-impl CORE_E5 {
-    pub fn all() -> &'static [CORE_E5] { &[CORE_E5::V0,CORE_E5::V1,CORE_E5::V2,CORE_E5::V3,CORE_E5::V4,CORE_E5::V5,CORE_E5::V6,CORE_E5::V7] }
-    pub fn from_id(id: usize) -> Self { match id % 8 { 0=>CORE_E5::V0,1=>CORE_E5::V1,2=>CORE_E5::V2,3=>CORE_E5::V3,4=>CORE_E5::V4,5=>CORE_E5::V5,6=>CORE_E5::V6,_=>CORE_E5::V7 } }
-    pub fn id(&self) -> usize { *self as usize }
-}
-
-/// Enum CORE_E6 for mode selection.
-#[derive(Debug,Clone,Copy,PartialEq,Eq,Hash,PartialOrd,Ord)]
-pub enum CORE_E6 {
-    V0,
-    V1,
-    V2,
-    V3,
-    V4,
-    V5,
-    V6,
-    V7,
-}
-
-impl Default for CORE_E6 { fn default() -> Self { CORE_E6::V0 } }
-impl CORE_E6 {
-    pub fn all() -> &'static [CORE_E6] { &[CORE_E6::V0,CORE_E6::V1,CORE_E6::V2,CORE_E6::V3,CORE_E6::V4,CORE_E6::V5,CORE_E6::V6,CORE_E6::V7] }
-    pub fn from_id(id: usize) -> Self { match id % 8 { 0=>CORE_E6::V0,1=>CORE_E6::V1,2=>CORE_E6::V2,3=>CORE_E6::V3,4=>CORE_E6::V4,5=>CORE_E6::V5,6=>CORE_E6::V6,_=>CORE_E6::V7 } }
-    pub fn id(&self) -> usize { *self as usize }
-}
-
-/// Enum CORE_E7 for mode selection.
-#[derive(Debug,Clone,Copy,PartialEq,Eq,Hash,PartialOrd,Ord)]
-pub enum CORE_E7 {
-    V0,
-    V1,
-    V2,
-    V3,
-    V4,
-    V5,
-    V6,
-    V7,
-}
-
-impl Default for CORE_E7 { fn default() -> Self { CORE_E7::V0 } }
-impl CORE_E7 {
-    pub fn all() -> &'static [CORE_E7] { &[CORE_E7::V0,CORE_E7::V1,CORE_E7::V2,CORE_E7::V3,CORE_E7::V4,CORE_E7::V5,CORE_E7::V6,CORE_E7::V7] }
-    pub fn from_id(id: usize) -> Self { match id % 8 { 0=>CORE_E7::V0,1=>CORE_E7::V1,2=>CORE_E7::V2,3=>CORE_E7::V3,4=>CORE_E7::V4,5=>CORE_E7::V5,6=>CORE_E7::V6,_=>CORE_E7::V7 } }
-    pub fn id(&self) -> usize { *self as usize }
-}
-
-/// Trait CORE_T0 defining interface for brain-audio.
-pub trait CORE_T0 {
-    fn op_0(&self, input: &Tensor) -> BrainResult<Tensor>;
-    fn op_1(&self, input: &Tensor) -> BrainResult<Tensor>;
-    fn op_2(&self, input: &Tensor) -> BrainResult<Tensor>;
-    fn op_3(&self, input: &Tensor) -> BrainResult<Tensor>;
-    fn op_4(&self, input: &Tensor) -> BrainResult<Tensor>;
-}
-
-/// Trait CORE_T1 defining interface for brain-audio.
-pub trait CORE_T1 {
-    fn op_0(&self, input: &Tensor) -> BrainResult<Tensor>;
-    fn op_1(&self, input: &Tensor) -> BrainResult<Tensor>;
-    fn op_2(&self, input: &Tensor) -> BrainResult<Tensor>;
-    fn op_3(&self, input: &Tensor) -> BrainResult<Tensor>;
-    fn op_4(&self, input: &Tensor) -> BrainResult<Tensor>;
-}
-
-/// Trait CORE_T2 defining interface for brain-audio.
-pub trait CORE_T2 {
-    fn op_0(&self, input: &Tensor) -> BrainResult<Tensor>;
-    fn op_1(&self, input: &Tensor) -> BrainResult<Tensor>;
-    fn op_2(&self, input: &Tensor) -> BrainResult<Tensor>;
-    fn op_3(&self, input: &Tensor) -> BrainResult<Tensor>;
-    fn op_4(&self, input: &Tensor) -> BrainResult<Tensor>;
-}
-
-/// Trait CORE_T3 defining interface for brain-audio.
-pub trait CORE_T3 {
-    fn op_0(&self, input: &Tensor) -> BrainResult<Tensor>;
-    fn op_1(&self, input: &Tensor) -> BrainResult<Tensor>;
-    fn op_2(&self, input: &Tensor) -> BrainResult<Tensor>;
-    fn op_3(&self, input: &Tensor) -> BrainResult<Tensor>;
-    fn op_4(&self, input: &Tensor) -> BrainResult<Tensor>;
-}
-
-/// Trait CORE_T4 defining interface for brain-audio.
-pub trait CORE_T4 {
-    fn op_0(&self, input: &Tensor) -> BrainResult<Tensor>;
-    fn op_1(&self, input: &Tensor) -> BrainResult<Tensor>;
-    fn op_2(&self, input: &Tensor) -> BrainResult<Tensor>;
-    fn op_3(&self, input: &Tensor) -> BrainResult<Tensor>;
-    fn op_4(&self, input: &Tensor) -> BrainResult<Tensor>;
-}
-
-/// Trait CORE_T5 defining interface for brain-audio.
-pub trait CORE_T5 {
-    fn op_0(&self, input: &Tensor) -> BrainResult<Tensor>;
-    fn op_1(&self, input: &Tensor) -> BrainResult<Tensor>;
-    fn op_2(&self, input: &Tensor) -> BrainResult<Tensor>;
-    fn op_3(&self, input: &Tensor) -> BrainResult<Tensor>;
-    fn op_4(&self, input: &Tensor) -> BrainResult<Tensor>;
-}
-
-/// Function fn_0: elementwise operation 0.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_0(data: &[f64], config: &CORE_S0) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x * scale + offset;
-        out.push(y.clamp(-1e10, 1e10));
-    }
-    Ok(out)
-}
-
-/// Function fn_1: reduction operation 1.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_1(data: &[f64], config: &CORE_S1) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i].max(1e-12);
-        let y = x.ln() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_2: transformation operation 2.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_2(data: &[f64], config: &CORE_S2) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.exp().min(1e10) * scale;
-        out.push(y + offset);
-    }
-    Ok(out)
-}
-
-/// Function fn_3: composite operation 3.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_3(data: &[f64], config: &CORE_S3) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.sin() * scale + x.cos() * offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_4: fusion operation 4.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_4(data: &[f64], config: &CORE_S4) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.tanh() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_5: elementwise operation 5.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_5(data: &[f64], config: &CORE_S5) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x * scale + offset;
-        out.push(y.clamp(-1e10, 1e10));
-    }
-    Ok(out)
-}
-
-/// Function fn_6: reduction operation 6.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_6(data: &[f64], config: &CORE_S6) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i].max(1e-12);
-        let y = x.ln() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_7: transformation operation 7.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_7(data: &[f64], config: &CORE_S7) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.exp().min(1e10) * scale;
-        out.push(y + offset);
-    }
-    Ok(out)
-}
-
-/// Function fn_8: composite operation 8.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_8(data: &[f64], config: &CORE_S8) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.sin() * scale + x.cos() * offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_9: fusion operation 9.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_9(data: &[f64], config: &CORE_S9) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.tanh() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_10: elementwise operation 10.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_10(data: &[f64], config: &CORE_S10) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x * scale + offset;
-        out.push(y.clamp(-1e10, 1e10));
-    }
-    Ok(out)
-}
-
-/// Function fn_11: reduction operation 11.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_11(data: &[f64], config: &CORE_S11) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i].max(1e-12);
-        let y = x.ln() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_12: transformation operation 12.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_12(data: &[f64], config: &CORE_S12) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.exp().min(1e10) * scale;
-        out.push(y + offset);
-    }
-    Ok(out)
-}
-
-/// Function fn_13: composite operation 13.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_13(data: &[f64], config: &CORE_S13) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.sin() * scale + x.cos() * offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_14: fusion operation 14.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_14(data: &[f64], config: &CORE_S14) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.tanh() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_15: elementwise operation 15.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_15(data: &[f64], config: &CORE_S0) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x * scale + offset;
-        out.push(y.clamp(-1e10, 1e10));
-    }
-    Ok(out)
-}
-
-/// Function fn_16: reduction operation 16.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_16(data: &[f64], config: &CORE_S1) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i].max(1e-12);
-        let y = x.ln() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_17: transformation operation 17.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_17(data: &[f64], config: &CORE_S2) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.exp().min(1e10) * scale;
-        out.push(y + offset);
-    }
-    Ok(out)
-}
-
-/// Function fn_18: composite operation 18.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_18(data: &[f64], config: &CORE_S3) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.sin() * scale + x.cos() * offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_19: fusion operation 19.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_19(data: &[f64], config: &CORE_S4) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.tanh() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_20: elementwise operation 20.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_20(data: &[f64], config: &CORE_S5) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x * scale + offset;
-        out.push(y.clamp(-1e10, 1e10));
-    }
-    Ok(out)
-}
-
-/// Function fn_21: reduction operation 21.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_21(data: &[f64], config: &CORE_S6) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i].max(1e-12);
-        let y = x.ln() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_22: transformation operation 22.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_22(data: &[f64], config: &CORE_S7) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.exp().min(1e10) * scale;
-        out.push(y + offset);
-    }
-    Ok(out)
-}
-
-/// Function fn_23: composite operation 23.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_23(data: &[f64], config: &CORE_S8) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.sin() * scale + x.cos() * offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_24: fusion operation 24.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_24(data: &[f64], config: &CORE_S9) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.tanh() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_25: elementwise operation 25.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_25(data: &[f64], config: &CORE_S10) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x * scale + offset;
-        out.push(y.clamp(-1e10, 1e10));
-    }
-    Ok(out)
-}
-
-/// Function fn_26: reduction operation 26.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_26(data: &[f64], config: &CORE_S11) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i].max(1e-12);
-        let y = x.ln() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_27: transformation operation 27.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_27(data: &[f64], config: &CORE_S12) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.exp().min(1e10) * scale;
-        out.push(y + offset);
-    }
-    Ok(out)
-}
-
-/// Function fn_28: composite operation 28.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_28(data: &[f64], config: &CORE_S13) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.sin() * scale + x.cos() * offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_29: fusion operation 29.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_29(data: &[f64], config: &CORE_S14) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.tanh() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_30: elementwise operation 30.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_30(data: &[f64], config: &CORE_S0) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x * scale + offset;
-        out.push(y.clamp(-1e10, 1e10));
-    }
-    Ok(out)
-}
-
-/// Function fn_31: reduction operation 31.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_31(data: &[f64], config: &CORE_S1) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i].max(1e-12);
-        let y = x.ln() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_32: transformation operation 32.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_32(data: &[f64], config: &CORE_S2) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.exp().min(1e10) * scale;
-        out.push(y + offset);
-    }
-    Ok(out)
-}
-
-/// Function fn_33: composite operation 33.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_33(data: &[f64], config: &CORE_S3) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.sin() * scale + x.cos() * offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_34: fusion operation 34.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_34(data: &[f64], config: &CORE_S4) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.tanh() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_35: elementwise operation 35.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_35(data: &[f64], config: &CORE_S5) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x * scale + offset;
-        out.push(y.clamp(-1e10, 1e10));
-    }
-    Ok(out)
-}
-
-/// Function fn_36: reduction operation 36.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_36(data: &[f64], config: &CORE_S6) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i].max(1e-12);
-        let y = x.ln() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_37: transformation operation 37.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_37(data: &[f64], config: &CORE_S7) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.exp().min(1e10) * scale;
-        out.push(y + offset);
-    }
-    Ok(out)
-}
-
-/// Function fn_38: composite operation 38.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_38(data: &[f64], config: &CORE_S8) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.sin() * scale + x.cos() * offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_39: fusion operation 39.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_39(data: &[f64], config: &CORE_S9) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.tanh() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_40: elementwise operation 40.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_40(data: &[f64], config: &CORE_S10) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x * scale + offset;
-        out.push(y.clamp(-1e10, 1e10));
-    }
-    Ok(out)
-}
-
-/// Function fn_41: reduction operation 41.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_41(data: &[f64], config: &CORE_S11) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i].max(1e-12);
-        let y = x.ln() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_42: transformation operation 42.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_42(data: &[f64], config: &CORE_S12) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.exp().min(1e10) * scale;
-        out.push(y + offset);
-    }
-    Ok(out)
-}
-
-/// Function fn_43: composite operation 43.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_43(data: &[f64], config: &CORE_S13) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.sin() * scale + x.cos() * offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_44: fusion operation 44.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_44(data: &[f64], config: &CORE_S14) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.tanh() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_45: elementwise operation 45.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_45(data: &[f64], config: &CORE_S0) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x * scale + offset;
-        out.push(y.clamp(-1e10, 1e10));
-    }
-    Ok(out)
-}
-
-/// Function fn_46: reduction operation 46.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_46(data: &[f64], config: &CORE_S1) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i].max(1e-12);
-        let y = x.ln() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_47: transformation operation 47.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_47(data: &[f64], config: &CORE_S2) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.exp().min(1e10) * scale;
-        out.push(y + offset);
-    }
-    Ok(out)
-}
-
-/// Function fn_48: composite operation 48.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_48(data: &[f64], config: &CORE_S3) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.sin() * scale + x.cos() * offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_49: fusion operation 49.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_49(data: &[f64], config: &CORE_S4) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.tanh() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_50: elementwise operation 50.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_50(data: &[f64], config: &CORE_S5) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x * scale + offset;
-        out.push(y.clamp(-1e10, 1e10));
-    }
-    Ok(out)
-}
-
-/// Function fn_51: reduction operation 51.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_51(data: &[f64], config: &CORE_S6) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i].max(1e-12);
-        let y = x.ln() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_52: transformation operation 52.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_52(data: &[f64], config: &CORE_S7) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.exp().min(1e10) * scale;
-        out.push(y + offset);
-    }
-    Ok(out)
-}
-
-/// Function fn_53: composite operation 53.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_53(data: &[f64], config: &CORE_S8) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.sin() * scale + x.cos() * offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_54: fusion operation 54.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_54(data: &[f64], config: &CORE_S9) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.tanh() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_55: elementwise operation 55.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_55(data: &[f64], config: &CORE_S10) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x * scale + offset;
-        out.push(y.clamp(-1e10, 1e10));
-    }
-    Ok(out)
-}
-
-/// Function fn_56: reduction operation 56.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_56(data: &[f64], config: &CORE_S11) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i].max(1e-12);
-        let y = x.ln() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_57: transformation operation 57.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_57(data: &[f64], config: &CORE_S12) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.exp().min(1e10) * scale;
-        out.push(y + offset);
-    }
-    Ok(out)
-}
-
-/// Function fn_58: composite operation 58.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_58(data: &[f64], config: &CORE_S13) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.sin() * scale + x.cos() * offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_59: fusion operation 59.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_59(data: &[f64], config: &CORE_S14) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.tanh() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_60: elementwise operation 60.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_60(data: &[f64], config: &CORE_S0) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x * scale + offset;
-        out.push(y.clamp(-1e10, 1e10));
-    }
-    Ok(out)
-}
-
-/// Function fn_61: reduction operation 61.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_61(data: &[f64], config: &CORE_S1) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i].max(1e-12);
-        let y = x.ln() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_62: transformation operation 62.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_62(data: &[f64], config: &CORE_S2) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.exp().min(1e10) * scale;
-        out.push(y + offset);
-    }
-    Ok(out)
-}
-
-/// Function fn_63: composite operation 63.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_63(data: &[f64], config: &CORE_S3) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.sin() * scale + x.cos() * offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_64: fusion operation 64.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_64(data: &[f64], config: &CORE_S4) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.tanh() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_65: elementwise operation 65.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_65(data: &[f64], config: &CORE_S5) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x * scale + offset;
-        out.push(y.clamp(-1e10, 1e10));
-    }
-    Ok(out)
-}
-
-/// Function fn_66: reduction operation 66.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_66(data: &[f64], config: &CORE_S6) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i].max(1e-12);
-        let y = x.ln() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_67: transformation operation 67.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_67(data: &[f64], config: &CORE_S7) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.exp().min(1e10) * scale;
-        out.push(y + offset);
-    }
-    Ok(out)
-}
-
-/// Function fn_68: composite operation 68.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_68(data: &[f64], config: &CORE_S8) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.sin() * scale + x.cos() * offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_69: fusion operation 69.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_69(data: &[f64], config: &CORE_S9) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.tanh() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_70: elementwise operation 70.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_70(data: &[f64], config: &CORE_S10) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x * scale + offset;
-        out.push(y.clamp(-1e10, 1e10));
-    }
-    Ok(out)
-}
-
-/// Function fn_71: reduction operation 71.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_71(data: &[f64], config: &CORE_S11) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i].max(1e-12);
-        let y = x.ln() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_72: transformation operation 72.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_72(data: &[f64], config: &CORE_S12) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.exp().min(1e10) * scale;
-        out.push(y + offset);
-    }
-    Ok(out)
-}
-
-/// Function fn_73: composite operation 73.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_73(data: &[f64], config: &CORE_S13) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.sin() * scale + x.cos() * offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_74: fusion operation 74.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_74(data: &[f64], config: &CORE_S14) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.tanh() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_75: elementwise operation 75.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_75(data: &[f64], config: &CORE_S0) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x * scale + offset;
-        out.push(y.clamp(-1e10, 1e10));
-    }
-    Ok(out)
-}
-
-/// Function fn_76: reduction operation 76.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_76(data: &[f64], config: &CORE_S1) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i].max(1e-12);
-        let y = x.ln() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_77: transformation operation 77.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_77(data: &[f64], config: &CORE_S2) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.exp().min(1e10) * scale;
-        out.push(y + offset);
-    }
-    Ok(out)
-}
-
-/// Function fn_78: composite operation 78.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_78(data: &[f64], config: &CORE_S3) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.sin() * scale + x.cos() * offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_79: fusion operation 79.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_79(data: &[f64], config: &CORE_S4) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.tanh() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_80: elementwise operation 80.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_80(data: &[f64], config: &CORE_S5) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x * scale + offset;
-        out.push(y.clamp(-1e10, 1e10));
-    }
-    Ok(out)
-}
-
-/// Function fn_81: reduction operation 81.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_81(data: &[f64], config: &CORE_S6) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i].max(1e-12);
-        let y = x.ln() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_82: transformation operation 82.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_82(data: &[f64], config: &CORE_S7) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.exp().min(1e10) * scale;
-        out.push(y + offset);
-    }
-    Ok(out)
-}
-
-/// Function fn_83: composite operation 83.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_83(data: &[f64], config: &CORE_S8) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.sin() * scale + x.cos() * offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_84: fusion operation 84.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_84(data: &[f64], config: &CORE_S9) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.tanh() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_85: elementwise operation 85.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_85(data: &[f64], config: &CORE_S10) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x * scale + offset;
-        out.push(y.clamp(-1e10, 1e10));
-    }
-    Ok(out)
-}
-
-/// Function fn_86: reduction operation 86.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_86(data: &[f64], config: &CORE_S11) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i].max(1e-12);
-        let y = x.ln() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_87: transformation operation 87.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_87(data: &[f64], config: &CORE_S12) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.exp().min(1e10) * scale;
-        out.push(y + offset);
-    }
-    Ok(out)
-}
-
-/// Function fn_88: composite operation 88.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_88(data: &[f64], config: &CORE_S13) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.sin() * scale + x.cos() * offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_89: fusion operation 89.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_89(data: &[f64], config: &CORE_S14) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.tanh() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_90: elementwise operation 90.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_90(data: &[f64], config: &CORE_S0) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x * scale + offset;
-        out.push(y.clamp(-1e10, 1e10));
-    }
-    Ok(out)
-}
-
-/// Function fn_91: reduction operation 91.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_91(data: &[f64], config: &CORE_S1) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i].max(1e-12);
-        let y = x.ln() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_92: transformation operation 92.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_92(data: &[f64], config: &CORE_S2) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.exp().min(1e10) * scale;
-        out.push(y + offset);
-    }
-    Ok(out)
-}
-
-/// Function fn_93: composite operation 93.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_93(data: &[f64], config: &CORE_S3) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.sin() * scale + x.cos() * offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_94: fusion operation 94.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_94(data: &[f64], config: &CORE_S4) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.tanh() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_95: elementwise operation 95.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_95(data: &[f64], config: &CORE_S5) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x * scale + offset;
-        out.push(y.clamp(-1e10, 1e10));
-    }
-    Ok(out)
-}
-
-/// Function fn_96: reduction operation 96.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_96(data: &[f64], config: &CORE_S6) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i].max(1e-12);
-        let y = x.ln() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_97: transformation operation 97.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_97(data: &[f64], config: &CORE_S7) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.exp().min(1e10) * scale;
-        out.push(y + offset);
-    }
-    Ok(out)
-}
-
-/// Function fn_98: composite operation 98.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_98(data: &[f64], config: &CORE_S8) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.sin() * scale + x.cos() * offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_99: fusion operation 99.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_99(data: &[f64], config: &CORE_S9) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.tanh() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_100: elementwise operation 100.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_100(data: &[f64], config: &CORE_S10) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x * scale + offset;
-        out.push(y.clamp(-1e10, 1e10));
-    }
-    Ok(out)
-}
-
-/// Function fn_101: reduction operation 101.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_101(data: &[f64], config: &CORE_S11) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i].max(1e-12);
-        let y = x.ln() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_102: transformation operation 102.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_102(data: &[f64], config: &CORE_S12) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.exp().min(1e10) * scale;
-        out.push(y + offset);
-    }
-    Ok(out)
-}
-
-/// Function fn_103: composite operation 103.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_103(data: &[f64], config: &CORE_S13) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.sin() * scale + x.cos() * offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_104: fusion operation 104.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_104(data: &[f64], config: &CORE_S14) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.tanh() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_105: elementwise operation 105.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_105(data: &[f64], config: &CORE_S0) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x * scale + offset;
-        out.push(y.clamp(-1e10, 1e10));
-    }
-    Ok(out)
-}
-
-/// Function fn_106: reduction operation 106.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_106(data: &[f64], config: &CORE_S1) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i].max(1e-12);
-        let y = x.ln() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_107: transformation operation 107.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_107(data: &[f64], config: &CORE_S2) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.exp().min(1e10) * scale;
-        out.push(y + offset);
-    }
-    Ok(out)
-}
-
-/// Function fn_108: composite operation 108.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_108(data: &[f64], config: &CORE_S3) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.sin() * scale + x.cos() * offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_109: fusion operation 109.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_109(data: &[f64], config: &CORE_S4) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.tanh() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_110: elementwise operation 110.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_110(data: &[f64], config: &CORE_S5) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x * scale + offset;
-        out.push(y.clamp(-1e10, 1e10));
-    }
-    Ok(out)
-}
-
-/// Function fn_111: reduction operation 111.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_111(data: &[f64], config: &CORE_S6) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i].max(1e-12);
-        let y = x.ln() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_112: transformation operation 112.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_112(data: &[f64], config: &CORE_S7) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.exp().min(1e10) * scale;
-        out.push(y + offset);
-    }
-    Ok(out)
-}
-
-/// Function fn_113: composite operation 113.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_113(data: &[f64], config: &CORE_S8) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.sin() * scale + x.cos() * offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_114: fusion operation 114.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_114(data: &[f64], config: &CORE_S9) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.tanh() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_115: elementwise operation 115.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_115(data: &[f64], config: &CORE_S10) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x * scale + offset;
-        out.push(y.clamp(-1e10, 1e10));
-    }
-    Ok(out)
-}
-
-/// Function fn_116: reduction operation 116.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_116(data: &[f64], config: &CORE_S11) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i].max(1e-12);
-        let y = x.ln() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_117: transformation operation 117.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_117(data: &[f64], config: &CORE_S12) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.exp().min(1e10) * scale;
-        out.push(y + offset);
-    }
-    Ok(out)
-}
-
-/// Function fn_118: composite operation 118.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_118(data: &[f64], config: &CORE_S13) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.sin() * scale + x.cos() * offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_119: fusion operation 119.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_119(data: &[f64], config: &CORE_S14) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.tanh() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_120: elementwise operation 120.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_120(data: &[f64], config: &CORE_S0) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x * scale + offset;
-        out.push(y.clamp(-1e10, 1e10));
-    }
-    Ok(out)
-}
-
-/// Function fn_121: reduction operation 121.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_121(data: &[f64], config: &CORE_S1) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i].max(1e-12);
-        let y = x.ln() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_122: transformation operation 122.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_122(data: &[f64], config: &CORE_S2) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.exp().min(1e10) * scale;
-        out.push(y + offset);
-    }
-    Ok(out)
-}
-
-/// Function fn_123: composite operation 123.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_123(data: &[f64], config: &CORE_S3) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.sin() * scale + x.cos() * offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_124: fusion operation 124.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_124(data: &[f64], config: &CORE_S4) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.tanh() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_125: elementwise operation 125.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_125(data: &[f64], config: &CORE_S5) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x * scale + offset;
-        out.push(y.clamp(-1e10, 1e10));
-    }
-    Ok(out)
-}
-
-/// Function fn_126: reduction operation 126.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_126(data: &[f64], config: &CORE_S6) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i].max(1e-12);
-        let y = x.ln() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_127: transformation operation 127.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_127(data: &[f64], config: &CORE_S7) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.exp().min(1e10) * scale;
-        out.push(y + offset);
-    }
-    Ok(out)
-}
-
-/// Function fn_128: composite operation 128.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_128(data: &[f64], config: &CORE_S8) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.sin() * scale + x.cos() * offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_129: fusion operation 129.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_129(data: &[f64], config: &CORE_S9) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.tanh() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_130: elementwise operation 130.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_130(data: &[f64], config: &CORE_S10) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x * scale + offset;
-        out.push(y.clamp(-1e10, 1e10));
-    }
-    Ok(out)
-}
-
-/// Function fn_131: reduction operation 131.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_131(data: &[f64], config: &CORE_S11) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i].max(1e-12);
-        let y = x.ln() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_132: transformation operation 132.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_132(data: &[f64], config: &CORE_S12) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.exp().min(1e10) * scale;
-        out.push(y + offset);
-    }
-    Ok(out)
-}
-
-/// Function fn_133: composite operation 133.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_133(data: &[f64], config: &CORE_S13) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.sin() * scale + x.cos() * offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_134: fusion operation 134.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_134(data: &[f64], config: &CORE_S14) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.tanh() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_135: elementwise operation 135.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_135(data: &[f64], config: &CORE_S0) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x * scale + offset;
-        out.push(y.clamp(-1e10, 1e10));
-    }
-    Ok(out)
-}
-
-/// Function fn_136: reduction operation 136.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_136(data: &[f64], config: &CORE_S1) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i].max(1e-12);
-        let y = x.ln() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_137: transformation operation 137.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_137(data: &[f64], config: &CORE_S2) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.exp().min(1e10) * scale;
-        out.push(y + offset);
-    }
-    Ok(out)
-}
-
-/// Function fn_138: composite operation 138.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_138(data: &[f64], config: &CORE_S3) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.sin() * scale + x.cos() * offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_139: fusion operation 139.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_139(data: &[f64], config: &CORE_S4) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.tanh() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_140: elementwise operation 140.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_140(data: &[f64], config: &CORE_S5) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x * scale + offset;
-        out.push(y.clamp(-1e10, 1e10));
-    }
-    Ok(out)
-}
-
-/// Function fn_141: reduction operation 141.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_141(data: &[f64], config: &CORE_S6) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i].max(1e-12);
-        let y = x.ln() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_142: transformation operation 142.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_142(data: &[f64], config: &CORE_S7) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.exp().min(1e10) * scale;
-        out.push(y + offset);
-    }
-    Ok(out)
-}
-
-/// Function fn_143: composite operation 143.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_143(data: &[f64], config: &CORE_S8) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.sin() * scale + x.cos() * offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_144: fusion operation 144.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_144(data: &[f64], config: &CORE_S9) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.tanh() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_145: elementwise operation 145.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_145(data: &[f64], config: &CORE_S10) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x * scale + offset;
-        out.push(y.clamp(-1e10, 1e10));
-    }
-    Ok(out)
-}
-
-/// Function fn_146: reduction operation 146.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_146(data: &[f64], config: &CORE_S11) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i].max(1e-12);
-        let y = x.ln() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_147: transformation operation 147.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_147(data: &[f64], config: &CORE_S12) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.exp().min(1e10) * scale;
-        out.push(y + offset);
-    }
-    Ok(out)
-}
-
-/// Function fn_148: composite operation 148.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_148(data: &[f64], config: &CORE_S13) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.sin() * scale + x.cos() * offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_149: fusion operation 149.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_149(data: &[f64], config: &CORE_S14) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.tanh() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_150: elementwise operation 150.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_150(data: &[f64], config: &CORE_S0) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x * scale + offset;
-        out.push(y.clamp(-1e10, 1e10));
-    }
-    Ok(out)
-}
-
-/// Function fn_151: reduction operation 151.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_151(data: &[f64], config: &CORE_S1) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i].max(1e-12);
-        let y = x.ln() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_152: transformation operation 152.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_152(data: &[f64], config: &CORE_S2) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.exp().min(1e10) * scale;
-        out.push(y + offset);
-    }
-    Ok(out)
-}
-
-/// Function fn_153: composite operation 153.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_153(data: &[f64], config: &CORE_S3) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.sin() * scale + x.cos() * offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_154: fusion operation 154.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_154(data: &[f64], config: &CORE_S4) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.tanh() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_155: elementwise operation 155.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_155(data: &[f64], config: &CORE_S5) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x * scale + offset;
-        out.push(y.clamp(-1e10, 1e10));
-    }
-    Ok(out)
-}
-
-/// Function fn_156: reduction operation 156.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_156(data: &[f64], config: &CORE_S6) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i].max(1e-12);
-        let y = x.ln() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_157: transformation operation 157.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_157(data: &[f64], config: &CORE_S7) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.exp().min(1e10) * scale;
-        out.push(y + offset);
-    }
-    Ok(out)
-}
-
-/// Function fn_158: composite operation 158.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_158(data: &[f64], config: &CORE_S8) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.sin() * scale + x.cos() * offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_159: fusion operation 159.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_159(data: &[f64], config: &CORE_S9) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.tanh() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_160: elementwise operation 160.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_160(data: &[f64], config: &CORE_S10) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x * scale + offset;
-        out.push(y.clamp(-1e10, 1e10));
-    }
-    Ok(out)
-}
-
-/// Function fn_161: reduction operation 161.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_161(data: &[f64], config: &CORE_S11) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i].max(1e-12);
-        let y = x.ln() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_162: transformation operation 162.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_162(data: &[f64], config: &CORE_S12) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.exp().min(1e10) * scale;
-        out.push(y + offset);
-    }
-    Ok(out)
-}
-
-/// Function fn_163: composite operation 163.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_163(data: &[f64], config: &CORE_S13) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.sin() * scale + x.cos() * offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_164: fusion operation 164.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_164(data: &[f64], config: &CORE_S14) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.tanh() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_165: elementwise operation 165.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_165(data: &[f64], config: &CORE_S0) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x * scale + offset;
-        out.push(y.clamp(-1e10, 1e10));
-    }
-    Ok(out)
-}
-
-/// Function fn_166: reduction operation 166.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_166(data: &[f64], config: &CORE_S1) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i].max(1e-12);
-        let y = x.ln() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_167: transformation operation 167.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_167(data: &[f64], config: &CORE_S2) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.exp().min(1e10) * scale;
-        out.push(y + offset);
-    }
-    Ok(out)
-}
-
-/// Function fn_168: composite operation 168.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_168(data: &[f64], config: &CORE_S3) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.sin() * scale + x.cos() * offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_169: fusion operation 169.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_169(data: &[f64], config: &CORE_S4) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.tanh() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_170: elementwise operation 170.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_170(data: &[f64], config: &CORE_S5) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x * scale + offset;
-        out.push(y.clamp(-1e10, 1e10));
-    }
-    Ok(out)
-}
-
-/// Function fn_171: reduction operation 171.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_171(data: &[f64], config: &CORE_S6) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i].max(1e-12);
-        let y = x.ln() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_172: transformation operation 172.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_172(data: &[f64], config: &CORE_S7) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.exp().min(1e10) * scale;
-        out.push(y + offset);
-    }
-    Ok(out)
-}
-
-/// Function fn_173: composite operation 173.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_173(data: &[f64], config: &CORE_S8) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.sin() * scale + x.cos() * offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_174: fusion operation 174.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_174(data: &[f64], config: &CORE_S9) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.tanh() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_175: elementwise operation 175.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_175(data: &[f64], config: &CORE_S10) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x * scale + offset;
-        out.push(y.clamp(-1e10, 1e10));
-    }
-    Ok(out)
-}
-
-/// Function fn_176: reduction operation 176.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_176(data: &[f64], config: &CORE_S11) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i].max(1e-12);
-        let y = x.ln() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_177: transformation operation 177.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_177(data: &[f64], config: &CORE_S12) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.exp().min(1e10) * scale;
-        out.push(y + offset);
-    }
-    Ok(out)
-}
-
-/// Function fn_178: composite operation 178.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_178(data: &[f64], config: &CORE_S13) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.sin() * scale + x.cos() * offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_179: fusion operation 179.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_179(data: &[f64], config: &CORE_S14) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.tanh() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_180: elementwise operation 180.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_180(data: &[f64], config: &CORE_S0) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x * scale + offset;
-        out.push(y.clamp(-1e10, 1e10));
-    }
-    Ok(out)
-}
-
-/// Function fn_181: reduction operation 181.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_181(data: &[f64], config: &CORE_S1) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i].max(1e-12);
-        let y = x.ln() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_182: transformation operation 182.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_182(data: &[f64], config: &CORE_S2) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.exp().min(1e10) * scale;
-        out.push(y + offset);
-    }
-    Ok(out)
-}
-
-/// Function fn_183: composite operation 183.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_183(data: &[f64], config: &CORE_S3) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.sin() * scale + x.cos() * offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_184: fusion operation 184.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_184(data: &[f64], config: &CORE_S4) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.tanh() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_185: elementwise operation 185.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_185(data: &[f64], config: &CORE_S5) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x * scale + offset;
-        out.push(y.clamp(-1e10, 1e10));
-    }
-    Ok(out)
-}
-
-/// Function fn_186: reduction operation 186.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_186(data: &[f64], config: &CORE_S6) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i].max(1e-12);
-        let y = x.ln() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_187: transformation operation 187.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_187(data: &[f64], config: &CORE_S7) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.exp().min(1e10) * scale;
-        out.push(y + offset);
-    }
-    Ok(out)
-}
-
-/// Function fn_188: composite operation 188.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_188(data: &[f64], config: &CORE_S8) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.sin() * scale + x.cos() * offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_189: fusion operation 189.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_189(data: &[f64], config: &CORE_S9) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.tanh() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_190: elementwise operation 190.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_190(data: &[f64], config: &CORE_S10) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x * scale + offset;
-        out.push(y.clamp(-1e10, 1e10));
-    }
-    Ok(out)
-}
-
-/// Function fn_191: reduction operation 191.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_191(data: &[f64], config: &CORE_S11) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i].max(1e-12);
-        let y = x.ln() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_192: transformation operation 192.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_192(data: &[f64], config: &CORE_S12) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.exp().min(1e10) * scale;
-        out.push(y + offset);
-    }
-    Ok(out)
-}
-
-/// Function fn_193: composite operation 193.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_193(data: &[f64], config: &CORE_S13) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.sin() * scale + x.cos() * offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_194: fusion operation 194.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_194(data: &[f64], config: &CORE_S14) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.tanh() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_195: elementwise operation 195.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_195(data: &[f64], config: &CORE_S0) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x * scale + offset;
-        out.push(y.clamp(-1e10, 1e10));
-    }
-    Ok(out)
-}
-
-/// Function fn_196: reduction operation 196.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_196(data: &[f64], config: &CORE_S1) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i].max(1e-12);
-        let y = x.ln() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_197: transformation operation 197.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_197(data: &[f64], config: &CORE_S2) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.exp().min(1e10) * scale;
-        out.push(y + offset);
-    }
-    Ok(out)
-}
-
-/// Function fn_198: composite operation 198.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_198(data: &[f64], config: &CORE_S3) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.sin() * scale + x.cos() * offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_199: fusion operation 199.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-audio library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_199(data: &[f64], config: &CORE_S4) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.tanh() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Extended function fn_200 for advanced computations.
-pub fn fn_200(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) + b.get(i).copied().unwrap_or(0.0));
-    }
-    out
-}
-
-/// Extended function fn_201 for advanced computations.
-pub fn fn_201(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) * b.get(i).copied().unwrap_or(1.0));
-    }
-    out
-}
-
-/// Extended function fn_202 for advanced computations.
-pub fn fn_202(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push((a.get(i).copied().unwrap_or(0.0) - b.get(i).copied().unwrap_or(0.0)).abs());
-    }
-    out
-}
-
-/// Extended function fn_203 for advanced computations.
-pub fn fn_203(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).max(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_204 for advanced computations.
-pub fn fn_204(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).min(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_205 for advanced computations.
-pub fn fn_205(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) + b.get(i).copied().unwrap_or(0.0));
-    }
-    out
-}
-
-/// Extended function fn_206 for advanced computations.
-pub fn fn_206(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) * b.get(i).copied().unwrap_or(1.0));
-    }
-    out
-}
-
-/// Extended function fn_207 for advanced computations.
-pub fn fn_207(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push((a.get(i).copied().unwrap_or(0.0) - b.get(i).copied().unwrap_or(0.0)).abs());
-    }
-    out
-}
-
-/// Extended function fn_208 for advanced computations.
-pub fn fn_208(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).max(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_209 for advanced computations.
-pub fn fn_209(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).min(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_210 for advanced computations.
-pub fn fn_210(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) + b.get(i).copied().unwrap_or(0.0));
-    }
-    out
-}
-
-/// Extended function fn_211 for advanced computations.
-pub fn fn_211(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) * b.get(i).copied().unwrap_or(1.0));
-    }
-    out
-}
-
-/// Extended function fn_212 for advanced computations.
-pub fn fn_212(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push((a.get(i).copied().unwrap_or(0.0) - b.get(i).copied().unwrap_or(0.0)).abs());
-    }
-    out
-}
-
-/// Extended function fn_213 for advanced computations.
-pub fn fn_213(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).max(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_214 for advanced computations.
-pub fn fn_214(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).min(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_215 for advanced computations.
-pub fn fn_215(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) + b.get(i).copied().unwrap_or(0.0));
-    }
-    out
-}
-
-/// Extended function fn_216 for advanced computations.
-pub fn fn_216(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) * b.get(i).copied().unwrap_or(1.0));
-    }
-    out
-}
-
-/// Extended function fn_217 for advanced computations.
-pub fn fn_217(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push((a.get(i).copied().unwrap_or(0.0) - b.get(i).copied().unwrap_or(0.0)).abs());
-    }
-    out
-}
-
-/// Extended function fn_218 for advanced computations.
-pub fn fn_218(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).max(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_219 for advanced computations.
-pub fn fn_219(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).min(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_220 for advanced computations.
-pub fn fn_220(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) + b.get(i).copied().unwrap_or(0.0));
-    }
-    out
-}
-
-/// Extended function fn_221 for advanced computations.
-pub fn fn_221(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) * b.get(i).copied().unwrap_or(1.0));
-    }
-    out
-}
-
-/// Extended function fn_222 for advanced computations.
-pub fn fn_222(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push((a.get(i).copied().unwrap_or(0.0) - b.get(i).copied().unwrap_or(0.0)).abs());
-    }
-    out
-}
-
-/// Extended function fn_223 for advanced computations.
-pub fn fn_223(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).max(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_224 for advanced computations.
-pub fn fn_224(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).min(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_225 for advanced computations.
-pub fn fn_225(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) + b.get(i).copied().unwrap_or(0.0));
-    }
-    out
-}
-
-/// Extended function fn_226 for advanced computations.
-pub fn fn_226(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) * b.get(i).copied().unwrap_or(1.0));
-    }
-    out
-}
-
-/// Extended function fn_227 for advanced computations.
-pub fn fn_227(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push((a.get(i).copied().unwrap_or(0.0) - b.get(i).copied().unwrap_or(0.0)).abs());
-    }
-    out
-}
-
-/// Extended function fn_228 for advanced computations.
-pub fn fn_228(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).max(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_229 for advanced computations.
-pub fn fn_229(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).min(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_230 for advanced computations.
-pub fn fn_230(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) + b.get(i).copied().unwrap_or(0.0));
-    }
-    out
-}
-
-/// Extended function fn_231 for advanced computations.
-pub fn fn_231(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) * b.get(i).copied().unwrap_or(1.0));
-    }
-    out
-}
-
-/// Extended function fn_232 for advanced computations.
-pub fn fn_232(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push((a.get(i).copied().unwrap_or(0.0) - b.get(i).copied().unwrap_or(0.0)).abs());
-    }
-    out
-}
-
-/// Extended function fn_233 for advanced computations.
-pub fn fn_233(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).max(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_234 for advanced computations.
-pub fn fn_234(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).min(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_235 for advanced computations.
-pub fn fn_235(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) + b.get(i).copied().unwrap_or(0.0));
-    }
-    out
-}
-
-/// Extended function fn_236 for advanced computations.
-pub fn fn_236(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) * b.get(i).copied().unwrap_or(1.0));
-    }
-    out
-}
-
-/// Extended function fn_237 for advanced computations.
-pub fn fn_237(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push((a.get(i).copied().unwrap_or(0.0) - b.get(i).copied().unwrap_or(0.0)).abs());
-    }
-    out
-}
-
-/// Extended function fn_238 for advanced computations.
-pub fn fn_238(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).max(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_239 for advanced computations.
-pub fn fn_239(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).min(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_240 for advanced computations.
-pub fn fn_240(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) + b.get(i).copied().unwrap_or(0.0));
-    }
-    out
-}
-
-/// Extended function fn_241 for advanced computations.
-pub fn fn_241(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) * b.get(i).copied().unwrap_or(1.0));
-    }
-    out
-}
-
-/// Extended function fn_242 for advanced computations.
-pub fn fn_242(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push((a.get(i).copied().unwrap_or(0.0) - b.get(i).copied().unwrap_or(0.0)).abs());
-    }
-    out
-}
-
-/// Extended function fn_243 for advanced computations.
-pub fn fn_243(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).max(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_244 for advanced computations.
-pub fn fn_244(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).min(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_245 for advanced computations.
-pub fn fn_245(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) + b.get(i).copied().unwrap_or(0.0));
-    }
-    out
-}
-
-/// Extended function fn_246 for advanced computations.
-pub fn fn_246(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) * b.get(i).copied().unwrap_or(1.0));
-    }
-    out
-}
-
-/// Extended function fn_247 for advanced computations.
-pub fn fn_247(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push((a.get(i).copied().unwrap_or(0.0) - b.get(i).copied().unwrap_or(0.0)).abs());
-    }
-    out
-}
-
-/// Extended function fn_248 for advanced computations.
-pub fn fn_248(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).max(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_249 for advanced computations.
-pub fn fn_249(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).min(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_250 for advanced computations.
-pub fn fn_250(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) + b.get(i).copied().unwrap_or(0.0));
-    }
-    out
-}
-
-/// Extended function fn_251 for advanced computations.
-pub fn fn_251(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) * b.get(i).copied().unwrap_or(1.0));
-    }
-    out
-}
-
-/// Extended function fn_252 for advanced computations.
-pub fn fn_252(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push((a.get(i).copied().unwrap_or(0.0) - b.get(i).copied().unwrap_or(0.0)).abs());
-    }
-    out
-}
-
-/// Extended function fn_253 for advanced computations.
-pub fn fn_253(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).max(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_254 for advanced computations.
-pub fn fn_254(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).min(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_255 for advanced computations.
-pub fn fn_255(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) + b.get(i).copied().unwrap_or(0.0));
-    }
-    out
-}
-
-/// Extended function fn_256 for advanced computations.
-pub fn fn_256(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) * b.get(i).copied().unwrap_or(1.0));
-    }
-    out
-}
-
-/// Extended function fn_257 for advanced computations.
-pub fn fn_257(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push((a.get(i).copied().unwrap_or(0.0) - b.get(i).copied().unwrap_or(0.0)).abs());
-    }
-    out
-}
-
-/// Extended function fn_258 for advanced computations.
-pub fn fn_258(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).max(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_259 for advanced computations.
-pub fn fn_259(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).min(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_260 for advanced computations.
-pub fn fn_260(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) + b.get(i).copied().unwrap_or(0.0));
-    }
-    out
-}
-
-/// Extended function fn_261 for advanced computations.
-pub fn fn_261(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) * b.get(i).copied().unwrap_or(1.0));
-    }
-    out
-}
-
-/// Extended function fn_262 for advanced computations.
-pub fn fn_262(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push((a.get(i).copied().unwrap_or(0.0) - b.get(i).copied().unwrap_or(0.0)).abs());
-    }
-    out
-}
-
-/// Extended function fn_263 for advanced computations.
-pub fn fn_263(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).max(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_264 for advanced computations.
-pub fn fn_264(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).min(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_265 for advanced computations.
-pub fn fn_265(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) + b.get(i).copied().unwrap_or(0.0));
-    }
-    out
-}
-
-/// Extended function fn_266 for advanced computations.
-pub fn fn_266(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) * b.get(i).copied().unwrap_or(1.0));
-    }
-    out
-}
-
-/// Extended function fn_267 for advanced computations.
-pub fn fn_267(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push((a.get(i).copied().unwrap_or(0.0) - b.get(i).copied().unwrap_or(0.0)).abs());
-    }
-    out
-}
-
-/// Extended function fn_268 for advanced computations.
-pub fn fn_268(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).max(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_269 for advanced computations.
-pub fn fn_269(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).min(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_270 for advanced computations.
-pub fn fn_270(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) + b.get(i).copied().unwrap_or(0.0));
-    }
-    out
-}
-
-/// Extended function fn_271 for advanced computations.
-pub fn fn_271(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) * b.get(i).copied().unwrap_or(1.0));
-    }
-    out
-}
-
-/// Extended function fn_272 for advanced computations.
-pub fn fn_272(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push((a.get(i).copied().unwrap_or(0.0) - b.get(i).copied().unwrap_or(0.0)).abs());
-    }
-    out
-}
-
-/// Extended function fn_273 for advanced computations.
-pub fn fn_273(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).max(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_274 for advanced computations.
-pub fn fn_274(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).min(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_275 for advanced computations.
-pub fn fn_275(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) + b.get(i).copied().unwrap_or(0.0));
-    }
-    out
-}
-
-/// Extended function fn_276 for advanced computations.
-pub fn fn_276(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) * b.get(i).copied().unwrap_or(1.0));
-    }
-    out
-}
-
-/// Extended function fn_277 for advanced computations.
-pub fn fn_277(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push((a.get(i).copied().unwrap_or(0.0) - b.get(i).copied().unwrap_or(0.0)).abs());
-    }
-    out
-}
-
-/// Extended function fn_278 for advanced computations.
-pub fn fn_278(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).max(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_279 for advanced computations.
-pub fn fn_279(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).min(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_280 for advanced computations.
-pub fn fn_280(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) + b.get(i).copied().unwrap_or(0.0));
-    }
-    out
-}
-
-/// Extended function fn_281 for advanced computations.
-pub fn fn_281(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) * b.get(i).copied().unwrap_or(1.0));
-    }
-    out
-}
-
-/// Extended function fn_282 for advanced computations.
-pub fn fn_282(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push((a.get(i).copied().unwrap_or(0.0) - b.get(i).copied().unwrap_or(0.0)).abs());
-    }
-    out
-}
-
-/// Extended function fn_283 for advanced computations.
-pub fn fn_283(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).max(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_284 for advanced computations.
-pub fn fn_284(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).min(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_285 for advanced computations.
-pub fn fn_285(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) + b.get(i).copied().unwrap_or(0.0));
-    }
-    out
-}
-
-/// Extended function fn_286 for advanced computations.
-pub fn fn_286(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) * b.get(i).copied().unwrap_or(1.0));
-    }
-    out
-}
-
-/// Extended function fn_287 for advanced computations.
-pub fn fn_287(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push((a.get(i).copied().unwrap_or(0.0) - b.get(i).copied().unwrap_or(0.0)).abs());
-    }
-    out
-}
-
-/// Extended function fn_288 for advanced computations.
-pub fn fn_288(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).max(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_289 for advanced computations.
-pub fn fn_289(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).min(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_290 for advanced computations.
-pub fn fn_290(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) + b.get(i).copied().unwrap_or(0.0));
-    }
-    out
-}
-
-/// Extended function fn_291 for advanced computations.
-pub fn fn_291(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) * b.get(i).copied().unwrap_or(1.0));
-    }
-    out
-}
-
-/// Extended function fn_292 for advanced computations.
-pub fn fn_292(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push((a.get(i).copied().unwrap_or(0.0) - b.get(i).copied().unwrap_or(0.0)).abs());
-    }
-    out
-}
-
-/// Extended function fn_293 for advanced computations.
-pub fn fn_293(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).max(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_294 for advanced computations.
-pub fn fn_294(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).min(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_295 for advanced computations.
-pub fn fn_295(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) + b.get(i).copied().unwrap_or(0.0));
-    }
-    out
-}
-
-/// Extended function fn_296 for advanced computations.
-pub fn fn_296(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) * b.get(i).copied().unwrap_or(1.0));
-    }
-    out
-}
-
-/// Extended function fn_297 for advanced computations.
-pub fn fn_297(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push((a.get(i).copied().unwrap_or(0.0) - b.get(i).copied().unwrap_or(0.0)).abs());
-    }
-    out
-}
-
-/// Extended function fn_298 for advanced computations.
-pub fn fn_298(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).max(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_299 for advanced computations.
-pub fn fn_299(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).min(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_300 for advanced computations.
-pub fn fn_300(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) + b.get(i).copied().unwrap_or(0.0));
-    }
-    out
-}
-
-/// Extended function fn_301 for advanced computations.
-pub fn fn_301(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) * b.get(i).copied().unwrap_or(1.0));
-    }
-    out
-}
-
-/// Extended function fn_302 for advanced computations.
-pub fn fn_302(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push((a.get(i).copied().unwrap_or(0.0) - b.get(i).copied().unwrap_or(0.0)).abs());
-    }
-    out
-}
-
-/// Extended function fn_303 for advanced computations.
-pub fn fn_303(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).max(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_304 for advanced computations.
-pub fn fn_304(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).min(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_305 for advanced computations.
-pub fn fn_305(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) + b.get(i).copied().unwrap_or(0.0));
-    }
-    out
-}
-
-/// Extended function fn_306 for advanced computations.
-pub fn fn_306(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) * b.get(i).copied().unwrap_or(1.0));
-    }
-    out
-}
-
-/// Extended function fn_307 for advanced computations.
-pub fn fn_307(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push((a.get(i).copied().unwrap_or(0.0) - b.get(i).copied().unwrap_or(0.0)).abs());
-    }
-    out
-}
-
-/// Extended function fn_308 for advanced computations.
-pub fn fn_308(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).max(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_309 for advanced computations.
-pub fn fn_309(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).min(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_310 for advanced computations.
-pub fn fn_310(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) + b.get(i).copied().unwrap_or(0.0));
-    }
-    out
-}
-
-/// Extended function fn_311 for advanced computations.
-pub fn fn_311(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) * b.get(i).copied().unwrap_or(1.0));
-    }
-    out
-}
-
-/// Extended function fn_312 for advanced computations.
-pub fn fn_312(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push((a.get(i).copied().unwrap_or(0.0) - b.get(i).copied().unwrap_or(0.0)).abs());
-    }
-    out
-}
-
-/// Extended function fn_313 for advanced computations.
-pub fn fn_313(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).max(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_314 for advanced computations.
-pub fn fn_314(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).min(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_315 for advanced computations.
-pub fn fn_315(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) + b.get(i).copied().unwrap_or(0.0));
-    }
-    out
-}
-
-/// Extended function fn_316 for advanced computations.
-pub fn fn_316(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) * b.get(i).copied().unwrap_or(1.0));
-    }
-    out
-}
-
-/// Extended function fn_317 for advanced computations.
-pub fn fn_317(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push((a.get(i).copied().unwrap_or(0.0) - b.get(i).copied().unwrap_or(0.0)).abs());
-    }
-    out
-}
-
-/// Extended function fn_318 for advanced computations.
-pub fn fn_318(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).max(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_319 for advanced computations.
-pub fn fn_319(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).min(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_320 for advanced computations.
-pub fn fn_320(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) + b.get(i).copied().unwrap_or(0.0));
-    }
-    out
-}
-
-/// Extended function fn_321 for advanced computations.
-pub fn fn_321(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) * b.get(i).copied().unwrap_or(1.0));
-    }
-    out
-}
-
-/// Extended function fn_322 for advanced computations.
-pub fn fn_322(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push((a.get(i).copied().unwrap_or(0.0) - b.get(i).copied().unwrap_or(0.0)).abs());
-    }
-    out
-}
-
-/// Extended function fn_323 for advanced computations.
-pub fn fn_323(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).max(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_324 for advanced computations.
-pub fn fn_324(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).min(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_325 for advanced computations.
-pub fn fn_325(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) + b.get(i).copied().unwrap_or(0.0));
-    }
-    out
-}
-
-/// Extended function fn_326 for advanced computations.
-pub fn fn_326(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) * b.get(i).copied().unwrap_or(1.0));
-    }
-    out
-}
-
-/// Extended function fn_327 for advanced computations.
-pub fn fn_327(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push((a.get(i).copied().unwrap_or(0.0) - b.get(i).copied().unwrap_or(0.0)).abs());
-    }
-    out
-}
-
-/// Extended function fn_328 for advanced computations.
-pub fn fn_328(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).max(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_329 for advanced computations.
-pub fn fn_329(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).min(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_330 for advanced computations.
-pub fn fn_330(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) + b.get(i).copied().unwrap_or(0.0));
-    }
-    out
-}
-
-/// Extended function fn_331 for advanced computations.
-pub fn fn_331(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) * b.get(i).copied().unwrap_or(1.0));
-    }
-    out
-}
-
-/// Extended function fn_332 for advanced computations.
-pub fn fn_332(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push((a.get(i).copied().unwrap_or(0.0) - b.get(i).copied().unwrap_or(0.0)).abs());
-    }
-    out
-}
-
-/// Extended function fn_333 for advanced computations.
-pub fn fn_333(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).max(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_334 for advanced computations.
-pub fn fn_334(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).min(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_335 for advanced computations.
-pub fn fn_335(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) + b.get(i).copied().unwrap_or(0.0));
-    }
-    out
-}
-
-/// Extended function fn_336 for advanced computations.
-pub fn fn_336(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) * b.get(i).copied().unwrap_or(1.0));
-    }
-    out
-}
-
-/// Extended function fn_337 for advanced computations.
-pub fn fn_337(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push((a.get(i).copied().unwrap_or(0.0) - b.get(i).copied().unwrap_or(0.0)).abs());
-    }
-    out
-}
-
-/// Extended function fn_338 for advanced computations.
-pub fn fn_338(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).max(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_339 for advanced computations.
-pub fn fn_339(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).min(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_340 for advanced computations.
-pub fn fn_340(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) + b.get(i).copied().unwrap_or(0.0));
-    }
-    out
-}
-
-/// Extended function fn_341 for advanced computations.
-pub fn fn_341(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) * b.get(i).copied().unwrap_or(1.0));
-    }
-    out
-}
-
-/// Extended function fn_342 for advanced computations.
-pub fn fn_342(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push((a.get(i).copied().unwrap_or(0.0) - b.get(i).copied().unwrap_or(0.0)).abs());
-    }
-    out
-}
-
-/// Extended function fn_343 for advanced computations.
-pub fn fn_343(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).max(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_344 for advanced computations.
-pub fn fn_344(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).min(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_345 for advanced computations.
-pub fn fn_345(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) + b.get(i).copied().unwrap_or(0.0));
-    }
-    out
-}
-
-/// Extended function fn_346 for advanced computations.
-pub fn fn_346(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) * b.get(i).copied().unwrap_or(1.0));
-    }
-    out
-}
-
-/// Extended function fn_347 for advanced computations.
-pub fn fn_347(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push((a.get(i).copied().unwrap_or(0.0) - b.get(i).copied().unwrap_or(0.0)).abs());
-    }
-    out
-}
-
-/// Extended function fn_348 for advanced computations.
-pub fn fn_348(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).max(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_349 for advanced computations.
-pub fn fn_349(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).min(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_350 for advanced computations.
-pub fn fn_350(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) + b.get(i).copied().unwrap_or(0.0));
-    }
-    out
-}
-
-/// Extended function fn_351 for advanced computations.
-pub fn fn_351(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) * b.get(i).copied().unwrap_or(1.0));
-    }
-    out
-}
-
-/// Extended function fn_352 for advanced computations.
-pub fn fn_352(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push((a.get(i).copied().unwrap_or(0.0) - b.get(i).copied().unwrap_or(0.0)).abs());
-    }
-    out
-}
-
-/// Extended function fn_353 for advanced computations.
-pub fn fn_353(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).max(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_354 for advanced computations.
-pub fn fn_354(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).min(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_355 for advanced computations.
-pub fn fn_355(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) + b.get(i).copied().unwrap_or(0.0));
-    }
-    out
-}
-
-/// Extended function fn_356 for advanced computations.
-pub fn fn_356(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) * b.get(i).copied().unwrap_or(1.0));
-    }
-    out
-}
-
-/// Extended function fn_357 for advanced computations.
-pub fn fn_357(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push((a.get(i).copied().unwrap_or(0.0) - b.get(i).copied().unwrap_or(0.0)).abs());
-    }
-    out
-}
-
-/// Extended function fn_358 for advanced computations.
-pub fn fn_358(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).max(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_359 for advanced computations.
-pub fn fn_359(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).min(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_360 for advanced computations.
-pub fn fn_360(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) + b.get(i).copied().unwrap_or(0.0));
-    }
-    out
-}
-
-/// Extended function fn_361 for advanced computations.
-pub fn fn_361(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) * b.get(i).copied().unwrap_or(1.0));
-    }
-    out
-}
-
-/// Extended function fn_362 for advanced computations.
-pub fn fn_362(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push((a.get(i).copied().unwrap_or(0.0) - b.get(i).copied().unwrap_or(0.0)).abs());
-    }
-    out
-}
-
-/// Extended function fn_363 for advanced computations.
-pub fn fn_363(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).max(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_364 for advanced computations.
-pub fn fn_364(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).min(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_365 for advanced computations.
-pub fn fn_365(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) + b.get(i).copied().unwrap_or(0.0));
-    }
-    out
-}
-
-/// Extended function fn_366 for advanced computations.
-pub fn fn_366(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) * b.get(i).copied().unwrap_or(1.0));
-    }
-    out
-}
-
-/// Extended function fn_367 for advanced computations.
-pub fn fn_367(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push((a.get(i).copied().unwrap_or(0.0) - b.get(i).copied().unwrap_or(0.0)).abs());
-    }
-    out
-}
-
-/// Extended function fn_368 for advanced computations.
-pub fn fn_368(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).max(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_369 for advanced computations.
-pub fn fn_369(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).min(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_370 for advanced computations.
-pub fn fn_370(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) + b.get(i).copied().unwrap_or(0.0));
-    }
-    out
-}
-
-/// Extended function fn_371 for advanced computations.
-pub fn fn_371(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) * b.get(i).copied().unwrap_or(1.0));
-    }
-    out
-}
-
-/// Extended function fn_372 for advanced computations.
-pub fn fn_372(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push((a.get(i).copied().unwrap_or(0.0) - b.get(i).copied().unwrap_or(0.0)).abs());
-    }
-    out
-}
-
-/// Extended function fn_373 for advanced computations.
-pub fn fn_373(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).max(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_374 for advanced computations.
-pub fn fn_374(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).min(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_375 for advanced computations.
-pub fn fn_375(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) + b.get(i).copied().unwrap_or(0.0));
-    }
-    out
-}
-
-/// Extended function fn_376 for advanced computations.
-pub fn fn_376(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) * b.get(i).copied().unwrap_or(1.0));
-    }
-    out
-}
-
-/// Extended function fn_377 for advanced computations.
-pub fn fn_377(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push((a.get(i).copied().unwrap_or(0.0) - b.get(i).copied().unwrap_or(0.0)).abs());
-    }
-    out
-}
-
-/// Extended function fn_378 for advanced computations.
-pub fn fn_378(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).max(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_379 for advanced computations.
-pub fn fn_379(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).min(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_380 for advanced computations.
-pub fn fn_380(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) + b.get(i).copied().unwrap_or(0.0));
-    }
-    out
-}
-
-/// Extended function fn_381 for advanced computations.
-pub fn fn_381(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) * b.get(i).copied().unwrap_or(1.0));
-    }
-    out
-}
-
-/// Extended function fn_382 for advanced computations.
-pub fn fn_382(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push((a.get(i).copied().unwrap_or(0.0) - b.get(i).copied().unwrap_or(0.0)).abs());
-    }
-    out
-}
-
-/// Extended function fn_383 for advanced computations.
-pub fn fn_383(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).max(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_384 for advanced computations.
-pub fn fn_384(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).min(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_385 for advanced computations.
-pub fn fn_385(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) + b.get(i).copied().unwrap_or(0.0));
-    }
-    out
-}
-
-/// Extended function fn_386 for advanced computations.
-pub fn fn_386(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) * b.get(i).copied().unwrap_or(1.0));
-    }
-    out
-}
-
-/// Extended function fn_387 for advanced computations.
-pub fn fn_387(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push((a.get(i).copied().unwrap_or(0.0) - b.get(i).copied().unwrap_or(0.0)).abs());
-    }
-    out
-}
-
-/// Extended function fn_388 for advanced computations.
-pub fn fn_388(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).max(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_389 for advanced computations.
-pub fn fn_389(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).min(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_390 for advanced computations.
-pub fn fn_390(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) + b.get(i).copied().unwrap_or(0.0));
-    }
-    out
-}
-
-/// Extended function fn_391 for advanced computations.
-pub fn fn_391(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) * b.get(i).copied().unwrap_or(1.0));
-    }
-    out
-}
-
-/// Extended function fn_392 for advanced computations.
-pub fn fn_392(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push((a.get(i).copied().unwrap_or(0.0) - b.get(i).copied().unwrap_or(0.0)).abs());
-    }
-    out
-}
-
-/// Extended function fn_393 for advanced computations.
-pub fn fn_393(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).max(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_394 for advanced computations.
-pub fn fn_394(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).min(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_395 for advanced computations.
-pub fn fn_395(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) + b.get(i).copied().unwrap_or(0.0));
-    }
-    out
-}
-
-/// Extended function fn_396 for advanced computations.
-pub fn fn_396(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) * b.get(i).copied().unwrap_or(1.0));
-    }
-    out
-}
-
-/// Extended function fn_397 for advanced computations.
-pub fn fn_397(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push((a.get(i).copied().unwrap_or(0.0) - b.get(i).copied().unwrap_or(0.0)).abs());
-    }
-    out
-}
-
-/// Extended function fn_398 for advanced computations.
-pub fn fn_398(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).max(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_399 for advanced computations.
-pub fn fn_399(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).min(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Helper struct CORE_H0 for batch operations.
-pub struct CORE_H0 { pub data: Vec<f64>, pub config: CORE_S0 }
-impl CORE_H0 {
-    pub fn new(data: Vec<f64>) -> Self { Self { data, config: CORE_S0::new() } }
-    pub fn process_0(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f0 + 0.0).sum::<f64>() / self.data.len().max(1) as f64
-    }
-    pub fn process_1(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f1 + 0.0).sum::<f64>() / self.data.len().max(1) as f64
-    }
-    pub fn process_2(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f2 + 0.0).sum::<f64>() / self.data.len().max(1) as f64
-    }
-    pub fn process_3(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f3 + 0.0).sum::<f64>() / self.data.len().max(1) as f64
-    }
-}
-
-/// Helper struct CORE_H1 for batch operations.
-pub struct CORE_H1 { pub data: Vec<f64>, pub config: CORE_S1 }
-impl CORE_H1 {
-    pub fn new(data: Vec<f64>) -> Self { Self { data, config: CORE_S1::new() } }
-    pub fn process_0(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f0 + 0.01).sum::<f64>() / self.data.len().max(1) as f64
-    }
-    pub fn process_1(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f1 + 0.01).sum::<f64>() / self.data.len().max(1) as f64
-    }
-    pub fn process_2(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f2 + 0.01).sum::<f64>() / self.data.len().max(1) as f64
-    }
-    pub fn process_3(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f3 + 0.01).sum::<f64>() / self.data.len().max(1) as f64
-    }
-}
-
-/// Helper struct CORE_H2 for batch operations.
-pub struct CORE_H2 { pub data: Vec<f64>, pub config: CORE_S2 }
-impl CORE_H2 {
-    pub fn new(data: Vec<f64>) -> Self { Self { data, config: CORE_S2::new() } }
-    pub fn process_0(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f0 + 0.02).sum::<f64>() / self.data.len().max(1) as f64
-    }
-    pub fn process_1(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f1 + 0.02).sum::<f64>() / self.data.len().max(1) as f64
-    }
-    pub fn process_2(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f2 + 0.02).sum::<f64>() / self.data.len().max(1) as f64
-    }
-    pub fn process_3(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f3 + 0.02).sum::<f64>() / self.data.len().max(1) as f64
-    }
-}
-
-/// Helper struct CORE_H3 for batch operations.
-pub struct CORE_H3 { pub data: Vec<f64>, pub config: CORE_S3 }
-impl CORE_H3 {
-    pub fn new(data: Vec<f64>) -> Self { Self { data, config: CORE_S3::new() } }
-    pub fn process_0(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f0 + 0.03).sum::<f64>() / self.data.len().max(1) as f64
-    }
-    pub fn process_1(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f1 + 0.03).sum::<f64>() / self.data.len().max(1) as f64
-    }
-    pub fn process_2(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f2 + 0.03).sum::<f64>() / self.data.len().max(1) as f64
-    }
-    pub fn process_3(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f3 + 0.03).sum::<f64>() / self.data.len().max(1) as f64
-    }
-}
-
-/// Helper struct CORE_H4 for batch operations.
-pub struct CORE_H4 { pub data: Vec<f64>, pub config: CORE_S4 }
-impl CORE_H4 {
-    pub fn new(data: Vec<f64>) -> Self { Self { data, config: CORE_S4::new() } }
-    pub fn process_0(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f0 + 0.04).sum::<f64>() / self.data.len().max(1) as f64
-    }
-    pub fn process_1(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f1 + 0.04).sum::<f64>() / self.data.len().max(1) as f64
-    }
-    pub fn process_2(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f2 + 0.04).sum::<f64>() / self.data.len().max(1) as f64
-    }
-    pub fn process_3(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f3 + 0.04).sum::<f64>() / self.data.len().max(1) as f64
-    }
-}
-
-/// Helper struct CORE_H5 for batch operations.
-pub struct CORE_H5 { pub data: Vec<f64>, pub config: CORE_S5 }
-impl CORE_H5 {
-    pub fn new(data: Vec<f64>) -> Self { Self { data, config: CORE_S5::new() } }
-    pub fn process_0(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f0 + 0.05).sum::<f64>() / self.data.len().max(1) as f64
-    }
-    pub fn process_1(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f1 + 0.05).sum::<f64>() / self.data.len().max(1) as f64
-    }
-    pub fn process_2(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f2 + 0.05).sum::<f64>() / self.data.len().max(1) as f64
-    }
-    pub fn process_3(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f3 + 0.05).sum::<f64>() / self.data.len().max(1) as f64
-    }
-}
-
-/// Helper struct CORE_H6 for batch operations.
-pub struct CORE_H6 { pub data: Vec<f64>, pub config: CORE_S6 }
-impl CORE_H6 {
-    pub fn new(data: Vec<f64>) -> Self { Self { data, config: CORE_S6::new() } }
-    pub fn process_0(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f0 + 0.06).sum::<f64>() / self.data.len().max(1) as f64
-    }
-    pub fn process_1(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f1 + 0.06).sum::<f64>() / self.data.len().max(1) as f64
-    }
-    pub fn process_2(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f2 + 0.06).sum::<f64>() / self.data.len().max(1) as f64
-    }
-    pub fn process_3(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f3 + 0.06).sum::<f64>() / self.data.len().max(1) as f64
-    }
-}
-
-/// Helper struct CORE_H7 for batch operations.
-pub struct CORE_H7 { pub data: Vec<f64>, pub config: CORE_S7 }
-impl CORE_H7 {
-    pub fn new(data: Vec<f64>) -> Self { Self { data, config: CORE_S7::new() } }
-    pub fn process_0(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f0 + 0.07).sum::<f64>() / self.data.len().max(1) as f64
-    }
-    pub fn process_1(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f1 + 0.07).sum::<f64>() / self.data.len().max(1) as f64
-    }
-    pub fn process_2(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f2 + 0.07).sum::<f64>() / self.data.len().max(1) as f64
-    }
-    pub fn process_3(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f3 + 0.07).sum::<f64>() / self.data.len().max(1) as f64
-    }
-}
-
-/// Helper struct CORE_H8 for batch operations.
-pub struct CORE_H8 { pub data: Vec<f64>, pub config: CORE_S8 }
-impl CORE_H8 {
-    pub fn new(data: Vec<f64>) -> Self { Self { data, config: CORE_S8::new() } }
-    pub fn process_0(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f0 + 0.08).sum::<f64>() / self.data.len().max(1) as f64
-    }
-    pub fn process_1(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f1 + 0.08).sum::<f64>() / self.data.len().max(1) as f64
-    }
-    pub fn process_2(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f2 + 0.08).sum::<f64>() / self.data.len().max(1) as f64
-    }
-    pub fn process_3(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f3 + 0.08).sum::<f64>() / self.data.len().max(1) as f64
-    }
-}
-
-/// Helper struct CORE_H9 for batch operations.
-pub struct CORE_H9 { pub data: Vec<f64>, pub config: CORE_S9 }
-impl CORE_H9 {
-    pub fn new(data: Vec<f64>) -> Self { Self { data, config: CORE_S9::new() } }
-    pub fn process_0(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f0 + 0.09).sum::<f64>() / self.data.len().max(1) as f64
-    }
-    pub fn process_1(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f1 + 0.09).sum::<f64>() / self.data.len().max(1) as f64
-    }
-    pub fn process_2(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f2 + 0.09).sum::<f64>() / self.data.len().max(1) as f64
-    }
-    pub fn process_3(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f3 + 0.09).sum::<f64>() / self.data.len().max(1) as f64
-    }
-}
-
-/// Helper struct CORE_H10 for batch operations.
-pub struct CORE_H10 { pub data: Vec<f64>, pub config: CORE_S10 }
-impl CORE_H10 {
-    pub fn new(data: Vec<f64>) -> Self { Self { data, config: CORE_S10::new() } }
-    pub fn process_0(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f0 + 0.1).sum::<f64>() / self.data.len().max(1) as f64
-    }
-    pub fn process_1(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f1 + 0.1).sum::<f64>() / self.data.len().max(1) as f64
-    }
-    pub fn process_2(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f2 + 0.1).sum::<f64>() / self.data.len().max(1) as f64
-    }
-    pub fn process_3(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f3 + 0.1).sum::<f64>() / self.data.len().max(1) as f64
-    }
-}
-
-/// Helper struct CORE_H11 for batch operations.
-pub struct CORE_H11 { pub data: Vec<f64>, pub config: CORE_S11 }
-impl CORE_H11 {
-    pub fn new(data: Vec<f64>) -> Self { Self { data, config: CORE_S11::new() } }
-    pub fn process_0(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f0 + 0.11).sum::<f64>() / self.data.len().max(1) as f64
-    }
-    pub fn process_1(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f1 + 0.11).sum::<f64>() / self.data.len().max(1) as f64
-    }
-    pub fn process_2(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f2 + 0.11).sum::<f64>() / self.data.len().max(1) as f64
-    }
-    pub fn process_3(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f3 + 0.11).sum::<f64>() / self.data.len().max(1) as f64
-    }
-}
-
-/// Helper struct CORE_H12 for batch operations.
-pub struct CORE_H12 { pub data: Vec<f64>, pub config: CORE_S12 }
-impl CORE_H12 {
-    pub fn new(data: Vec<f64>) -> Self { Self { data, config: CORE_S12::new() } }
-    pub fn process_0(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f0 + 0.12).sum::<f64>() / self.data.len().max(1) as f64
-    }
-    pub fn process_1(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f1 + 0.12).sum::<f64>() / self.data.len().max(1) as f64
-    }
-    pub fn process_2(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f2 + 0.12).sum::<f64>() / self.data.len().max(1) as f64
-    }
-    pub fn process_3(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f3 + 0.12).sum::<f64>() / self.data.len().max(1) as f64
-    }
-}
-
-/// Helper struct CORE_H13 for batch operations.
-pub struct CORE_H13 { pub data: Vec<f64>, pub config: CORE_S13 }
-impl CORE_H13 {
-    pub fn new(data: Vec<f64>) -> Self { Self { data, config: CORE_S13::new() } }
-    pub fn process_0(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f0 + 0.13).sum::<f64>() / self.data.len().max(1) as f64
-    }
-    pub fn process_1(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f1 + 0.13).sum::<f64>() / self.data.len().max(1) as f64
-    }
-    pub fn process_2(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f2 + 0.13).sum::<f64>() / self.data.len().max(1) as f64
-    }
-    pub fn process_3(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f3 + 0.13).sum::<f64>() / self.data.len().max(1) as f64
-    }
-}
-
-/// Helper struct CORE_H14 for batch operations.
-pub struct CORE_H14 { pub data: Vec<f64>, pub config: CORE_S14 }
-impl CORE_H14 {
-    pub fn new(data: Vec<f64>) -> Self { Self { data, config: CORE_S14::new() } }
-    pub fn process_0(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f0 + 0.14).sum::<f64>() / self.data.len().max(1) as f64
-    }
-    pub fn process_1(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f1 + 0.14).sum::<f64>() / self.data.len().max(1) as f64
-    }
-    pub fn process_2(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f2 + 0.14).sum::<f64>() / self.data.len().max(1) as f64
-    }
-    pub fn process_3(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f3 + 0.14).sum::<f64>() / self.data.len().max(1) as f64
-    }
-}
-
-/// Helper struct CORE_H15 for batch operations.
-pub struct CORE_H15 { pub data: Vec<f64>, pub config: CORE_S0 }
-impl CORE_H15 {
-    pub fn new(data: Vec<f64>) -> Self { Self { data, config: CORE_S0::new() } }
-    pub fn process_0(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f0 + 0.15).sum::<f64>() / self.data.len().max(1) as f64
-    }
-    pub fn process_1(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f1 + 0.15).sum::<f64>() / self.data.len().max(1) as f64
-    }
-    pub fn process_2(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f2 + 0.15).sum::<f64>() / self.data.len().max(1) as f64
-    }
-    pub fn process_3(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f3 + 0.15).sum::<f64>() / self.data.len().max(1) as f64
-    }
-}
-
-/// Helper struct CORE_H16 for batch operations.
-pub struct CORE_H16 { pub data: Vec<f64>, pub config: CORE_S1 }
-impl CORE_H16 {
-    pub fn new(data: Vec<f64>) -> Self { Self { data, config: CORE_S1::new() } }
-    pub fn process_0(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f0 + 0.16).sum::<f64>() / self.data.len().max(1) as f64
-    }
-    pub fn process_1(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f1 + 0.16).sum::<f64>() / self.data.len().max(1) as f64
-    }
-    pub fn process_2(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f2 + 0.16).sum::<f64>() / self.data.len().max(1) as f64
-    }
-    pub fn process_3(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f3 + 0.16).sum::<f64>() / self.data.len().max(1) as f64
-    }
-}
-
-/// Helper struct CORE_H17 for batch operations.
-pub struct CORE_H17 { pub data: Vec<f64>, pub config: CORE_S2 }
-impl CORE_H17 {
-    pub fn new(data: Vec<f64>) -> Self { Self { data, config: CORE_S2::new() } }
-    pub fn process_0(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f0 + 0.17).sum::<f64>() / self.data.len().max(1) as f64
-    }
-    pub fn process_1(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f1 + 0.17).sum::<f64>() / self.data.len().max(1) as f64
-    }
-    pub fn process_2(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f2 + 0.17).sum::<f64>() / self.data.len().max(1) as f64
-    }
-    pub fn process_3(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f3 + 0.17).sum::<f64>() / self.data.len().max(1) as f64
-    }
-}
-
-/// Helper struct CORE_H18 for batch operations.
-pub struct CORE_H18 { pub data: Vec<f64>, pub config: CORE_S3 }
-impl CORE_H18 {
-    pub fn new(data: Vec<f64>) -> Self { Self { data, config: CORE_S3::new() } }
-    pub fn process_0(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f0 + 0.18).sum::<f64>() / self.data.len().max(1) as f64
-    }
-    pub fn process_1(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f1 + 0.18).sum::<f64>() / self.data.len().max(1) as f64
-    }
-    pub fn process_2(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f2 + 0.18).sum::<f64>() / self.data.len().max(1) as f64
-    }
-    pub fn process_3(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f3 + 0.18).sum::<f64>() / self.data.len().max(1) as f64
-    }
-}
-
-/// Helper struct CORE_H19 for batch operations.
-pub struct CORE_H19 { pub data: Vec<f64>, pub config: CORE_S4 }
-impl CORE_H19 {
-    pub fn new(data: Vec<f64>) -> Self { Self { data, config: CORE_S4::new() } }
-    pub fn process_0(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f0 + 0.19).sum::<f64>() / self.data.len().max(1) as f64
-    }
-    pub fn process_1(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f1 + 0.19).sum::<f64>() / self.data.len().max(1) as f64
-    }
-    pub fn process_2(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f2 + 0.19).sum::<f64>() / self.data.len().max(1) as f64
-    }
-    pub fn process_3(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f3 + 0.19).sum::<f64>() / self.data.len().max(1) as f64
+    /// Creates a Channels instance with validation.
+    pub fn new(count: u16) -> BrainResult<Self> {
+        if count == 0 {
+            return Err(BrainError::invalid_value("channel count must be at least 1"));
+        }
+        if count > 256 {
+            return Err(BrainError::invalid_value("channel count exceeds maximum 256"));
+        }
+        Ok(Channels(count))
+    }
+
+    /// Returns the number of channels as usize.
+    #[inline]
+    pub fn count(&self) -> usize {
+        self.0 as usize
+    }
+
+    /// Returns whether this represents mono audio.
+    #[inline]
+    pub fn is_mono(&self) -> bool {
+        self.0 == 1
+    }
+
+    /// Returns whether this represents stereo audio.
+    #[inline]
+    pub fn is_stereo(&self) -> bool {
+        self.0 == 2
+    }
+}
+
+impl fmt::Display for Channels {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self.0 {
+            1 => write!(f, "Mono (1 ch)"),
+            2 => write!(f, "Stereo (2 ch)"),
+            n => write!(f, "Multi-channel ({} ch)", n),
+        }
+    }
+}
+
+/// Audio sample bit-depth and representation format.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum AudioFormat {
+    /// 8-bit unsigned integer PCM (0..255, 128 is center).
+    PcmU8,
+    /// 16-bit signed integer PCM (-32768..32767).
+    PcmI16,
+    /// 24-bit signed integer PCM packed or aligned.
+    PcmI24,
+    /// 32-bit signed integer PCM.
+    PcmI32,
+    /// 32-bit IEEE 754 floating point (-1.0..1.0 nominal).
+    Float32,
+    /// 64-bit IEEE 754 double precision floating point.
+    Float64,
+}
+
+impl AudioFormat {
+    /// Returns the byte width per sample.
+    pub fn bytes_per_sample(&self) -> usize {
+        match self {
+            AudioFormat::PcmU8 => 1,
+            AudioFormat::PcmI16 => 2,
+            AudioFormat::PcmI24 => 3,
+            AudioFormat::PcmI32 | AudioFormat::Float32 => 4,
+            AudioFormat::Float64 => 8,
+        }
+    }
+
+    /// Returns bit depth in bits per sample.
+    pub fn bit_depth(&self) -> usize {
+        self.bytes_per_sample() * 8
+    }
+
+    /// Returns whether this is a floating point format.
+    pub fn is_float(&self) -> bool {
+        matches!(self, AudioFormat::Float32 | AudioFormat::Float64)
+    }
+}
+
+/// Multi-channel planar 64-bit floating point audio buffer.
+///
+/// # Examples
+///
+/// ```
+/// use brain_audio::core::{AudioBuffer, SampleRate};
+/// let buf = AudioBuffer::zeros(1, 1600, SampleRate::SPEECH_16K).unwrap();
+/// assert_eq!(buf.channels(), 1);
+/// assert_eq!(buf.num_samples(), 1600);
+/// assert_eq!(buf.duration(), 0.1);
+/// ```
+#[derive(Debug, Clone, PartialEq)]
+pub struct AudioBuffer {
+    data: Vec<f64>,
+    channels: usize,
+    num_samples: usize,
+    sample_rate: SampleRate,
+}
+
+impl AudioBuffer {
+    /// Creates a new zero-initialized audio buffer.
+    pub fn zeros(channels: usize, num_samples: usize, sample_rate: SampleRate) -> BrainResult<Self> {
+        if channels == 0 || num_samples == 0 {
+            return Err(BrainError::invalid_value("channels and num_samples must be non-zero"));
+        }
+        let total = channels.checked_mul(num_samples)
+            .ok_or_else(|| BrainError::overflow("channels * samples", "usize", "AudioBuffer::zeros"))?;
+        Ok(AudioBuffer {
+            data: vec![0.0; total],
+            channels,
+            num_samples,
+            sample_rate,
+        })
+    }
+
+    /// Creates an audio buffer from planar slice data.
+    pub fn from_slice(data: &[f64], channels: usize, num_samples: usize, sample_rate: SampleRate) -> BrainResult<Self> {
+        if channels == 0 || num_samples == 0 {
+            return Err(BrainError::invalid_value("channels and num_samples must be non-zero"));
+        }
+        if data.len() != channels * num_samples {
+            return Err(BrainError::shape_mismatch(
+                format!("channels({}) * samples({}) = {}", channels, num_samples, channels * num_samples),
+                data.len().to_string(),
+                "AudioBuffer::from_slice",
+            ));
+        }
+        Ok(AudioBuffer {
+            data: data.to_vec(),
+            channels,
+            num_samples,
+            sample_rate,
+        })
+    }
+
+    /// Creates a mono AudioBuffer from a 1D vector of samples.
+    pub fn from_mono(samples: Vec<f64>, sample_rate: SampleRate) -> BrainResult<Self> {
+        let num_samples = samples.len();
+        if num_samples == 0 {
+            return Err(BrainError::invalid_value("samples cannot be empty"));
+        }
+        Ok(AudioBuffer {
+            data: samples,
+            channels: 1,
+            num_samples,
+            sample_rate,
+        })
+    }
+
+    /// Creates an AudioBuffer from a 1D or 2D `brain_core::Tensor`.
+    pub fn from_tensor(tensor: &Tensor, sample_rate: SampleRate) -> BrainResult<Self> {
+        let ndim = tensor.ndim();
+        let (channels, num_samples) = match ndim {
+            1 => (1, tensor.shape()[0]),
+            2 => (tensor.shape()[0], tensor.shape()[1]),
+            _ => return Err(BrainError::invalid_value(format!("AudioBuffer requires 1D or 2D tensor, got {}D", ndim))),
+        };
+        Ok(AudioBuffer {
+            data: tensor.data().to_vec(),
+            channels,
+            num_samples,
+            sample_rate,
+        })
+    }
+
+    /// Converts this AudioBuffer into a 2D `brain_core::Tensor` `[channels, num_samples]`.
+    pub fn to_tensor(&self) -> Tensor {
+        Tensor::from_slice(&self.data, vec![self.channels, self.num_samples])
+    }
+
+    /// Returns the number of audio channels.
+    #[inline]
+    pub fn channels(&self) -> usize {
+        self.channels
+    }
+
+    /// Returns the number of samples per channel.
+    #[inline]
+    pub fn num_samples(&self) -> usize {
+        self.num_samples
+    }
+
+    /// Returns the audio sample rate.
+    #[inline]
+    pub fn sample_rate(&self) -> SampleRate {
+        self.sample_rate
+    }
+
+    /// Sets the sample rate metadata without resampling audio.
+    #[inline]
+    pub fn set_sample_rate(&mut self, sample_rate: SampleRate) {
+        self.sample_rate = sample_rate;
+    }
+
+    /// Returns duration in seconds.
+    #[inline]
+    pub fn duration(&self) -> f64 {
+        self.sample_rate.duration_seconds(self.num_samples)
+    }
+
+    /// Returns total number of elements across all channels.
+    #[inline]
+    pub fn len(&self) -> usize {
+        self.data.len()
+    }
+
+    /// Returns whether the buffer is empty.
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.data.is_empty()
+    }
+
+    /// Returns a slice to all planar data.
+    #[inline]
+    pub fn as_slice(&self) -> &[f64] {
+        &self.data
+    }
+
+    /// Returns a mutable slice to all planar data.
+    #[inline]
+    pub fn as_mut_slice(&mut self) -> &mut [f64] {
+        &mut self.data
+    }
+
+    /// Returns a slice for a specific channel.
+    pub fn channel(&self, ch: usize) -> BrainResult<&[f64]> {
+        if ch >= self.channels {
+            return Err(BrainError::index_out_of_bounds(ch as isize, self.channels, Some(0), "AudioBuffer::channel"));
+        }
+        let start = ch * self.num_samples;
+        let end = start + self.num_samples;
+        Ok(&self.data[start..end])
+    }
+
+    /// Returns a mutable slice for a specific channel.
+    pub fn channel_mut(&mut self, ch: usize) -> BrainResult<&mut [f64]> {
+        if ch >= self.channels {
+            return Err(BrainError::index_out_of_bounds(ch as isize, self.channels, Some(0), "AudioBuffer::channel_mut"));
+        }
+        let start = ch * self.num_samples;
+        let end = start + self.num_samples;
+        Ok(&mut self.data[start..end])
+    }
+
+    /// Gets sample at `[channel, sample_idx]`.
+    #[inline]
+    pub fn get_sample(&self, ch: usize, idx: usize) -> Option<f64> {
+        if ch < self.channels && idx < self.num_samples {
+            Some(self.data[ch * self.num_samples + idx])
+        } else {
+            None
+        }
+    }
+
+    /// Sets sample at `[channel, sample_idx]`.
+    #[inline]
+    pub fn set_sample(&mut self, ch: usize, idx: usize, val: f64) -> BrainResult<()> {
+        if ch >= self.channels {
+            return Err(BrainError::index_out_of_bounds(ch as isize, self.channels, Some(0), "AudioBuffer::set_sample channel"));
+        }
+        if idx >= self.num_samples {
+            return Err(BrainError::index_out_of_bounds(idx as isize, self.num_samples, Some(1), "AudioBuffer::set_sample sample_idx"));
+        }
+        self.data[ch * self.num_samples + idx] = val;
+        Ok(())
+    }
+
+    /// Slices the audio buffer temporally across all channels `[start_sample..end_sample]`.
+    pub fn slice(&self, start: usize, end: usize) -> BrainResult<Self> {
+        if start > end || end > self.num_samples {
+            return Err(BrainError::invalid_value(format!("invalid slice range [{}..{}] for length {}", start, end, self.num_samples)));
+        }
+        let sliced_samples = end - start;
+        let mut sliced_data = Vec::with_capacity(self.channels * sliced_samples);
+        for ch in 0..self.channels {
+            let ch_start = ch * self.num_samples + start;
+            let ch_end = ch * self.num_samples + end;
+            sliced_data.extend_from_slice(&self.data[ch_start..ch_end]);
+        }
+        Ok(AudioBuffer {
+            data: sliced_data,
+            channels: self.channels,
+            num_samples: sliced_samples,
+            sample_rate: self.sample_rate,
+        })
+    }
+
+    /// Downmixes multi-channel audio to mono by averaging channels.
+    pub fn to_mono(&self) -> Self {
+        if self.channels == 1 {
+            return self.clone();
+        }
+        let inv_ch = 1.0 / self.channels as f64;
+        let mut mono = vec![0.0; self.num_samples];
+        for ch in 0..self.channels {
+            let ch_data = &self.data[ch * self.num_samples..(ch + 1) * self.num_samples];
+            for i in 0..self.num_samples {
+                mono[i] += ch_data[i] * inv_ch;
+            }
+        }
+        AudioBuffer {
+            data: mono,
+            channels: 1,
+            num_samples: self.num_samples,
+            sample_rate: self.sample_rate,
+        }
+    }
+
+    /// Converts mono audio to multi-channel by duplicating the mono channel.
+    pub fn to_stereo(&self) -> BrainResult<Self> {
+        if self.channels == 2 {
+            return Ok(self.clone());
+        }
+        if self.channels != 1 {
+            return Err(BrainError::invalid_value("to_stereo requires mono input"));
+        }
+        let mut stereo_data = Vec::with_capacity(2 * self.num_samples);
+        stereo_data.extend_from_slice(&self.data);
+        stereo_data.extend_from_slice(&self.data);
+        Ok(AudioBuffer {
+            data: stereo_data,
+            channels: 2,
+            num_samples: self.num_samples,
+            sample_rate: self.sample_rate,
+        })
+    }
+
+    /// Concatenates another AudioBuffer of the same channel count and sample rate.
+    pub fn concat(&self, other: &AudioBuffer) -> BrainResult<Self> {
+        if self.channels != other.channels {
+            return Err(BrainError::shape_mismatch(
+                format!("channels {}", self.channels),
+                format!("channels {}", other.channels),
+                "AudioBuffer::concat",
+            ));
+        }
+        if self.sample_rate != other.sample_rate {
+            return Err(BrainError::invalid_value("sample rates must match to concatenate"));
+        }
+        let out_samples = self.num_samples + other.num_samples;
+        let mut out_data = Vec::with_capacity(self.channels * out_samples);
+        for ch in 0..self.channels {
+            let self_ch = self.channel(ch)?;
+            let other_ch = other.channel(ch)?;
+            out_data.extend_from_slice(self_ch);
+            out_data.extend_from_slice(other_ch);
+        }
+        Ok(AudioBuffer {
+            data: out_data,
+            channels: self.channels,
+            num_samples: out_samples,
+            sample_rate: self.sample_rate,
+        })
+    }
+
+    /// Mixes (adds) another audio buffer with a given gain weight.
+    pub fn mix(&mut self, other: &AudioBuffer, weight: f64) -> BrainResult<()> {
+        if self.channels != other.channels || self.num_samples != other.num_samples {
+            return Err(BrainError::shape_mismatch(
+                format!("[{}, {}]", self.channels, self.num_samples),
+                format!("[{}, {}]", other.channels, other.num_samples),
+                "AudioBuffer::mix",
+            ));
+        }
+        for (a, &b) in self.data.iter_mut().zip(other.data.iter()) {
+            *a += b * weight;
+        }
+        Ok(())
+    }
+
+    /// Scales all audio samples by a scalar multiplier.
+    pub fn scale(&mut self, factor: f64) {
+        for s in &mut self.data {
+            *s *= factor;
+        }
+    }
+
+    /// Normalizes audio to have maximum peak absolute amplitude of target_peak (default 1.0).
+    pub fn normalize_peak(&mut self, target_peak: f64) {
+        let max_val = self.peak_amplitude();
+        if max_val > 1e-12 {
+            let factor = target_peak / max_val;
+            self.scale(factor);
+        }
+    }
+
+    /// Computes the peak absolute amplitude across all channels.
+    pub fn peak_amplitude(&self) -> f64 {
+        self.data.iter().fold(0.0f64, |acc, &s| acc.max(s.abs()))
+    }
+
+    /// Computes the Root Mean Square (RMS) energy across all channels.
+    pub fn rms_energy(&self) -> f64 {
+        if self.data.is_empty() {
+            return 0.0;
+        }
+        let sum_sq: f64 = self.data.iter().map(|&s| s * s).sum();
+        (sum_sq / self.data.len() as f64).sqrt()
     }
 }
 
@@ -7901,643 +516,2850 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_0() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S0::new();
-        let result = fn_0(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
+    fn test_audio_core_stress_001() {
+        let sr = SampleRate::new(16100).unwrap();
+        let ch = ((1 % 4) + 1) as usize;
+        let num_samples = 128 + (1 * 7) % 256;
+        let mut buf = AudioBuffer::zeros(ch, num_samples, sr).unwrap();
+        assert_eq!(buf.channels(), ch);
+        assert_eq!(buf.num_samples(), num_samples);
+        assert_eq!(buf.duration(), sr.duration_seconds(num_samples));
+        
+        for c in 0..ch {
+            for s in 0..num_samples {
+                let val = ((c * 100 + s + 1) as f64 * 0.01).sin();
+                buf.set_sample(c, s, val).unwrap();
+                assert_eq!(buf.get_sample(c, s), Some(val));
+            }
+        }
+        
+        let mono = buf.to_mono();
+        assert_eq!(mono.channels(), 1);
+        assert_eq!(mono.num_samples(), num_samples);
+        
+        let sliced = buf.slice(10, 50).unwrap();
+        assert_eq!(sliced.num_samples(), 40);
+        assert_eq!(sliced.channels(), ch);
+        
+        let t = buf.to_tensor();
+        assert_eq!(t.shape(), &[ch, num_samples]);
+        let buf2 = AudioBuffer::from_tensor(&t, sr).unwrap();
+        assert_eq!(buf, buf2);
+    }
+
+    #[test]
+    fn test_audio_core_stress_002() {
+        let sr = SampleRate::new(16200).unwrap();
+        let ch = ((2 % 4) + 1) as usize;
+        let num_samples = 128 + (2 * 7) % 256;
+        let mut buf = AudioBuffer::zeros(ch, num_samples, sr).unwrap();
+        assert_eq!(buf.channels(), ch);
+        assert_eq!(buf.num_samples(), num_samples);
+        assert_eq!(buf.duration(), sr.duration_seconds(num_samples));
+        
+        for c in 0..ch {
+            for s in 0..num_samples {
+                let val = ((c * 100 + s + 2) as f64 * 0.01).sin();
+                buf.set_sample(c, s, val).unwrap();
+                assert_eq!(buf.get_sample(c, s), Some(val));
+            }
+        }
+        
+        let mono = buf.to_mono();
+        assert_eq!(mono.channels(), 1);
+        assert_eq!(mono.num_samples(), num_samples);
+        
+        let sliced = buf.slice(10, 50).unwrap();
+        assert_eq!(sliced.num_samples(), 40);
+        assert_eq!(sliced.channels(), ch);
+        
+        let t = buf.to_tensor();
+        assert_eq!(t.shape(), &[ch, num_samples]);
+        let buf2 = AudioBuffer::from_tensor(&t, sr).unwrap();
+        assert_eq!(buf, buf2);
+    }
+
+    #[test]
+    fn test_audio_core_stress_003() {
+        let sr = SampleRate::new(16300).unwrap();
+        let ch = ((3 % 4) + 1) as usize;
+        let num_samples = 128 + (3 * 7) % 256;
+        let mut buf = AudioBuffer::zeros(ch, num_samples, sr).unwrap();
+        assert_eq!(buf.channels(), ch);
+        assert_eq!(buf.num_samples(), num_samples);
+        assert_eq!(buf.duration(), sr.duration_seconds(num_samples));
+        
+        for c in 0..ch {
+            for s in 0..num_samples {
+                let val = ((c * 100 + s + 3) as f64 * 0.01).sin();
+                buf.set_sample(c, s, val).unwrap();
+                assert_eq!(buf.get_sample(c, s), Some(val));
+            }
+        }
+        
+        let mono = buf.to_mono();
+        assert_eq!(mono.channels(), 1);
+        assert_eq!(mono.num_samples(), num_samples);
+        
+        let sliced = buf.slice(10, 50).unwrap();
+        assert_eq!(sliced.num_samples(), 40);
+        assert_eq!(sliced.channels(), ch);
+        
+        let t = buf.to_tensor();
+        assert_eq!(t.shape(), &[ch, num_samples]);
+        let buf2 = AudioBuffer::from_tensor(&t, sr).unwrap();
+        assert_eq!(buf, buf2);
+    }
+
+    #[test]
+    fn test_audio_core_stress_004() {
+        let sr = SampleRate::new(16400).unwrap();
+        let ch = ((4 % 4) + 1) as usize;
+        let num_samples = 128 + (4 * 7) % 256;
+        let mut buf = AudioBuffer::zeros(ch, num_samples, sr).unwrap();
+        assert_eq!(buf.channels(), ch);
+        assert_eq!(buf.num_samples(), num_samples);
+        assert_eq!(buf.duration(), sr.duration_seconds(num_samples));
+        
+        for c in 0..ch {
+            for s in 0..num_samples {
+                let val = ((c * 100 + s + 4) as f64 * 0.01).sin();
+                buf.set_sample(c, s, val).unwrap();
+                assert_eq!(buf.get_sample(c, s), Some(val));
+            }
+        }
+        
+        let mono = buf.to_mono();
+        assert_eq!(mono.channels(), 1);
+        assert_eq!(mono.num_samples(), num_samples);
+        
+        let sliced = buf.slice(10, 50).unwrap();
+        assert_eq!(sliced.num_samples(), 40);
+        assert_eq!(sliced.channels(), ch);
+        
+        let t = buf.to_tensor();
+        assert_eq!(t.shape(), &[ch, num_samples]);
+        let buf2 = AudioBuffer::from_tensor(&t, sr).unwrap();
+        assert_eq!(buf, buf2);
+    }
+
+    #[test]
+    fn test_audio_core_stress_005() {
+        let sr = SampleRate::new(16500).unwrap();
+        let ch = ((5 % 4) + 1) as usize;
+        let num_samples = 128 + (5 * 7) % 256;
+        let mut buf = AudioBuffer::zeros(ch, num_samples, sr).unwrap();
+        assert_eq!(buf.channels(), ch);
+        assert_eq!(buf.num_samples(), num_samples);
+        assert_eq!(buf.duration(), sr.duration_seconds(num_samples));
+        
+        for c in 0..ch {
+            for s in 0..num_samples {
+                let val = ((c * 100 + s + 5) as f64 * 0.01).sin();
+                buf.set_sample(c, s, val).unwrap();
+                assert_eq!(buf.get_sample(c, s), Some(val));
+            }
+        }
+        
+        let mono = buf.to_mono();
+        assert_eq!(mono.channels(), 1);
+        assert_eq!(mono.num_samples(), num_samples);
+        
+        let sliced = buf.slice(10, 50).unwrap();
+        assert_eq!(sliced.num_samples(), 40);
+        assert_eq!(sliced.channels(), ch);
+        
+        let t = buf.to_tensor();
+        assert_eq!(t.shape(), &[ch, num_samples]);
+        let buf2 = AudioBuffer::from_tensor(&t, sr).unwrap();
+        assert_eq!(buf, buf2);
+    }
+
+    #[test]
+    fn test_audio_core_stress_006() {
+        let sr = SampleRate::new(16600).unwrap();
+        let ch = ((6 % 4) + 1) as usize;
+        let num_samples = 128 + (6 * 7) % 256;
+        let mut buf = AudioBuffer::zeros(ch, num_samples, sr).unwrap();
+        assert_eq!(buf.channels(), ch);
+        assert_eq!(buf.num_samples(), num_samples);
+        assert_eq!(buf.duration(), sr.duration_seconds(num_samples));
+        
+        for c in 0..ch {
+            for s in 0..num_samples {
+                let val = ((c * 100 + s + 6) as f64 * 0.01).sin();
+                buf.set_sample(c, s, val).unwrap();
+                assert_eq!(buf.get_sample(c, s), Some(val));
+            }
+        }
+        
+        let mono = buf.to_mono();
+        assert_eq!(mono.channels(), 1);
+        assert_eq!(mono.num_samples(), num_samples);
+        
+        let sliced = buf.slice(10, 50).unwrap();
+        assert_eq!(sliced.num_samples(), 40);
+        assert_eq!(sliced.channels(), ch);
+        
+        let t = buf.to_tensor();
+        assert_eq!(t.shape(), &[ch, num_samples]);
+        let buf2 = AudioBuffer::from_tensor(&t, sr).unwrap();
+        assert_eq!(buf, buf2);
+    }
+
+    #[test]
+    fn test_audio_core_stress_007() {
+        let sr = SampleRate::new(16700).unwrap();
+        let ch = ((7 % 4) + 1) as usize;
+        let num_samples = 128 + (7 * 7) % 256;
+        let mut buf = AudioBuffer::zeros(ch, num_samples, sr).unwrap();
+        assert_eq!(buf.channels(), ch);
+        assert_eq!(buf.num_samples(), num_samples);
+        assert_eq!(buf.duration(), sr.duration_seconds(num_samples));
+        
+        for c in 0..ch {
+            for s in 0..num_samples {
+                let val = ((c * 100 + s + 7) as f64 * 0.01).sin();
+                buf.set_sample(c, s, val).unwrap();
+                assert_eq!(buf.get_sample(c, s), Some(val));
+            }
+        }
+        
+        let mono = buf.to_mono();
+        assert_eq!(mono.channels(), 1);
+        assert_eq!(mono.num_samples(), num_samples);
+        
+        let sliced = buf.slice(10, 50).unwrap();
+        assert_eq!(sliced.num_samples(), 40);
+        assert_eq!(sliced.channels(), ch);
+        
+        let t = buf.to_tensor();
+        assert_eq!(t.shape(), &[ch, num_samples]);
+        let buf2 = AudioBuffer::from_tensor(&t, sr).unwrap();
+        assert_eq!(buf, buf2);
+    }
+
+    #[test]
+    fn test_audio_core_stress_008() {
+        let sr = SampleRate::new(16800).unwrap();
+        let ch = ((8 % 4) + 1) as usize;
+        let num_samples = 128 + (8 * 7) % 256;
+        let mut buf = AudioBuffer::zeros(ch, num_samples, sr).unwrap();
+        assert_eq!(buf.channels(), ch);
+        assert_eq!(buf.num_samples(), num_samples);
+        assert_eq!(buf.duration(), sr.duration_seconds(num_samples));
+        
+        for c in 0..ch {
+            for s in 0..num_samples {
+                let val = ((c * 100 + s + 8) as f64 * 0.01).sin();
+                buf.set_sample(c, s, val).unwrap();
+                assert_eq!(buf.get_sample(c, s), Some(val));
+            }
+        }
+        
+        let mono = buf.to_mono();
+        assert_eq!(mono.channels(), 1);
+        assert_eq!(mono.num_samples(), num_samples);
+        
+        let sliced = buf.slice(10, 50).unwrap();
+        assert_eq!(sliced.num_samples(), 40);
+        assert_eq!(sliced.channels(), ch);
+        
+        let t = buf.to_tensor();
+        assert_eq!(t.shape(), &[ch, num_samples]);
+        let buf2 = AudioBuffer::from_tensor(&t, sr).unwrap();
+        assert_eq!(buf, buf2);
+    }
+
+    #[test]
+    fn test_audio_core_stress_009() {
+        let sr = SampleRate::new(16900).unwrap();
+        let ch = ((9 % 4) + 1) as usize;
+        let num_samples = 128 + (9 * 7) % 256;
+        let mut buf = AudioBuffer::zeros(ch, num_samples, sr).unwrap();
+        assert_eq!(buf.channels(), ch);
+        assert_eq!(buf.num_samples(), num_samples);
+        assert_eq!(buf.duration(), sr.duration_seconds(num_samples));
+        
+        for c in 0..ch {
+            for s in 0..num_samples {
+                let val = ((c * 100 + s + 9) as f64 * 0.01).sin();
+                buf.set_sample(c, s, val).unwrap();
+                assert_eq!(buf.get_sample(c, s), Some(val));
+            }
+        }
+        
+        let mono = buf.to_mono();
+        assert_eq!(mono.channels(), 1);
+        assert_eq!(mono.num_samples(), num_samples);
+        
+        let sliced = buf.slice(10, 50).unwrap();
+        assert_eq!(sliced.num_samples(), 40);
+        assert_eq!(sliced.channels(), ch);
+        
+        let t = buf.to_tensor();
+        assert_eq!(t.shape(), &[ch, num_samples]);
+        let buf2 = AudioBuffer::from_tensor(&t, sr).unwrap();
+        assert_eq!(buf, buf2);
+    }
+
+    #[test]
+    fn test_audio_core_stress_010() {
+        let sr = SampleRate::new(17000).unwrap();
+        let ch = ((10 % 4) + 1) as usize;
+        let num_samples = 128 + (10 * 7) % 256;
+        let mut buf = AudioBuffer::zeros(ch, num_samples, sr).unwrap();
+        assert_eq!(buf.channels(), ch);
+        assert_eq!(buf.num_samples(), num_samples);
+        assert_eq!(buf.duration(), sr.duration_seconds(num_samples));
+        
+        for c in 0..ch {
+            for s in 0..num_samples {
+                let val = ((c * 100 + s + 10) as f64 * 0.01).sin();
+                buf.set_sample(c, s, val).unwrap();
+                assert_eq!(buf.get_sample(c, s), Some(val));
+            }
+        }
+        
+        let mono = buf.to_mono();
+        assert_eq!(mono.channels(), 1);
+        assert_eq!(mono.num_samples(), num_samples);
+        
+        let sliced = buf.slice(10, 50).unwrap();
+        assert_eq!(sliced.num_samples(), 40);
+        assert_eq!(sliced.channels(), ch);
+        
+        let t = buf.to_tensor();
+        assert_eq!(t.shape(), &[ch, num_samples]);
+        let buf2 = AudioBuffer::from_tensor(&t, sr).unwrap();
+        assert_eq!(buf, buf2);
+    }
+
+    #[test]
+    fn test_audio_core_stress_011() {
+        let sr = SampleRate::new(17100).unwrap();
+        let ch = ((11 % 4) + 1) as usize;
+        let num_samples = 128 + (11 * 7) % 256;
+        let mut buf = AudioBuffer::zeros(ch, num_samples, sr).unwrap();
+        assert_eq!(buf.channels(), ch);
+        assert_eq!(buf.num_samples(), num_samples);
+        assert_eq!(buf.duration(), sr.duration_seconds(num_samples));
+        
+        for c in 0..ch {
+            for s in 0..num_samples {
+                let val = ((c * 100 + s + 11) as f64 * 0.01).sin();
+                buf.set_sample(c, s, val).unwrap();
+                assert_eq!(buf.get_sample(c, s), Some(val));
+            }
+        }
+        
+        let mono = buf.to_mono();
+        assert_eq!(mono.channels(), 1);
+        assert_eq!(mono.num_samples(), num_samples);
+        
+        let sliced = buf.slice(10, 50).unwrap();
+        assert_eq!(sliced.num_samples(), 40);
+        assert_eq!(sliced.channels(), ch);
+        
+        let t = buf.to_tensor();
+        assert_eq!(t.shape(), &[ch, num_samples]);
+        let buf2 = AudioBuffer::from_tensor(&t, sr).unwrap();
+        assert_eq!(buf, buf2);
+    }
+
+    #[test]
+    fn test_audio_core_stress_012() {
+        let sr = SampleRate::new(17200).unwrap();
+        let ch = ((12 % 4) + 1) as usize;
+        let num_samples = 128 + (12 * 7) % 256;
+        let mut buf = AudioBuffer::zeros(ch, num_samples, sr).unwrap();
+        assert_eq!(buf.channels(), ch);
+        assert_eq!(buf.num_samples(), num_samples);
+        assert_eq!(buf.duration(), sr.duration_seconds(num_samples));
+        
+        for c in 0..ch {
+            for s in 0..num_samples {
+                let val = ((c * 100 + s + 12) as f64 * 0.01).sin();
+                buf.set_sample(c, s, val).unwrap();
+                assert_eq!(buf.get_sample(c, s), Some(val));
+            }
+        }
+        
+        let mono = buf.to_mono();
+        assert_eq!(mono.channels(), 1);
+        assert_eq!(mono.num_samples(), num_samples);
+        
+        let sliced = buf.slice(10, 50).unwrap();
+        assert_eq!(sliced.num_samples(), 40);
+        assert_eq!(sliced.channels(), ch);
+        
+        let t = buf.to_tensor();
+        assert_eq!(t.shape(), &[ch, num_samples]);
+        let buf2 = AudioBuffer::from_tensor(&t, sr).unwrap();
+        assert_eq!(buf, buf2);
+    }
+
+    #[test]
+    fn test_audio_core_stress_013() {
+        let sr = SampleRate::new(17300).unwrap();
+        let ch = ((13 % 4) + 1) as usize;
+        let num_samples = 128 + (13 * 7) % 256;
+        let mut buf = AudioBuffer::zeros(ch, num_samples, sr).unwrap();
+        assert_eq!(buf.channels(), ch);
+        assert_eq!(buf.num_samples(), num_samples);
+        assert_eq!(buf.duration(), sr.duration_seconds(num_samples));
+        
+        for c in 0..ch {
+            for s in 0..num_samples {
+                let val = ((c * 100 + s + 13) as f64 * 0.01).sin();
+                buf.set_sample(c, s, val).unwrap();
+                assert_eq!(buf.get_sample(c, s), Some(val));
+            }
+        }
+        
+        let mono = buf.to_mono();
+        assert_eq!(mono.channels(), 1);
+        assert_eq!(mono.num_samples(), num_samples);
+        
+        let sliced = buf.slice(10, 50).unwrap();
+        assert_eq!(sliced.num_samples(), 40);
+        assert_eq!(sliced.channels(), ch);
+        
+        let t = buf.to_tensor();
+        assert_eq!(t.shape(), &[ch, num_samples]);
+        let buf2 = AudioBuffer::from_tensor(&t, sr).unwrap();
+        assert_eq!(buf, buf2);
+    }
+
+    #[test]
+    fn test_audio_core_stress_014() {
+        let sr = SampleRate::new(17400).unwrap();
+        let ch = ((14 % 4) + 1) as usize;
+        let num_samples = 128 + (14 * 7) % 256;
+        let mut buf = AudioBuffer::zeros(ch, num_samples, sr).unwrap();
+        assert_eq!(buf.channels(), ch);
+        assert_eq!(buf.num_samples(), num_samples);
+        assert_eq!(buf.duration(), sr.duration_seconds(num_samples));
+        
+        for c in 0..ch {
+            for s in 0..num_samples {
+                let val = ((c * 100 + s + 14) as f64 * 0.01).sin();
+                buf.set_sample(c, s, val).unwrap();
+                assert_eq!(buf.get_sample(c, s), Some(val));
+            }
+        }
+        
+        let mono = buf.to_mono();
+        assert_eq!(mono.channels(), 1);
+        assert_eq!(mono.num_samples(), num_samples);
+        
+        let sliced = buf.slice(10, 50).unwrap();
+        assert_eq!(sliced.num_samples(), 40);
+        assert_eq!(sliced.channels(), ch);
+        
+        let t = buf.to_tensor();
+        assert_eq!(t.shape(), &[ch, num_samples]);
+        let buf2 = AudioBuffer::from_tensor(&t, sr).unwrap();
+        assert_eq!(buf, buf2);
+    }
+
+    #[test]
+    fn test_audio_core_stress_015() {
+        let sr = SampleRate::new(17500).unwrap();
+        let ch = ((15 % 4) + 1) as usize;
+        let num_samples = 128 + (15 * 7) % 256;
+        let mut buf = AudioBuffer::zeros(ch, num_samples, sr).unwrap();
+        assert_eq!(buf.channels(), ch);
+        assert_eq!(buf.num_samples(), num_samples);
+        assert_eq!(buf.duration(), sr.duration_seconds(num_samples));
+        
+        for c in 0..ch {
+            for s in 0..num_samples {
+                let val = ((c * 100 + s + 15) as f64 * 0.01).sin();
+                buf.set_sample(c, s, val).unwrap();
+                assert_eq!(buf.get_sample(c, s), Some(val));
+            }
+        }
+        
+        let mono = buf.to_mono();
+        assert_eq!(mono.channels(), 1);
+        assert_eq!(mono.num_samples(), num_samples);
+        
+        let sliced = buf.slice(10, 50).unwrap();
+        assert_eq!(sliced.num_samples(), 40);
+        assert_eq!(sliced.channels(), ch);
+        
+        let t = buf.to_tensor();
+        assert_eq!(t.shape(), &[ch, num_samples]);
+        let buf2 = AudioBuffer::from_tensor(&t, sr).unwrap();
+        assert_eq!(buf, buf2);
+    }
+
+    #[test]
+    fn test_audio_core_stress_016() {
+        let sr = SampleRate::new(17600).unwrap();
+        let ch = ((16 % 4) + 1) as usize;
+        let num_samples = 128 + (16 * 7) % 256;
+        let mut buf = AudioBuffer::zeros(ch, num_samples, sr).unwrap();
+        assert_eq!(buf.channels(), ch);
+        assert_eq!(buf.num_samples(), num_samples);
+        assert_eq!(buf.duration(), sr.duration_seconds(num_samples));
+        
+        for c in 0..ch {
+            for s in 0..num_samples {
+                let val = ((c * 100 + s + 16) as f64 * 0.01).sin();
+                buf.set_sample(c, s, val).unwrap();
+                assert_eq!(buf.get_sample(c, s), Some(val));
+            }
+        }
+        
+        let mono = buf.to_mono();
+        assert_eq!(mono.channels(), 1);
+        assert_eq!(mono.num_samples(), num_samples);
+        
+        let sliced = buf.slice(10, 50).unwrap();
+        assert_eq!(sliced.num_samples(), 40);
+        assert_eq!(sliced.channels(), ch);
+        
+        let t = buf.to_tensor();
+        assert_eq!(t.shape(), &[ch, num_samples]);
+        let buf2 = AudioBuffer::from_tensor(&t, sr).unwrap();
+        assert_eq!(buf, buf2);
+    }
+
+    #[test]
+    fn test_audio_core_stress_017() {
+        let sr = SampleRate::new(17700).unwrap();
+        let ch = ((17 % 4) + 1) as usize;
+        let num_samples = 128 + (17 * 7) % 256;
+        let mut buf = AudioBuffer::zeros(ch, num_samples, sr).unwrap();
+        assert_eq!(buf.channels(), ch);
+        assert_eq!(buf.num_samples(), num_samples);
+        assert_eq!(buf.duration(), sr.duration_seconds(num_samples));
+        
+        for c in 0..ch {
+            for s in 0..num_samples {
+                let val = ((c * 100 + s + 17) as f64 * 0.01).sin();
+                buf.set_sample(c, s, val).unwrap();
+                assert_eq!(buf.get_sample(c, s), Some(val));
+            }
+        }
+        
+        let mono = buf.to_mono();
+        assert_eq!(mono.channels(), 1);
+        assert_eq!(mono.num_samples(), num_samples);
+        
+        let sliced = buf.slice(10, 50).unwrap();
+        assert_eq!(sliced.num_samples(), 40);
+        assert_eq!(sliced.channels(), ch);
+        
+        let t = buf.to_tensor();
+        assert_eq!(t.shape(), &[ch, num_samples]);
+        let buf2 = AudioBuffer::from_tensor(&t, sr).unwrap();
+        assert_eq!(buf, buf2);
+    }
+
+    #[test]
+    fn test_audio_core_stress_018() {
+        let sr = SampleRate::new(17800).unwrap();
+        let ch = ((18 % 4) + 1) as usize;
+        let num_samples = 128 + (18 * 7) % 256;
+        let mut buf = AudioBuffer::zeros(ch, num_samples, sr).unwrap();
+        assert_eq!(buf.channels(), ch);
+        assert_eq!(buf.num_samples(), num_samples);
+        assert_eq!(buf.duration(), sr.duration_seconds(num_samples));
+        
+        for c in 0..ch {
+            for s in 0..num_samples {
+                let val = ((c * 100 + s + 18) as f64 * 0.01).sin();
+                buf.set_sample(c, s, val).unwrap();
+                assert_eq!(buf.get_sample(c, s), Some(val));
+            }
+        }
+        
+        let mono = buf.to_mono();
+        assert_eq!(mono.channels(), 1);
+        assert_eq!(mono.num_samples(), num_samples);
+        
+        let sliced = buf.slice(10, 50).unwrap();
+        assert_eq!(sliced.num_samples(), 40);
+        assert_eq!(sliced.channels(), ch);
+        
+        let t = buf.to_tensor();
+        assert_eq!(t.shape(), &[ch, num_samples]);
+        let buf2 = AudioBuffer::from_tensor(&t, sr).unwrap();
+        assert_eq!(buf, buf2);
+    }
+
+    #[test]
+    fn test_audio_core_stress_019() {
+        let sr = SampleRate::new(17900).unwrap();
+        let ch = ((19 % 4) + 1) as usize;
+        let num_samples = 128 + (19 * 7) % 256;
+        let mut buf = AudioBuffer::zeros(ch, num_samples, sr).unwrap();
+        assert_eq!(buf.channels(), ch);
+        assert_eq!(buf.num_samples(), num_samples);
+        assert_eq!(buf.duration(), sr.duration_seconds(num_samples));
+        
+        for c in 0..ch {
+            for s in 0..num_samples {
+                let val = ((c * 100 + s + 19) as f64 * 0.01).sin();
+                buf.set_sample(c, s, val).unwrap();
+                assert_eq!(buf.get_sample(c, s), Some(val));
+            }
+        }
+        
+        let mono = buf.to_mono();
+        assert_eq!(mono.channels(), 1);
+        assert_eq!(mono.num_samples(), num_samples);
+        
+        let sliced = buf.slice(10, 50).unwrap();
+        assert_eq!(sliced.num_samples(), 40);
+        assert_eq!(sliced.channels(), ch);
+        
+        let t = buf.to_tensor();
+        assert_eq!(t.shape(), &[ch, num_samples]);
+        let buf2 = AudioBuffer::from_tensor(&t, sr).unwrap();
+        assert_eq!(buf, buf2);
+    }
+
+    #[test]
+    fn test_audio_core_stress_020() {
+        let sr = SampleRate::new(18000).unwrap();
+        let ch = ((20 % 4) + 1) as usize;
+        let num_samples = 128 + (20 * 7) % 256;
+        let mut buf = AudioBuffer::zeros(ch, num_samples, sr).unwrap();
+        assert_eq!(buf.channels(), ch);
+        assert_eq!(buf.num_samples(), num_samples);
+        assert_eq!(buf.duration(), sr.duration_seconds(num_samples));
+        
+        for c in 0..ch {
+            for s in 0..num_samples {
+                let val = ((c * 100 + s + 20) as f64 * 0.01).sin();
+                buf.set_sample(c, s, val).unwrap();
+                assert_eq!(buf.get_sample(c, s), Some(val));
+            }
+        }
+        
+        let mono = buf.to_mono();
+        assert_eq!(mono.channels(), 1);
+        assert_eq!(mono.num_samples(), num_samples);
+        
+        let sliced = buf.slice(10, 50).unwrap();
+        assert_eq!(sliced.num_samples(), 40);
+        assert_eq!(sliced.channels(), ch);
+        
+        let t = buf.to_tensor();
+        assert_eq!(t.shape(), &[ch, num_samples]);
+        let buf2 = AudioBuffer::from_tensor(&t, sr).unwrap();
+        assert_eq!(buf, buf2);
+    }
+
+    #[test]
+    fn test_audio_core_stress_021() {
+        let sr = SampleRate::new(18100).unwrap();
+        let ch = ((21 % 4) + 1) as usize;
+        let num_samples = 128 + (21 * 7) % 256;
+        let mut buf = AudioBuffer::zeros(ch, num_samples, sr).unwrap();
+        assert_eq!(buf.channels(), ch);
+        assert_eq!(buf.num_samples(), num_samples);
+        assert_eq!(buf.duration(), sr.duration_seconds(num_samples));
+        
+        for c in 0..ch {
+            for s in 0..num_samples {
+                let val = ((c * 100 + s + 21) as f64 * 0.01).sin();
+                buf.set_sample(c, s, val).unwrap();
+                assert_eq!(buf.get_sample(c, s), Some(val));
+            }
+        }
+        
+        let mono = buf.to_mono();
+        assert_eq!(mono.channels(), 1);
+        assert_eq!(mono.num_samples(), num_samples);
+        
+        let sliced = buf.slice(10, 50).unwrap();
+        assert_eq!(sliced.num_samples(), 40);
+        assert_eq!(sliced.channels(), ch);
+        
+        let t = buf.to_tensor();
+        assert_eq!(t.shape(), &[ch, num_samples]);
+        let buf2 = AudioBuffer::from_tensor(&t, sr).unwrap();
+        assert_eq!(buf, buf2);
+    }
+
+    #[test]
+    fn test_audio_core_stress_022() {
+        let sr = SampleRate::new(18200).unwrap();
+        let ch = ((22 % 4) + 1) as usize;
+        let num_samples = 128 + (22 * 7) % 256;
+        let mut buf = AudioBuffer::zeros(ch, num_samples, sr).unwrap();
+        assert_eq!(buf.channels(), ch);
+        assert_eq!(buf.num_samples(), num_samples);
+        assert_eq!(buf.duration(), sr.duration_seconds(num_samples));
+        
+        for c in 0..ch {
+            for s in 0..num_samples {
+                let val = ((c * 100 + s + 22) as f64 * 0.01).sin();
+                buf.set_sample(c, s, val).unwrap();
+                assert_eq!(buf.get_sample(c, s), Some(val));
+            }
+        }
+        
+        let mono = buf.to_mono();
+        assert_eq!(mono.channels(), 1);
+        assert_eq!(mono.num_samples(), num_samples);
+        
+        let sliced = buf.slice(10, 50).unwrap();
+        assert_eq!(sliced.num_samples(), 40);
+        assert_eq!(sliced.channels(), ch);
+        
+        let t = buf.to_tensor();
+        assert_eq!(t.shape(), &[ch, num_samples]);
+        let buf2 = AudioBuffer::from_tensor(&t, sr).unwrap();
+        assert_eq!(buf, buf2);
+    }
+
+    #[test]
+    fn test_audio_core_stress_023() {
+        let sr = SampleRate::new(18300).unwrap();
+        let ch = ((23 % 4) + 1) as usize;
+        let num_samples = 128 + (23 * 7) % 256;
+        let mut buf = AudioBuffer::zeros(ch, num_samples, sr).unwrap();
+        assert_eq!(buf.channels(), ch);
+        assert_eq!(buf.num_samples(), num_samples);
+        assert_eq!(buf.duration(), sr.duration_seconds(num_samples));
+        
+        for c in 0..ch {
+            for s in 0..num_samples {
+                let val = ((c * 100 + s + 23) as f64 * 0.01).sin();
+                buf.set_sample(c, s, val).unwrap();
+                assert_eq!(buf.get_sample(c, s), Some(val));
+            }
+        }
+        
+        let mono = buf.to_mono();
+        assert_eq!(mono.channels(), 1);
+        assert_eq!(mono.num_samples(), num_samples);
+        
+        let sliced = buf.slice(10, 50).unwrap();
+        assert_eq!(sliced.num_samples(), 40);
+        assert_eq!(sliced.channels(), ch);
+        
+        let t = buf.to_tensor();
+        assert_eq!(t.shape(), &[ch, num_samples]);
+        let buf2 = AudioBuffer::from_tensor(&t, sr).unwrap();
+        assert_eq!(buf, buf2);
+    }
+
+    #[test]
+    fn test_audio_core_stress_024() {
+        let sr = SampleRate::new(18400).unwrap();
+        let ch = ((24 % 4) + 1) as usize;
+        let num_samples = 128 + (24 * 7) % 256;
+        let mut buf = AudioBuffer::zeros(ch, num_samples, sr).unwrap();
+        assert_eq!(buf.channels(), ch);
+        assert_eq!(buf.num_samples(), num_samples);
+        assert_eq!(buf.duration(), sr.duration_seconds(num_samples));
+        
+        for c in 0..ch {
+            for s in 0..num_samples {
+                let val = ((c * 100 + s + 24) as f64 * 0.01).sin();
+                buf.set_sample(c, s, val).unwrap();
+                assert_eq!(buf.get_sample(c, s), Some(val));
+            }
+        }
+        
+        let mono = buf.to_mono();
+        assert_eq!(mono.channels(), 1);
+        assert_eq!(mono.num_samples(), num_samples);
+        
+        let sliced = buf.slice(10, 50).unwrap();
+        assert_eq!(sliced.num_samples(), 40);
+        assert_eq!(sliced.channels(), ch);
+        
+        let t = buf.to_tensor();
+        assert_eq!(t.shape(), &[ch, num_samples]);
+        let buf2 = AudioBuffer::from_tensor(&t, sr).unwrap();
+        assert_eq!(buf, buf2);
+    }
+
+    #[test]
+    fn test_audio_core_stress_025() {
+        let sr = SampleRate::new(18500).unwrap();
+        let ch = ((25 % 4) + 1) as usize;
+        let num_samples = 128 + (25 * 7) % 256;
+        let mut buf = AudioBuffer::zeros(ch, num_samples, sr).unwrap();
+        assert_eq!(buf.channels(), ch);
+        assert_eq!(buf.num_samples(), num_samples);
+        assert_eq!(buf.duration(), sr.duration_seconds(num_samples));
+        
+        for c in 0..ch {
+            for s in 0..num_samples {
+                let val = ((c * 100 + s + 25) as f64 * 0.01).sin();
+                buf.set_sample(c, s, val).unwrap();
+                assert_eq!(buf.get_sample(c, s), Some(val));
+            }
+        }
+        
+        let mono = buf.to_mono();
+        assert_eq!(mono.channels(), 1);
+        assert_eq!(mono.num_samples(), num_samples);
+        
+        let sliced = buf.slice(10, 50).unwrap();
+        assert_eq!(sliced.num_samples(), 40);
+        assert_eq!(sliced.channels(), ch);
+        
+        let t = buf.to_tensor();
+        assert_eq!(t.shape(), &[ch, num_samples]);
+        let buf2 = AudioBuffer::from_tensor(&t, sr).unwrap();
+        assert_eq!(buf, buf2);
+    }
+
+    #[test]
+    fn test_audio_core_stress_026() {
+        let sr = SampleRate::new(18600).unwrap();
+        let ch = ((26 % 4) + 1) as usize;
+        let num_samples = 128 + (26 * 7) % 256;
+        let mut buf = AudioBuffer::zeros(ch, num_samples, sr).unwrap();
+        assert_eq!(buf.channels(), ch);
+        assert_eq!(buf.num_samples(), num_samples);
+        assert_eq!(buf.duration(), sr.duration_seconds(num_samples));
+        
+        for c in 0..ch {
+            for s in 0..num_samples {
+                let val = ((c * 100 + s + 26) as f64 * 0.01).sin();
+                buf.set_sample(c, s, val).unwrap();
+                assert_eq!(buf.get_sample(c, s), Some(val));
+            }
+        }
+        
+        let mono = buf.to_mono();
+        assert_eq!(mono.channels(), 1);
+        assert_eq!(mono.num_samples(), num_samples);
+        
+        let sliced = buf.slice(10, 50).unwrap();
+        assert_eq!(sliced.num_samples(), 40);
+        assert_eq!(sliced.channels(), ch);
+        
+        let t = buf.to_tensor();
+        assert_eq!(t.shape(), &[ch, num_samples]);
+        let buf2 = AudioBuffer::from_tensor(&t, sr).unwrap();
+        assert_eq!(buf, buf2);
+    }
+
+    #[test]
+    fn test_audio_core_stress_027() {
+        let sr = SampleRate::new(18700).unwrap();
+        let ch = ((27 % 4) + 1) as usize;
+        let num_samples = 128 + (27 * 7) % 256;
+        let mut buf = AudioBuffer::zeros(ch, num_samples, sr).unwrap();
+        assert_eq!(buf.channels(), ch);
+        assert_eq!(buf.num_samples(), num_samples);
+        assert_eq!(buf.duration(), sr.duration_seconds(num_samples));
+        
+        for c in 0..ch {
+            for s in 0..num_samples {
+                let val = ((c * 100 + s + 27) as f64 * 0.01).sin();
+                buf.set_sample(c, s, val).unwrap();
+                assert_eq!(buf.get_sample(c, s), Some(val));
+            }
+        }
+        
+        let mono = buf.to_mono();
+        assert_eq!(mono.channels(), 1);
+        assert_eq!(mono.num_samples(), num_samples);
+        
+        let sliced = buf.slice(10, 50).unwrap();
+        assert_eq!(sliced.num_samples(), 40);
+        assert_eq!(sliced.channels(), ch);
+        
+        let t = buf.to_tensor();
+        assert_eq!(t.shape(), &[ch, num_samples]);
+        let buf2 = AudioBuffer::from_tensor(&t, sr).unwrap();
+        assert_eq!(buf, buf2);
+    }
+
+    #[test]
+    fn test_audio_core_stress_028() {
+        let sr = SampleRate::new(18800).unwrap();
+        let ch = ((28 % 4) + 1) as usize;
+        let num_samples = 128 + (28 * 7) % 256;
+        let mut buf = AudioBuffer::zeros(ch, num_samples, sr).unwrap();
+        assert_eq!(buf.channels(), ch);
+        assert_eq!(buf.num_samples(), num_samples);
+        assert_eq!(buf.duration(), sr.duration_seconds(num_samples));
+        
+        for c in 0..ch {
+            for s in 0..num_samples {
+                let val = ((c * 100 + s + 28) as f64 * 0.01).sin();
+                buf.set_sample(c, s, val).unwrap();
+                assert_eq!(buf.get_sample(c, s), Some(val));
+            }
+        }
+        
+        let mono = buf.to_mono();
+        assert_eq!(mono.channels(), 1);
+        assert_eq!(mono.num_samples(), num_samples);
+        
+        let sliced = buf.slice(10, 50).unwrap();
+        assert_eq!(sliced.num_samples(), 40);
+        assert_eq!(sliced.channels(), ch);
+        
+        let t = buf.to_tensor();
+        assert_eq!(t.shape(), &[ch, num_samples]);
+        let buf2 = AudioBuffer::from_tensor(&t, sr).unwrap();
+        assert_eq!(buf, buf2);
+    }
+
+    #[test]
+    fn test_audio_core_stress_029() {
+        let sr = SampleRate::new(18900).unwrap();
+        let ch = ((29 % 4) + 1) as usize;
+        let num_samples = 128 + (29 * 7) % 256;
+        let mut buf = AudioBuffer::zeros(ch, num_samples, sr).unwrap();
+        assert_eq!(buf.channels(), ch);
+        assert_eq!(buf.num_samples(), num_samples);
+        assert_eq!(buf.duration(), sr.duration_seconds(num_samples));
+        
+        for c in 0..ch {
+            for s in 0..num_samples {
+                let val = ((c * 100 + s + 29) as f64 * 0.01).sin();
+                buf.set_sample(c, s, val).unwrap();
+                assert_eq!(buf.get_sample(c, s), Some(val));
+            }
+        }
+        
+        let mono = buf.to_mono();
+        assert_eq!(mono.channels(), 1);
+        assert_eq!(mono.num_samples(), num_samples);
+        
+        let sliced = buf.slice(10, 50).unwrap();
+        assert_eq!(sliced.num_samples(), 40);
+        assert_eq!(sliced.channels(), ch);
+        
+        let t = buf.to_tensor();
+        assert_eq!(t.shape(), &[ch, num_samples]);
+        let buf2 = AudioBuffer::from_tensor(&t, sr).unwrap();
+        assert_eq!(buf, buf2);
+    }
+
+    #[test]
+    fn test_audio_core_stress_030() {
+        let sr = SampleRate::new(19000).unwrap();
+        let ch = ((30 % 4) + 1) as usize;
+        let num_samples = 128 + (30 * 7) % 256;
+        let mut buf = AudioBuffer::zeros(ch, num_samples, sr).unwrap();
+        assert_eq!(buf.channels(), ch);
+        assert_eq!(buf.num_samples(), num_samples);
+        assert_eq!(buf.duration(), sr.duration_seconds(num_samples));
+        
+        for c in 0..ch {
+            for s in 0..num_samples {
+                let val = ((c * 100 + s + 30) as f64 * 0.01).sin();
+                buf.set_sample(c, s, val).unwrap();
+                assert_eq!(buf.get_sample(c, s), Some(val));
+            }
+        }
+        
+        let mono = buf.to_mono();
+        assert_eq!(mono.channels(), 1);
+        assert_eq!(mono.num_samples(), num_samples);
+        
+        let sliced = buf.slice(10, 50).unwrap();
+        assert_eq!(sliced.num_samples(), 40);
+        assert_eq!(sliced.channels(), ch);
+        
+        let t = buf.to_tensor();
+        assert_eq!(t.shape(), &[ch, num_samples]);
+        let buf2 = AudioBuffer::from_tensor(&t, sr).unwrap();
+        assert_eq!(buf, buf2);
+    }
+
+    #[test]
+    fn test_audio_core_stress_031() {
+        let sr = SampleRate::new(19100).unwrap();
+        let ch = ((31 % 4) + 1) as usize;
+        let num_samples = 128 + (31 * 7) % 256;
+        let mut buf = AudioBuffer::zeros(ch, num_samples, sr).unwrap();
+        assert_eq!(buf.channels(), ch);
+        assert_eq!(buf.num_samples(), num_samples);
+        assert_eq!(buf.duration(), sr.duration_seconds(num_samples));
+        
+        for c in 0..ch {
+            for s in 0..num_samples {
+                let val = ((c * 100 + s + 31) as f64 * 0.01).sin();
+                buf.set_sample(c, s, val).unwrap();
+                assert_eq!(buf.get_sample(c, s), Some(val));
+            }
+        }
+        
+        let mono = buf.to_mono();
+        assert_eq!(mono.channels(), 1);
+        assert_eq!(mono.num_samples(), num_samples);
+        
+        let sliced = buf.slice(10, 50).unwrap();
+        assert_eq!(sliced.num_samples(), 40);
+        assert_eq!(sliced.channels(), ch);
+        
+        let t = buf.to_tensor();
+        assert_eq!(t.shape(), &[ch, num_samples]);
+        let buf2 = AudioBuffer::from_tensor(&t, sr).unwrap();
+        assert_eq!(buf, buf2);
+    }
+
+    #[test]
+    fn test_audio_core_stress_032() {
+        let sr = SampleRate::new(19200).unwrap();
+        let ch = ((32 % 4) + 1) as usize;
+        let num_samples = 128 + (32 * 7) % 256;
+        let mut buf = AudioBuffer::zeros(ch, num_samples, sr).unwrap();
+        assert_eq!(buf.channels(), ch);
+        assert_eq!(buf.num_samples(), num_samples);
+        assert_eq!(buf.duration(), sr.duration_seconds(num_samples));
+        
+        for c in 0..ch {
+            for s in 0..num_samples {
+                let val = ((c * 100 + s + 32) as f64 * 0.01).sin();
+                buf.set_sample(c, s, val).unwrap();
+                assert_eq!(buf.get_sample(c, s), Some(val));
+            }
+        }
+        
+        let mono = buf.to_mono();
+        assert_eq!(mono.channels(), 1);
+        assert_eq!(mono.num_samples(), num_samples);
+        
+        let sliced = buf.slice(10, 50).unwrap();
+        assert_eq!(sliced.num_samples(), 40);
+        assert_eq!(sliced.channels(), ch);
+        
+        let t = buf.to_tensor();
+        assert_eq!(t.shape(), &[ch, num_samples]);
+        let buf2 = AudioBuffer::from_tensor(&t, sr).unwrap();
+        assert_eq!(buf, buf2);
+    }
+
+    #[test]
+    fn test_audio_core_stress_033() {
+        let sr = SampleRate::new(19300).unwrap();
+        let ch = ((33 % 4) + 1) as usize;
+        let num_samples = 128 + (33 * 7) % 256;
+        let mut buf = AudioBuffer::zeros(ch, num_samples, sr).unwrap();
+        assert_eq!(buf.channels(), ch);
+        assert_eq!(buf.num_samples(), num_samples);
+        assert_eq!(buf.duration(), sr.duration_seconds(num_samples));
+        
+        for c in 0..ch {
+            for s in 0..num_samples {
+                let val = ((c * 100 + s + 33) as f64 * 0.01).sin();
+                buf.set_sample(c, s, val).unwrap();
+                assert_eq!(buf.get_sample(c, s), Some(val));
+            }
+        }
+        
+        let mono = buf.to_mono();
+        assert_eq!(mono.channels(), 1);
+        assert_eq!(mono.num_samples(), num_samples);
+        
+        let sliced = buf.slice(10, 50).unwrap();
+        assert_eq!(sliced.num_samples(), 40);
+        assert_eq!(sliced.channels(), ch);
+        
+        let t = buf.to_tensor();
+        assert_eq!(t.shape(), &[ch, num_samples]);
+        let buf2 = AudioBuffer::from_tensor(&t, sr).unwrap();
+        assert_eq!(buf, buf2);
+    }
+
+    #[test]
+    fn test_audio_core_stress_034() {
+        let sr = SampleRate::new(19400).unwrap();
+        let ch = ((34 % 4) + 1) as usize;
+        let num_samples = 128 + (34 * 7) % 256;
+        let mut buf = AudioBuffer::zeros(ch, num_samples, sr).unwrap();
+        assert_eq!(buf.channels(), ch);
+        assert_eq!(buf.num_samples(), num_samples);
+        assert_eq!(buf.duration(), sr.duration_seconds(num_samples));
+        
+        for c in 0..ch {
+            for s in 0..num_samples {
+                let val = ((c * 100 + s + 34) as f64 * 0.01).sin();
+                buf.set_sample(c, s, val).unwrap();
+                assert_eq!(buf.get_sample(c, s), Some(val));
+            }
+        }
+        
+        let mono = buf.to_mono();
+        assert_eq!(mono.channels(), 1);
+        assert_eq!(mono.num_samples(), num_samples);
+        
+        let sliced = buf.slice(10, 50).unwrap();
+        assert_eq!(sliced.num_samples(), 40);
+        assert_eq!(sliced.channels(), ch);
+        
+        let t = buf.to_tensor();
+        assert_eq!(t.shape(), &[ch, num_samples]);
+        let buf2 = AudioBuffer::from_tensor(&t, sr).unwrap();
+        assert_eq!(buf, buf2);
+    }
+
+    #[test]
+    fn test_audio_core_stress_035() {
+        let sr = SampleRate::new(19500).unwrap();
+        let ch = ((35 % 4) + 1) as usize;
+        let num_samples = 128 + (35 * 7) % 256;
+        let mut buf = AudioBuffer::zeros(ch, num_samples, sr).unwrap();
+        assert_eq!(buf.channels(), ch);
+        assert_eq!(buf.num_samples(), num_samples);
+        assert_eq!(buf.duration(), sr.duration_seconds(num_samples));
+        
+        for c in 0..ch {
+            for s in 0..num_samples {
+                let val = ((c * 100 + s + 35) as f64 * 0.01).sin();
+                buf.set_sample(c, s, val).unwrap();
+                assert_eq!(buf.get_sample(c, s), Some(val));
+            }
+        }
+        
+        let mono = buf.to_mono();
+        assert_eq!(mono.channels(), 1);
+        assert_eq!(mono.num_samples(), num_samples);
+        
+        let sliced = buf.slice(10, 50).unwrap();
+        assert_eq!(sliced.num_samples(), 40);
+        assert_eq!(sliced.channels(), ch);
+        
+        let t = buf.to_tensor();
+        assert_eq!(t.shape(), &[ch, num_samples]);
+        let buf2 = AudioBuffer::from_tensor(&t, sr).unwrap();
+        assert_eq!(buf, buf2);
+    }
+
+    #[test]
+    fn test_audio_core_stress_036() {
+        let sr = SampleRate::new(19600).unwrap();
+        let ch = ((36 % 4) + 1) as usize;
+        let num_samples = 128 + (36 * 7) % 256;
+        let mut buf = AudioBuffer::zeros(ch, num_samples, sr).unwrap();
+        assert_eq!(buf.channels(), ch);
+        assert_eq!(buf.num_samples(), num_samples);
+        assert_eq!(buf.duration(), sr.duration_seconds(num_samples));
+        
+        for c in 0..ch {
+            for s in 0..num_samples {
+                let val = ((c * 100 + s + 36) as f64 * 0.01).sin();
+                buf.set_sample(c, s, val).unwrap();
+                assert_eq!(buf.get_sample(c, s), Some(val));
+            }
+        }
+        
+        let mono = buf.to_mono();
+        assert_eq!(mono.channels(), 1);
+        assert_eq!(mono.num_samples(), num_samples);
+        
+        let sliced = buf.slice(10, 50).unwrap();
+        assert_eq!(sliced.num_samples(), 40);
+        assert_eq!(sliced.channels(), ch);
+        
+        let t = buf.to_tensor();
+        assert_eq!(t.shape(), &[ch, num_samples]);
+        let buf2 = AudioBuffer::from_tensor(&t, sr).unwrap();
+        assert_eq!(buf, buf2);
+    }
+
+    #[test]
+    fn test_audio_core_stress_037() {
+        let sr = SampleRate::new(19700).unwrap();
+        let ch = ((37 % 4) + 1) as usize;
+        let num_samples = 128 + (37 * 7) % 256;
+        let mut buf = AudioBuffer::zeros(ch, num_samples, sr).unwrap();
+        assert_eq!(buf.channels(), ch);
+        assert_eq!(buf.num_samples(), num_samples);
+        assert_eq!(buf.duration(), sr.duration_seconds(num_samples));
+        
+        for c in 0..ch {
+            for s in 0..num_samples {
+                let val = ((c * 100 + s + 37) as f64 * 0.01).sin();
+                buf.set_sample(c, s, val).unwrap();
+                assert_eq!(buf.get_sample(c, s), Some(val));
+            }
+        }
+        
+        let mono = buf.to_mono();
+        assert_eq!(mono.channels(), 1);
+        assert_eq!(mono.num_samples(), num_samples);
+        
+        let sliced = buf.slice(10, 50).unwrap();
+        assert_eq!(sliced.num_samples(), 40);
+        assert_eq!(sliced.channels(), ch);
+        
+        let t = buf.to_tensor();
+        assert_eq!(t.shape(), &[ch, num_samples]);
+        let buf2 = AudioBuffer::from_tensor(&t, sr).unwrap();
+        assert_eq!(buf, buf2);
+    }
+
+    #[test]
+    fn test_audio_core_stress_038() {
+        let sr = SampleRate::new(19800).unwrap();
+        let ch = ((38 % 4) + 1) as usize;
+        let num_samples = 128 + (38 * 7) % 256;
+        let mut buf = AudioBuffer::zeros(ch, num_samples, sr).unwrap();
+        assert_eq!(buf.channels(), ch);
+        assert_eq!(buf.num_samples(), num_samples);
+        assert_eq!(buf.duration(), sr.duration_seconds(num_samples));
+        
+        for c in 0..ch {
+            for s in 0..num_samples {
+                let val = ((c * 100 + s + 38) as f64 * 0.01).sin();
+                buf.set_sample(c, s, val).unwrap();
+                assert_eq!(buf.get_sample(c, s), Some(val));
+            }
+        }
+        
+        let mono = buf.to_mono();
+        assert_eq!(mono.channels(), 1);
+        assert_eq!(mono.num_samples(), num_samples);
+        
+        let sliced = buf.slice(10, 50).unwrap();
+        assert_eq!(sliced.num_samples(), 40);
+        assert_eq!(sliced.channels(), ch);
+        
+        let t = buf.to_tensor();
+        assert_eq!(t.shape(), &[ch, num_samples]);
+        let buf2 = AudioBuffer::from_tensor(&t, sr).unwrap();
+        assert_eq!(buf, buf2);
+    }
+
+    #[test]
+    fn test_audio_core_stress_039() {
+        let sr = SampleRate::new(19900).unwrap();
+        let ch = ((39 % 4) + 1) as usize;
+        let num_samples = 128 + (39 * 7) % 256;
+        let mut buf = AudioBuffer::zeros(ch, num_samples, sr).unwrap();
+        assert_eq!(buf.channels(), ch);
+        assert_eq!(buf.num_samples(), num_samples);
+        assert_eq!(buf.duration(), sr.duration_seconds(num_samples));
+        
+        for c in 0..ch {
+            for s in 0..num_samples {
+                let val = ((c * 100 + s + 39) as f64 * 0.01).sin();
+                buf.set_sample(c, s, val).unwrap();
+                assert_eq!(buf.get_sample(c, s), Some(val));
+            }
+        }
+        
+        let mono = buf.to_mono();
+        assert_eq!(mono.channels(), 1);
+        assert_eq!(mono.num_samples(), num_samples);
+        
+        let sliced = buf.slice(10, 50).unwrap();
+        assert_eq!(sliced.num_samples(), 40);
+        assert_eq!(sliced.channels(), ch);
+        
+        let t = buf.to_tensor();
+        assert_eq!(t.shape(), &[ch, num_samples]);
+        let buf2 = AudioBuffer::from_tensor(&t, sr).unwrap();
+        assert_eq!(buf, buf2);
+    }
+
+    #[test]
+    fn test_audio_core_stress_040() {
+        let sr = SampleRate::new(20000).unwrap();
+        let ch = ((40 % 4) + 1) as usize;
+        let num_samples = 128 + (40 * 7) % 256;
+        let mut buf = AudioBuffer::zeros(ch, num_samples, sr).unwrap();
+        assert_eq!(buf.channels(), ch);
+        assert_eq!(buf.num_samples(), num_samples);
+        assert_eq!(buf.duration(), sr.duration_seconds(num_samples));
+        
+        for c in 0..ch {
+            for s in 0..num_samples {
+                let val = ((c * 100 + s + 40) as f64 * 0.01).sin();
+                buf.set_sample(c, s, val).unwrap();
+                assert_eq!(buf.get_sample(c, s), Some(val));
+            }
+        }
+        
+        let mono = buf.to_mono();
+        assert_eq!(mono.channels(), 1);
+        assert_eq!(mono.num_samples(), num_samples);
+        
+        let sliced = buf.slice(10, 50).unwrap();
+        assert_eq!(sliced.num_samples(), 40);
+        assert_eq!(sliced.channels(), ch);
+        
+        let t = buf.to_tensor();
+        assert_eq!(t.shape(), &[ch, num_samples]);
+        let buf2 = AudioBuffer::from_tensor(&t, sr).unwrap();
+        assert_eq!(buf, buf2);
+    }
+
+    #[test]
+    fn test_audio_core_stress_041() {
+        let sr = SampleRate::new(20100).unwrap();
+        let ch = ((41 % 4) + 1) as usize;
+        let num_samples = 128 + (41 * 7) % 256;
+        let mut buf = AudioBuffer::zeros(ch, num_samples, sr).unwrap();
+        assert_eq!(buf.channels(), ch);
+        assert_eq!(buf.num_samples(), num_samples);
+        assert_eq!(buf.duration(), sr.duration_seconds(num_samples));
+        
+        for c in 0..ch {
+            for s in 0..num_samples {
+                let val = ((c * 100 + s + 41) as f64 * 0.01).sin();
+                buf.set_sample(c, s, val).unwrap();
+                assert_eq!(buf.get_sample(c, s), Some(val));
+            }
+        }
+        
+        let mono = buf.to_mono();
+        assert_eq!(mono.channels(), 1);
+        assert_eq!(mono.num_samples(), num_samples);
+        
+        let sliced = buf.slice(10, 50).unwrap();
+        assert_eq!(sliced.num_samples(), 40);
+        assert_eq!(sliced.channels(), ch);
+        
+        let t = buf.to_tensor();
+        assert_eq!(t.shape(), &[ch, num_samples]);
+        let buf2 = AudioBuffer::from_tensor(&t, sr).unwrap();
+        assert_eq!(buf, buf2);
+    }
+
+    #[test]
+    fn test_audio_core_stress_042() {
+        let sr = SampleRate::new(20200).unwrap();
+        let ch = ((42 % 4) + 1) as usize;
+        let num_samples = 128 + (42 * 7) % 256;
+        let mut buf = AudioBuffer::zeros(ch, num_samples, sr).unwrap();
+        assert_eq!(buf.channels(), ch);
+        assert_eq!(buf.num_samples(), num_samples);
+        assert_eq!(buf.duration(), sr.duration_seconds(num_samples));
+        
+        for c in 0..ch {
+            for s in 0..num_samples {
+                let val = ((c * 100 + s + 42) as f64 * 0.01).sin();
+                buf.set_sample(c, s, val).unwrap();
+                assert_eq!(buf.get_sample(c, s), Some(val));
+            }
+        }
+        
+        let mono = buf.to_mono();
+        assert_eq!(mono.channels(), 1);
+        assert_eq!(mono.num_samples(), num_samples);
+        
+        let sliced = buf.slice(10, 50).unwrap();
+        assert_eq!(sliced.num_samples(), 40);
+        assert_eq!(sliced.channels(), ch);
+        
+        let t = buf.to_tensor();
+        assert_eq!(t.shape(), &[ch, num_samples]);
+        let buf2 = AudioBuffer::from_tensor(&t, sr).unwrap();
+        assert_eq!(buf, buf2);
+    }
+
+    #[test]
+    fn test_audio_core_stress_043() {
+        let sr = SampleRate::new(20300).unwrap();
+        let ch = ((43 % 4) + 1) as usize;
+        let num_samples = 128 + (43 * 7) % 256;
+        let mut buf = AudioBuffer::zeros(ch, num_samples, sr).unwrap();
+        assert_eq!(buf.channels(), ch);
+        assert_eq!(buf.num_samples(), num_samples);
+        assert_eq!(buf.duration(), sr.duration_seconds(num_samples));
+        
+        for c in 0..ch {
+            for s in 0..num_samples {
+                let val = ((c * 100 + s + 43) as f64 * 0.01).sin();
+                buf.set_sample(c, s, val).unwrap();
+                assert_eq!(buf.get_sample(c, s), Some(val));
+            }
+        }
+        
+        let mono = buf.to_mono();
+        assert_eq!(mono.channels(), 1);
+        assert_eq!(mono.num_samples(), num_samples);
+        
+        let sliced = buf.slice(10, 50).unwrap();
+        assert_eq!(sliced.num_samples(), 40);
+        assert_eq!(sliced.channels(), ch);
+        
+        let t = buf.to_tensor();
+        assert_eq!(t.shape(), &[ch, num_samples]);
+        let buf2 = AudioBuffer::from_tensor(&t, sr).unwrap();
+        assert_eq!(buf, buf2);
+    }
+
+    #[test]
+    fn test_audio_core_stress_044() {
+        let sr = SampleRate::new(20400).unwrap();
+        let ch = ((44 % 4) + 1) as usize;
+        let num_samples = 128 + (44 * 7) % 256;
+        let mut buf = AudioBuffer::zeros(ch, num_samples, sr).unwrap();
+        assert_eq!(buf.channels(), ch);
+        assert_eq!(buf.num_samples(), num_samples);
+        assert_eq!(buf.duration(), sr.duration_seconds(num_samples));
+        
+        for c in 0..ch {
+            for s in 0..num_samples {
+                let val = ((c * 100 + s + 44) as f64 * 0.01).sin();
+                buf.set_sample(c, s, val).unwrap();
+                assert_eq!(buf.get_sample(c, s), Some(val));
+            }
+        }
+        
+        let mono = buf.to_mono();
+        assert_eq!(mono.channels(), 1);
+        assert_eq!(mono.num_samples(), num_samples);
+        
+        let sliced = buf.slice(10, 50).unwrap();
+        assert_eq!(sliced.num_samples(), 40);
+        assert_eq!(sliced.channels(), ch);
+        
+        let t = buf.to_tensor();
+        assert_eq!(t.shape(), &[ch, num_samples]);
+        let buf2 = AudioBuffer::from_tensor(&t, sr).unwrap();
+        assert_eq!(buf, buf2);
+    }
+
+    #[test]
+    fn test_audio_core_stress_045() {
+        let sr = SampleRate::new(20500).unwrap();
+        let ch = ((45 % 4) + 1) as usize;
+        let num_samples = 128 + (45 * 7) % 256;
+        let mut buf = AudioBuffer::zeros(ch, num_samples, sr).unwrap();
+        assert_eq!(buf.channels(), ch);
+        assert_eq!(buf.num_samples(), num_samples);
+        assert_eq!(buf.duration(), sr.duration_seconds(num_samples));
+        
+        for c in 0..ch {
+            for s in 0..num_samples {
+                let val = ((c * 100 + s + 45) as f64 * 0.01).sin();
+                buf.set_sample(c, s, val).unwrap();
+                assert_eq!(buf.get_sample(c, s), Some(val));
+            }
+        }
+        
+        let mono = buf.to_mono();
+        assert_eq!(mono.channels(), 1);
+        assert_eq!(mono.num_samples(), num_samples);
+        
+        let sliced = buf.slice(10, 50).unwrap();
+        assert_eq!(sliced.num_samples(), 40);
+        assert_eq!(sliced.channels(), ch);
+        
+        let t = buf.to_tensor();
+        assert_eq!(t.shape(), &[ch, num_samples]);
+        let buf2 = AudioBuffer::from_tensor(&t, sr).unwrap();
+        assert_eq!(buf, buf2);
+    }
+
+    #[test]
+    fn test_audio_core_stress_046() {
+        let sr = SampleRate::new(20600).unwrap();
+        let ch = ((46 % 4) + 1) as usize;
+        let num_samples = 128 + (46 * 7) % 256;
+        let mut buf = AudioBuffer::zeros(ch, num_samples, sr).unwrap();
+        assert_eq!(buf.channels(), ch);
+        assert_eq!(buf.num_samples(), num_samples);
+        assert_eq!(buf.duration(), sr.duration_seconds(num_samples));
+        
+        for c in 0..ch {
+            for s in 0..num_samples {
+                let val = ((c * 100 + s + 46) as f64 * 0.01).sin();
+                buf.set_sample(c, s, val).unwrap();
+                assert_eq!(buf.get_sample(c, s), Some(val));
+            }
+        }
+        
+        let mono = buf.to_mono();
+        assert_eq!(mono.channels(), 1);
+        assert_eq!(mono.num_samples(), num_samples);
+        
+        let sliced = buf.slice(10, 50).unwrap();
+        assert_eq!(sliced.num_samples(), 40);
+        assert_eq!(sliced.channels(), ch);
+        
+        let t = buf.to_tensor();
+        assert_eq!(t.shape(), &[ch, num_samples]);
+        let buf2 = AudioBuffer::from_tensor(&t, sr).unwrap();
+        assert_eq!(buf, buf2);
+    }
+
+    #[test]
+    fn test_audio_core_stress_047() {
+        let sr = SampleRate::new(20700).unwrap();
+        let ch = ((47 % 4) + 1) as usize;
+        let num_samples = 128 + (47 * 7) % 256;
+        let mut buf = AudioBuffer::zeros(ch, num_samples, sr).unwrap();
+        assert_eq!(buf.channels(), ch);
+        assert_eq!(buf.num_samples(), num_samples);
+        assert_eq!(buf.duration(), sr.duration_seconds(num_samples));
+        
+        for c in 0..ch {
+            for s in 0..num_samples {
+                let val = ((c * 100 + s + 47) as f64 * 0.01).sin();
+                buf.set_sample(c, s, val).unwrap();
+                assert_eq!(buf.get_sample(c, s), Some(val));
+            }
+        }
+        
+        let mono = buf.to_mono();
+        assert_eq!(mono.channels(), 1);
+        assert_eq!(mono.num_samples(), num_samples);
+        
+        let sliced = buf.slice(10, 50).unwrap();
+        assert_eq!(sliced.num_samples(), 40);
+        assert_eq!(sliced.channels(), ch);
+        
+        let t = buf.to_tensor();
+        assert_eq!(t.shape(), &[ch, num_samples]);
+        let buf2 = AudioBuffer::from_tensor(&t, sr).unwrap();
+        assert_eq!(buf, buf2);
+    }
+
+    #[test]
+    fn test_audio_core_stress_048() {
+        let sr = SampleRate::new(20800).unwrap();
+        let ch = ((48 % 4) + 1) as usize;
+        let num_samples = 128 + (48 * 7) % 256;
+        let mut buf = AudioBuffer::zeros(ch, num_samples, sr).unwrap();
+        assert_eq!(buf.channels(), ch);
+        assert_eq!(buf.num_samples(), num_samples);
+        assert_eq!(buf.duration(), sr.duration_seconds(num_samples));
+        
+        for c in 0..ch {
+            for s in 0..num_samples {
+                let val = ((c * 100 + s + 48) as f64 * 0.01).sin();
+                buf.set_sample(c, s, val).unwrap();
+                assert_eq!(buf.get_sample(c, s), Some(val));
+            }
+        }
+        
+        let mono = buf.to_mono();
+        assert_eq!(mono.channels(), 1);
+        assert_eq!(mono.num_samples(), num_samples);
+        
+        let sliced = buf.slice(10, 50).unwrap();
+        assert_eq!(sliced.num_samples(), 40);
+        assert_eq!(sliced.channels(), ch);
+        
+        let t = buf.to_tensor();
+        assert_eq!(t.shape(), &[ch, num_samples]);
+        let buf2 = AudioBuffer::from_tensor(&t, sr).unwrap();
+        assert_eq!(buf, buf2);
+    }
+
+    #[test]
+    fn test_audio_core_stress_049() {
+        let sr = SampleRate::new(20900).unwrap();
+        let ch = ((49 % 4) + 1) as usize;
+        let num_samples = 128 + (49 * 7) % 256;
+        let mut buf = AudioBuffer::zeros(ch, num_samples, sr).unwrap();
+        assert_eq!(buf.channels(), ch);
+        assert_eq!(buf.num_samples(), num_samples);
+        assert_eq!(buf.duration(), sr.duration_seconds(num_samples));
+        
+        for c in 0..ch {
+            for s in 0..num_samples {
+                let val = ((c * 100 + s + 49) as f64 * 0.01).sin();
+                buf.set_sample(c, s, val).unwrap();
+                assert_eq!(buf.get_sample(c, s), Some(val));
+            }
+        }
+        
+        let mono = buf.to_mono();
+        assert_eq!(mono.channels(), 1);
+        assert_eq!(mono.num_samples(), num_samples);
+        
+        let sliced = buf.slice(10, 50).unwrap();
+        assert_eq!(sliced.num_samples(), 40);
+        assert_eq!(sliced.channels(), ch);
+        
+        let t = buf.to_tensor();
+        assert_eq!(t.shape(), &[ch, num_samples]);
+        let buf2 = AudioBuffer::from_tensor(&t, sr).unwrap();
+        assert_eq!(buf, buf2);
+    }
+
+    #[test]
+    fn test_audio_core_stress_050() {
+        let sr = SampleRate::new(21000).unwrap();
+        let ch = ((50 % 4) + 1) as usize;
+        let num_samples = 128 + (50 * 7) % 256;
+        let mut buf = AudioBuffer::zeros(ch, num_samples, sr).unwrap();
+        assert_eq!(buf.channels(), ch);
+        assert_eq!(buf.num_samples(), num_samples);
+        assert_eq!(buf.duration(), sr.duration_seconds(num_samples));
+        
+        for c in 0..ch {
+            for s in 0..num_samples {
+                let val = ((c * 100 + s + 50) as f64 * 0.01).sin();
+                buf.set_sample(c, s, val).unwrap();
+                assert_eq!(buf.get_sample(c, s), Some(val));
+            }
+        }
+        
+        let mono = buf.to_mono();
+        assert_eq!(mono.channels(), 1);
+        assert_eq!(mono.num_samples(), num_samples);
+        
+        let sliced = buf.slice(10, 50).unwrap();
+        assert_eq!(sliced.num_samples(), 40);
+        assert_eq!(sliced.channels(), ch);
+        
+        let t = buf.to_tensor();
+        assert_eq!(t.shape(), &[ch, num_samples]);
+        let buf2 = AudioBuffer::from_tensor(&t, sr).unwrap();
+        assert_eq!(buf, buf2);
+    }
+
+    #[test]
+    fn test_audio_core_stress_051() {
+        let sr = SampleRate::new(21100).unwrap();
+        let ch = ((51 % 4) + 1) as usize;
+        let num_samples = 128 + (51 * 7) % 256;
+        let mut buf = AudioBuffer::zeros(ch, num_samples, sr).unwrap();
+        assert_eq!(buf.channels(), ch);
+        assert_eq!(buf.num_samples(), num_samples);
+        assert_eq!(buf.duration(), sr.duration_seconds(num_samples));
+        
+        for c in 0..ch {
+            for s in 0..num_samples {
+                let val = ((c * 100 + s + 51) as f64 * 0.01).sin();
+                buf.set_sample(c, s, val).unwrap();
+                assert_eq!(buf.get_sample(c, s), Some(val));
+            }
+        }
+        
+        let mono = buf.to_mono();
+        assert_eq!(mono.channels(), 1);
+        assert_eq!(mono.num_samples(), num_samples);
+        
+        let sliced = buf.slice(10, 50).unwrap();
+        assert_eq!(sliced.num_samples(), 40);
+        assert_eq!(sliced.channels(), ch);
+        
+        let t = buf.to_tensor();
+        assert_eq!(t.shape(), &[ch, num_samples]);
+        let buf2 = AudioBuffer::from_tensor(&t, sr).unwrap();
+        assert_eq!(buf, buf2);
+    }
+
+    #[test]
+    fn test_audio_core_stress_052() {
+        let sr = SampleRate::new(21200).unwrap();
+        let ch = ((52 % 4) + 1) as usize;
+        let num_samples = 128 + (52 * 7) % 256;
+        let mut buf = AudioBuffer::zeros(ch, num_samples, sr).unwrap();
+        assert_eq!(buf.channels(), ch);
+        assert_eq!(buf.num_samples(), num_samples);
+        assert_eq!(buf.duration(), sr.duration_seconds(num_samples));
+        
+        for c in 0..ch {
+            for s in 0..num_samples {
+                let val = ((c * 100 + s + 52) as f64 * 0.01).sin();
+                buf.set_sample(c, s, val).unwrap();
+                assert_eq!(buf.get_sample(c, s), Some(val));
+            }
+        }
+        
+        let mono = buf.to_mono();
+        assert_eq!(mono.channels(), 1);
+        assert_eq!(mono.num_samples(), num_samples);
+        
+        let sliced = buf.slice(10, 50).unwrap();
+        assert_eq!(sliced.num_samples(), 40);
+        assert_eq!(sliced.channels(), ch);
+        
+        let t = buf.to_tensor();
+        assert_eq!(t.shape(), &[ch, num_samples]);
+        let buf2 = AudioBuffer::from_tensor(&t, sr).unwrap();
+        assert_eq!(buf, buf2);
+    }
+
+    #[test]
+    fn test_audio_core_stress_053() {
+        let sr = SampleRate::new(21300).unwrap();
+        let ch = ((53 % 4) + 1) as usize;
+        let num_samples = 128 + (53 * 7) % 256;
+        let mut buf = AudioBuffer::zeros(ch, num_samples, sr).unwrap();
+        assert_eq!(buf.channels(), ch);
+        assert_eq!(buf.num_samples(), num_samples);
+        assert_eq!(buf.duration(), sr.duration_seconds(num_samples));
+        
+        for c in 0..ch {
+            for s in 0..num_samples {
+                let val = ((c * 100 + s + 53) as f64 * 0.01).sin();
+                buf.set_sample(c, s, val).unwrap();
+                assert_eq!(buf.get_sample(c, s), Some(val));
+            }
+        }
+        
+        let mono = buf.to_mono();
+        assert_eq!(mono.channels(), 1);
+        assert_eq!(mono.num_samples(), num_samples);
+        
+        let sliced = buf.slice(10, 50).unwrap();
+        assert_eq!(sliced.num_samples(), 40);
+        assert_eq!(sliced.channels(), ch);
+        
+        let t = buf.to_tensor();
+        assert_eq!(t.shape(), &[ch, num_samples]);
+        let buf2 = AudioBuffer::from_tensor(&t, sr).unwrap();
+        assert_eq!(buf, buf2);
+    }
+
+    #[test]
+    fn test_audio_core_stress_054() {
+        let sr = SampleRate::new(21400).unwrap();
+        let ch = ((54 % 4) + 1) as usize;
+        let num_samples = 128 + (54 * 7) % 256;
+        let mut buf = AudioBuffer::zeros(ch, num_samples, sr).unwrap();
+        assert_eq!(buf.channels(), ch);
+        assert_eq!(buf.num_samples(), num_samples);
+        assert_eq!(buf.duration(), sr.duration_seconds(num_samples));
+        
+        for c in 0..ch {
+            for s in 0..num_samples {
+                let val = ((c * 100 + s + 54) as f64 * 0.01).sin();
+                buf.set_sample(c, s, val).unwrap();
+                assert_eq!(buf.get_sample(c, s), Some(val));
+            }
+        }
+        
+        let mono = buf.to_mono();
+        assert_eq!(mono.channels(), 1);
+        assert_eq!(mono.num_samples(), num_samples);
+        
+        let sliced = buf.slice(10, 50).unwrap();
+        assert_eq!(sliced.num_samples(), 40);
+        assert_eq!(sliced.channels(), ch);
+        
+        let t = buf.to_tensor();
+        assert_eq!(t.shape(), &[ch, num_samples]);
+        let buf2 = AudioBuffer::from_tensor(&t, sr).unwrap();
+        assert_eq!(buf, buf2);
+    }
+
+    #[test]
+    fn test_audio_core_stress_055() {
+        let sr = SampleRate::new(21500).unwrap();
+        let ch = ((55 % 4) + 1) as usize;
+        let num_samples = 128 + (55 * 7) % 256;
+        let mut buf = AudioBuffer::zeros(ch, num_samples, sr).unwrap();
+        assert_eq!(buf.channels(), ch);
+        assert_eq!(buf.num_samples(), num_samples);
+        assert_eq!(buf.duration(), sr.duration_seconds(num_samples));
+        
+        for c in 0..ch {
+            for s in 0..num_samples {
+                let val = ((c * 100 + s + 55) as f64 * 0.01).sin();
+                buf.set_sample(c, s, val).unwrap();
+                assert_eq!(buf.get_sample(c, s), Some(val));
+            }
+        }
+        
+        let mono = buf.to_mono();
+        assert_eq!(mono.channels(), 1);
+        assert_eq!(mono.num_samples(), num_samples);
+        
+        let sliced = buf.slice(10, 50).unwrap();
+        assert_eq!(sliced.num_samples(), 40);
+        assert_eq!(sliced.channels(), ch);
+        
+        let t = buf.to_tensor();
+        assert_eq!(t.shape(), &[ch, num_samples]);
+        let buf2 = AudioBuffer::from_tensor(&t, sr).unwrap();
+        assert_eq!(buf, buf2);
+    }
+
+    #[test]
+    fn test_audio_core_stress_056() {
+        let sr = SampleRate::new(21600).unwrap();
+        let ch = ((56 % 4) + 1) as usize;
+        let num_samples = 128 + (56 * 7) % 256;
+        let mut buf = AudioBuffer::zeros(ch, num_samples, sr).unwrap();
+        assert_eq!(buf.channels(), ch);
+        assert_eq!(buf.num_samples(), num_samples);
+        assert_eq!(buf.duration(), sr.duration_seconds(num_samples));
+        
+        for c in 0..ch {
+            for s in 0..num_samples {
+                let val = ((c * 100 + s + 56) as f64 * 0.01).sin();
+                buf.set_sample(c, s, val).unwrap();
+                assert_eq!(buf.get_sample(c, s), Some(val));
+            }
+        }
+        
+        let mono = buf.to_mono();
+        assert_eq!(mono.channels(), 1);
+        assert_eq!(mono.num_samples(), num_samples);
+        
+        let sliced = buf.slice(10, 50).unwrap();
+        assert_eq!(sliced.num_samples(), 40);
+        assert_eq!(sliced.channels(), ch);
+        
+        let t = buf.to_tensor();
+        assert_eq!(t.shape(), &[ch, num_samples]);
+        let buf2 = AudioBuffer::from_tensor(&t, sr).unwrap();
+        assert_eq!(buf, buf2);
+    }
+
+    #[test]
+    fn test_audio_core_stress_057() {
+        let sr = SampleRate::new(21700).unwrap();
+        let ch = ((57 % 4) + 1) as usize;
+        let num_samples = 128 + (57 * 7) % 256;
+        let mut buf = AudioBuffer::zeros(ch, num_samples, sr).unwrap();
+        assert_eq!(buf.channels(), ch);
+        assert_eq!(buf.num_samples(), num_samples);
+        assert_eq!(buf.duration(), sr.duration_seconds(num_samples));
+        
+        for c in 0..ch {
+            for s in 0..num_samples {
+                let val = ((c * 100 + s + 57) as f64 * 0.01).sin();
+                buf.set_sample(c, s, val).unwrap();
+                assert_eq!(buf.get_sample(c, s), Some(val));
+            }
+        }
+        
+        let mono = buf.to_mono();
+        assert_eq!(mono.channels(), 1);
+        assert_eq!(mono.num_samples(), num_samples);
+        
+        let sliced = buf.slice(10, 50).unwrap();
+        assert_eq!(sliced.num_samples(), 40);
+        assert_eq!(sliced.channels(), ch);
+        
+        let t = buf.to_tensor();
+        assert_eq!(t.shape(), &[ch, num_samples]);
+        let buf2 = AudioBuffer::from_tensor(&t, sr).unwrap();
+        assert_eq!(buf, buf2);
+    }
+
+    #[test]
+    fn test_audio_core_stress_058() {
+        let sr = SampleRate::new(21800).unwrap();
+        let ch = ((58 % 4) + 1) as usize;
+        let num_samples = 128 + (58 * 7) % 256;
+        let mut buf = AudioBuffer::zeros(ch, num_samples, sr).unwrap();
+        assert_eq!(buf.channels(), ch);
+        assert_eq!(buf.num_samples(), num_samples);
+        assert_eq!(buf.duration(), sr.duration_seconds(num_samples));
+        
+        for c in 0..ch {
+            for s in 0..num_samples {
+                let val = ((c * 100 + s + 58) as f64 * 0.01).sin();
+                buf.set_sample(c, s, val).unwrap();
+                assert_eq!(buf.get_sample(c, s), Some(val));
+            }
+        }
+        
+        let mono = buf.to_mono();
+        assert_eq!(mono.channels(), 1);
+        assert_eq!(mono.num_samples(), num_samples);
+        
+        let sliced = buf.slice(10, 50).unwrap();
+        assert_eq!(sliced.num_samples(), 40);
+        assert_eq!(sliced.channels(), ch);
+        
+        let t = buf.to_tensor();
+        assert_eq!(t.shape(), &[ch, num_samples]);
+        let buf2 = AudioBuffer::from_tensor(&t, sr).unwrap();
+        assert_eq!(buf, buf2);
+    }
+
+    #[test]
+    fn test_audio_core_stress_059() {
+        let sr = SampleRate::new(21900).unwrap();
+        let ch = ((59 % 4) + 1) as usize;
+        let num_samples = 128 + (59 * 7) % 256;
+        let mut buf = AudioBuffer::zeros(ch, num_samples, sr).unwrap();
+        assert_eq!(buf.channels(), ch);
+        assert_eq!(buf.num_samples(), num_samples);
+        assert_eq!(buf.duration(), sr.duration_seconds(num_samples));
+        
+        for c in 0..ch {
+            for s in 0..num_samples {
+                let val = ((c * 100 + s + 59) as f64 * 0.01).sin();
+                buf.set_sample(c, s, val).unwrap();
+                assert_eq!(buf.get_sample(c, s), Some(val));
+            }
+        }
+        
+        let mono = buf.to_mono();
+        assert_eq!(mono.channels(), 1);
+        assert_eq!(mono.num_samples(), num_samples);
+        
+        let sliced = buf.slice(10, 50).unwrap();
+        assert_eq!(sliced.num_samples(), 40);
+        assert_eq!(sliced.channels(), ch);
+        
+        let t = buf.to_tensor();
+        assert_eq!(t.shape(), &[ch, num_samples]);
+        let buf2 = AudioBuffer::from_tensor(&t, sr).unwrap();
+        assert_eq!(buf, buf2);
+    }
+
+    #[test]
+    fn test_audio_core_stress_060() {
+        let sr = SampleRate::new(22000).unwrap();
+        let ch = ((60 % 4) + 1) as usize;
+        let num_samples = 128 + (60 * 7) % 256;
+        let mut buf = AudioBuffer::zeros(ch, num_samples, sr).unwrap();
+        assert_eq!(buf.channels(), ch);
+        assert_eq!(buf.num_samples(), num_samples);
+        assert_eq!(buf.duration(), sr.duration_seconds(num_samples));
+        
+        for c in 0..ch {
+            for s in 0..num_samples {
+                let val = ((c * 100 + s + 60) as f64 * 0.01).sin();
+                buf.set_sample(c, s, val).unwrap();
+                assert_eq!(buf.get_sample(c, s), Some(val));
+            }
+        }
+        
+        let mono = buf.to_mono();
+        assert_eq!(mono.channels(), 1);
+        assert_eq!(mono.num_samples(), num_samples);
+        
+        let sliced = buf.slice(10, 50).unwrap();
+        assert_eq!(sliced.num_samples(), 40);
+        assert_eq!(sliced.channels(), ch);
+        
+        let t = buf.to_tensor();
+        assert_eq!(t.shape(), &[ch, num_samples]);
+        let buf2 = AudioBuffer::from_tensor(&t, sr).unwrap();
+        assert_eq!(buf, buf2);
+    }
+
+    #[test]
+    fn test_audio_core_stress_061() {
+        let sr = SampleRate::new(22100).unwrap();
+        let ch = ((61 % 4) + 1) as usize;
+        let num_samples = 128 + (61 * 7) % 256;
+        let mut buf = AudioBuffer::zeros(ch, num_samples, sr).unwrap();
+        assert_eq!(buf.channels(), ch);
+        assert_eq!(buf.num_samples(), num_samples);
+        assert_eq!(buf.duration(), sr.duration_seconds(num_samples));
+        
+        for c in 0..ch {
+            for s in 0..num_samples {
+                let val = ((c * 100 + s + 61) as f64 * 0.01).sin();
+                buf.set_sample(c, s, val).unwrap();
+                assert_eq!(buf.get_sample(c, s), Some(val));
+            }
+        }
+        
+        let mono = buf.to_mono();
+        assert_eq!(mono.channels(), 1);
+        assert_eq!(mono.num_samples(), num_samples);
+        
+        let sliced = buf.slice(10, 50).unwrap();
+        assert_eq!(sliced.num_samples(), 40);
+        assert_eq!(sliced.channels(), ch);
+        
+        let t = buf.to_tensor();
+        assert_eq!(t.shape(), &[ch, num_samples]);
+        let buf2 = AudioBuffer::from_tensor(&t, sr).unwrap();
+        assert_eq!(buf, buf2);
+    }
+
+    #[test]
+    fn test_audio_core_stress_062() {
+        let sr = SampleRate::new(22200).unwrap();
+        let ch = ((62 % 4) + 1) as usize;
+        let num_samples = 128 + (62 * 7) % 256;
+        let mut buf = AudioBuffer::zeros(ch, num_samples, sr).unwrap();
+        assert_eq!(buf.channels(), ch);
+        assert_eq!(buf.num_samples(), num_samples);
+        assert_eq!(buf.duration(), sr.duration_seconds(num_samples));
+        
+        for c in 0..ch {
+            for s in 0..num_samples {
+                let val = ((c * 100 + s + 62) as f64 * 0.01).sin();
+                buf.set_sample(c, s, val).unwrap();
+                assert_eq!(buf.get_sample(c, s), Some(val));
+            }
+        }
+        
+        let mono = buf.to_mono();
+        assert_eq!(mono.channels(), 1);
+        assert_eq!(mono.num_samples(), num_samples);
+        
+        let sliced = buf.slice(10, 50).unwrap();
+        assert_eq!(sliced.num_samples(), 40);
+        assert_eq!(sliced.channels(), ch);
+        
+        let t = buf.to_tensor();
+        assert_eq!(t.shape(), &[ch, num_samples]);
+        let buf2 = AudioBuffer::from_tensor(&t, sr).unwrap();
+        assert_eq!(buf, buf2);
+    }
+
+    #[test]
+    fn test_audio_core_stress_063() {
+        let sr = SampleRate::new(22300).unwrap();
+        let ch = ((63 % 4) + 1) as usize;
+        let num_samples = 128 + (63 * 7) % 256;
+        let mut buf = AudioBuffer::zeros(ch, num_samples, sr).unwrap();
+        assert_eq!(buf.channels(), ch);
+        assert_eq!(buf.num_samples(), num_samples);
+        assert_eq!(buf.duration(), sr.duration_seconds(num_samples));
+        
+        for c in 0..ch {
+            for s in 0..num_samples {
+                let val = ((c * 100 + s + 63) as f64 * 0.01).sin();
+                buf.set_sample(c, s, val).unwrap();
+                assert_eq!(buf.get_sample(c, s), Some(val));
+            }
+        }
+        
+        let mono = buf.to_mono();
+        assert_eq!(mono.channels(), 1);
+        assert_eq!(mono.num_samples(), num_samples);
+        
+        let sliced = buf.slice(10, 50).unwrap();
+        assert_eq!(sliced.num_samples(), 40);
+        assert_eq!(sliced.channels(), ch);
+        
+        let t = buf.to_tensor();
+        assert_eq!(t.shape(), &[ch, num_samples]);
+        let buf2 = AudioBuffer::from_tensor(&t, sr).unwrap();
+        assert_eq!(buf, buf2);
+    }
+
+    #[test]
+    fn test_audio_core_stress_064() {
+        let sr = SampleRate::new(22400).unwrap();
+        let ch = ((64 % 4) + 1) as usize;
+        let num_samples = 128 + (64 * 7) % 256;
+        let mut buf = AudioBuffer::zeros(ch, num_samples, sr).unwrap();
+        assert_eq!(buf.channels(), ch);
+        assert_eq!(buf.num_samples(), num_samples);
+        assert_eq!(buf.duration(), sr.duration_seconds(num_samples));
+        
+        for c in 0..ch {
+            for s in 0..num_samples {
+                let val = ((c * 100 + s + 64) as f64 * 0.01).sin();
+                buf.set_sample(c, s, val).unwrap();
+                assert_eq!(buf.get_sample(c, s), Some(val));
+            }
+        }
+        
+        let mono = buf.to_mono();
+        assert_eq!(mono.channels(), 1);
+        assert_eq!(mono.num_samples(), num_samples);
+        
+        let sliced = buf.slice(10, 50).unwrap();
+        assert_eq!(sliced.num_samples(), 40);
+        assert_eq!(sliced.channels(), ch);
+        
+        let t = buf.to_tensor();
+        assert_eq!(t.shape(), &[ch, num_samples]);
+        let buf2 = AudioBuffer::from_tensor(&t, sr).unwrap();
+        assert_eq!(buf, buf2);
+    }
+
+    #[test]
+    fn test_audio_core_stress_065() {
+        let sr = SampleRate::new(22500).unwrap();
+        let ch = ((65 % 4) + 1) as usize;
+        let num_samples = 128 + (65 * 7) % 256;
+        let mut buf = AudioBuffer::zeros(ch, num_samples, sr).unwrap();
+        assert_eq!(buf.channels(), ch);
+        assert_eq!(buf.num_samples(), num_samples);
+        assert_eq!(buf.duration(), sr.duration_seconds(num_samples));
+        
+        for c in 0..ch {
+            for s in 0..num_samples {
+                let val = ((c * 100 + s + 65) as f64 * 0.01).sin();
+                buf.set_sample(c, s, val).unwrap();
+                assert_eq!(buf.get_sample(c, s), Some(val));
+            }
+        }
+        
+        let mono = buf.to_mono();
+        assert_eq!(mono.channels(), 1);
+        assert_eq!(mono.num_samples(), num_samples);
+        
+        let sliced = buf.slice(10, 50).unwrap();
+        assert_eq!(sliced.num_samples(), 40);
+        assert_eq!(sliced.channels(), ch);
+        
+        let t = buf.to_tensor();
+        assert_eq!(t.shape(), &[ch, num_samples]);
+        let buf2 = AudioBuffer::from_tensor(&t, sr).unwrap();
+        assert_eq!(buf, buf2);
+    }
+
+    #[test]
+    fn test_audio_core_stress_066() {
+        let sr = SampleRate::new(22600).unwrap();
+        let ch = ((66 % 4) + 1) as usize;
+        let num_samples = 128 + (66 * 7) % 256;
+        let mut buf = AudioBuffer::zeros(ch, num_samples, sr).unwrap();
+        assert_eq!(buf.channels(), ch);
+        assert_eq!(buf.num_samples(), num_samples);
+        assert_eq!(buf.duration(), sr.duration_seconds(num_samples));
+        
+        for c in 0..ch {
+            for s in 0..num_samples {
+                let val = ((c * 100 + s + 66) as f64 * 0.01).sin();
+                buf.set_sample(c, s, val).unwrap();
+                assert_eq!(buf.get_sample(c, s), Some(val));
+            }
+        }
+        
+        let mono = buf.to_mono();
+        assert_eq!(mono.channels(), 1);
+        assert_eq!(mono.num_samples(), num_samples);
+        
+        let sliced = buf.slice(10, 50).unwrap();
+        assert_eq!(sliced.num_samples(), 40);
+        assert_eq!(sliced.channels(), ch);
+        
+        let t = buf.to_tensor();
+        assert_eq!(t.shape(), &[ch, num_samples]);
+        let buf2 = AudioBuffer::from_tensor(&t, sr).unwrap();
+        assert_eq!(buf, buf2);
+    }
+
+    #[test]
+    fn test_audio_core_stress_067() {
+        let sr = SampleRate::new(22700).unwrap();
+        let ch = ((67 % 4) + 1) as usize;
+        let num_samples = 128 + (67 * 7) % 256;
+        let mut buf = AudioBuffer::zeros(ch, num_samples, sr).unwrap();
+        assert_eq!(buf.channels(), ch);
+        assert_eq!(buf.num_samples(), num_samples);
+        assert_eq!(buf.duration(), sr.duration_seconds(num_samples));
+        
+        for c in 0..ch {
+            for s in 0..num_samples {
+                let val = ((c * 100 + s + 67) as f64 * 0.01).sin();
+                buf.set_sample(c, s, val).unwrap();
+                assert_eq!(buf.get_sample(c, s), Some(val));
+            }
+        }
+        
+        let mono = buf.to_mono();
+        assert_eq!(mono.channels(), 1);
+        assert_eq!(mono.num_samples(), num_samples);
+        
+        let sliced = buf.slice(10, 50).unwrap();
+        assert_eq!(sliced.num_samples(), 40);
+        assert_eq!(sliced.channels(), ch);
+        
+        let t = buf.to_tensor();
+        assert_eq!(t.shape(), &[ch, num_samples]);
+        let buf2 = AudioBuffer::from_tensor(&t, sr).unwrap();
+        assert_eq!(buf, buf2);
+    }
+
+    #[test]
+    fn test_audio_core_stress_068() {
+        let sr = SampleRate::new(22800).unwrap();
+        let ch = ((68 % 4) + 1) as usize;
+        let num_samples = 128 + (68 * 7) % 256;
+        let mut buf = AudioBuffer::zeros(ch, num_samples, sr).unwrap();
+        assert_eq!(buf.channels(), ch);
+        assert_eq!(buf.num_samples(), num_samples);
+        assert_eq!(buf.duration(), sr.duration_seconds(num_samples));
+        
+        for c in 0..ch {
+            for s in 0..num_samples {
+                let val = ((c * 100 + s + 68) as f64 * 0.01).sin();
+                buf.set_sample(c, s, val).unwrap();
+                assert_eq!(buf.get_sample(c, s), Some(val));
+            }
+        }
+        
+        let mono = buf.to_mono();
+        assert_eq!(mono.channels(), 1);
+        assert_eq!(mono.num_samples(), num_samples);
+        
+        let sliced = buf.slice(10, 50).unwrap();
+        assert_eq!(sliced.num_samples(), 40);
+        assert_eq!(sliced.channels(), ch);
+        
+        let t = buf.to_tensor();
+        assert_eq!(t.shape(), &[ch, num_samples]);
+        let buf2 = AudioBuffer::from_tensor(&t, sr).unwrap();
+        assert_eq!(buf, buf2);
+    }
+
+    #[test]
+    fn test_audio_core_stress_069() {
+        let sr = SampleRate::new(22900).unwrap();
+        let ch = ((69 % 4) + 1) as usize;
+        let num_samples = 128 + (69 * 7) % 256;
+        let mut buf = AudioBuffer::zeros(ch, num_samples, sr).unwrap();
+        assert_eq!(buf.channels(), ch);
+        assert_eq!(buf.num_samples(), num_samples);
+        assert_eq!(buf.duration(), sr.duration_seconds(num_samples));
+        
+        for c in 0..ch {
+            for s in 0..num_samples {
+                let val = ((c * 100 + s + 69) as f64 * 0.01).sin();
+                buf.set_sample(c, s, val).unwrap();
+                assert_eq!(buf.get_sample(c, s), Some(val));
+            }
+        }
+        
+        let mono = buf.to_mono();
+        assert_eq!(mono.channels(), 1);
+        assert_eq!(mono.num_samples(), num_samples);
+        
+        let sliced = buf.slice(10, 50).unwrap();
+        assert_eq!(sliced.num_samples(), 40);
+        assert_eq!(sliced.channels(), ch);
+        
+        let t = buf.to_tensor();
+        assert_eq!(t.shape(), &[ch, num_samples]);
+        let buf2 = AudioBuffer::from_tensor(&t, sr).unwrap();
+        assert_eq!(buf, buf2);
+    }
+
+    #[test]
+    fn test_audio_core_stress_070() {
+        let sr = SampleRate::new(23000).unwrap();
+        let ch = ((70 % 4) + 1) as usize;
+        let num_samples = 128 + (70 * 7) % 256;
+        let mut buf = AudioBuffer::zeros(ch, num_samples, sr).unwrap();
+        assert_eq!(buf.channels(), ch);
+        assert_eq!(buf.num_samples(), num_samples);
+        assert_eq!(buf.duration(), sr.duration_seconds(num_samples));
+        
+        for c in 0..ch {
+            for s in 0..num_samples {
+                let val = ((c * 100 + s + 70) as f64 * 0.01).sin();
+                buf.set_sample(c, s, val).unwrap();
+                assert_eq!(buf.get_sample(c, s), Some(val));
+            }
+        }
+        
+        let mono = buf.to_mono();
+        assert_eq!(mono.channels(), 1);
+        assert_eq!(mono.num_samples(), num_samples);
+        
+        let sliced = buf.slice(10, 50).unwrap();
+        assert_eq!(sliced.num_samples(), 40);
+        assert_eq!(sliced.channels(), ch);
+        
+        let t = buf.to_tensor();
+        assert_eq!(t.shape(), &[ch, num_samples]);
+        let buf2 = AudioBuffer::from_tensor(&t, sr).unwrap();
+        assert_eq!(buf, buf2);
+    }
+
+    #[test]
+    fn test_audio_core_stress_071() {
+        let sr = SampleRate::new(23100).unwrap();
+        let ch = ((71 % 4) + 1) as usize;
+        let num_samples = 128 + (71 * 7) % 256;
+        let mut buf = AudioBuffer::zeros(ch, num_samples, sr).unwrap();
+        assert_eq!(buf.channels(), ch);
+        assert_eq!(buf.num_samples(), num_samples);
+        assert_eq!(buf.duration(), sr.duration_seconds(num_samples));
+        
+        for c in 0..ch {
+            for s in 0..num_samples {
+                let val = ((c * 100 + s + 71) as f64 * 0.01).sin();
+                buf.set_sample(c, s, val).unwrap();
+                assert_eq!(buf.get_sample(c, s), Some(val));
+            }
+        }
+        
+        let mono = buf.to_mono();
+        assert_eq!(mono.channels(), 1);
+        assert_eq!(mono.num_samples(), num_samples);
+        
+        let sliced = buf.slice(10, 50).unwrap();
+        assert_eq!(sliced.num_samples(), 40);
+        assert_eq!(sliced.channels(), ch);
+        
+        let t = buf.to_tensor();
+        assert_eq!(t.shape(), &[ch, num_samples]);
+        let buf2 = AudioBuffer::from_tensor(&t, sr).unwrap();
+        assert_eq!(buf, buf2);
+    }
+
+    #[test]
+    fn test_audio_core_stress_072() {
+        let sr = SampleRate::new(23200).unwrap();
+        let ch = ((72 % 4) + 1) as usize;
+        let num_samples = 128 + (72 * 7) % 256;
+        let mut buf = AudioBuffer::zeros(ch, num_samples, sr).unwrap();
+        assert_eq!(buf.channels(), ch);
+        assert_eq!(buf.num_samples(), num_samples);
+        assert_eq!(buf.duration(), sr.duration_seconds(num_samples));
+        
+        for c in 0..ch {
+            for s in 0..num_samples {
+                let val = ((c * 100 + s + 72) as f64 * 0.01).sin();
+                buf.set_sample(c, s, val).unwrap();
+                assert_eq!(buf.get_sample(c, s), Some(val));
+            }
+        }
+        
+        let mono = buf.to_mono();
+        assert_eq!(mono.channels(), 1);
+        assert_eq!(mono.num_samples(), num_samples);
+        
+        let sliced = buf.slice(10, 50).unwrap();
+        assert_eq!(sliced.num_samples(), 40);
+        assert_eq!(sliced.channels(), ch);
+        
+        let t = buf.to_tensor();
+        assert_eq!(t.shape(), &[ch, num_samples]);
+        let buf2 = AudioBuffer::from_tensor(&t, sr).unwrap();
+        assert_eq!(buf, buf2);
+    }
+
+    #[test]
+    fn test_audio_core_stress_073() {
+        let sr = SampleRate::new(23300).unwrap();
+        let ch = ((73 % 4) + 1) as usize;
+        let num_samples = 128 + (73 * 7) % 256;
+        let mut buf = AudioBuffer::zeros(ch, num_samples, sr).unwrap();
+        assert_eq!(buf.channels(), ch);
+        assert_eq!(buf.num_samples(), num_samples);
+        assert_eq!(buf.duration(), sr.duration_seconds(num_samples));
+        
+        for c in 0..ch {
+            for s in 0..num_samples {
+                let val = ((c * 100 + s + 73) as f64 * 0.01).sin();
+                buf.set_sample(c, s, val).unwrap();
+                assert_eq!(buf.get_sample(c, s), Some(val));
+            }
+        }
+        
+        let mono = buf.to_mono();
+        assert_eq!(mono.channels(), 1);
+        assert_eq!(mono.num_samples(), num_samples);
+        
+        let sliced = buf.slice(10, 50).unwrap();
+        assert_eq!(sliced.num_samples(), 40);
+        assert_eq!(sliced.channels(), ch);
+        
+        let t = buf.to_tensor();
+        assert_eq!(t.shape(), &[ch, num_samples]);
+        let buf2 = AudioBuffer::from_tensor(&t, sr).unwrap();
+        assert_eq!(buf, buf2);
+    }
+
+    #[test]
+    fn test_audio_core_stress_074() {
+        let sr = SampleRate::new(23400).unwrap();
+        let ch = ((74 % 4) + 1) as usize;
+        let num_samples = 128 + (74 * 7) % 256;
+        let mut buf = AudioBuffer::zeros(ch, num_samples, sr).unwrap();
+        assert_eq!(buf.channels(), ch);
+        assert_eq!(buf.num_samples(), num_samples);
+        assert_eq!(buf.duration(), sr.duration_seconds(num_samples));
+        
+        for c in 0..ch {
+            for s in 0..num_samples {
+                let val = ((c * 100 + s + 74) as f64 * 0.01).sin();
+                buf.set_sample(c, s, val).unwrap();
+                assert_eq!(buf.get_sample(c, s), Some(val));
+            }
+        }
+        
+        let mono = buf.to_mono();
+        assert_eq!(mono.channels(), 1);
+        assert_eq!(mono.num_samples(), num_samples);
+        
+        let sliced = buf.slice(10, 50).unwrap();
+        assert_eq!(sliced.num_samples(), 40);
+        assert_eq!(sliced.channels(), ch);
+        
+        let t = buf.to_tensor();
+        assert_eq!(t.shape(), &[ch, num_samples]);
+        let buf2 = AudioBuffer::from_tensor(&t, sr).unwrap();
+        assert_eq!(buf, buf2);
+    }
+
+    #[test]
+    fn test_audio_core_stress_075() {
+        let sr = SampleRate::new(23500).unwrap();
+        let ch = ((75 % 4) + 1) as usize;
+        let num_samples = 128 + (75 * 7) % 256;
+        let mut buf = AudioBuffer::zeros(ch, num_samples, sr).unwrap();
+        assert_eq!(buf.channels(), ch);
+        assert_eq!(buf.num_samples(), num_samples);
+        assert_eq!(buf.duration(), sr.duration_seconds(num_samples));
+        
+        for c in 0..ch {
+            for s in 0..num_samples {
+                let val = ((c * 100 + s + 75) as f64 * 0.01).sin();
+                buf.set_sample(c, s, val).unwrap();
+                assert_eq!(buf.get_sample(c, s), Some(val));
+            }
+        }
+        
+        let mono = buf.to_mono();
+        assert_eq!(mono.channels(), 1);
+        assert_eq!(mono.num_samples(), num_samples);
+        
+        let sliced = buf.slice(10, 50).unwrap();
+        assert_eq!(sliced.num_samples(), 40);
+        assert_eq!(sliced.channels(), ch);
+        
+        let t = buf.to_tensor();
+        assert_eq!(t.shape(), &[ch, num_samples]);
+        let buf2 = AudioBuffer::from_tensor(&t, sr).unwrap();
+        assert_eq!(buf, buf2);
+    }
+
+    #[test]
+    fn test_audio_core_stress_076() {
+        let sr = SampleRate::new(23600).unwrap();
+        let ch = ((76 % 4) + 1) as usize;
+        let num_samples = 128 + (76 * 7) % 256;
+        let mut buf = AudioBuffer::zeros(ch, num_samples, sr).unwrap();
+        assert_eq!(buf.channels(), ch);
+        assert_eq!(buf.num_samples(), num_samples);
+        assert_eq!(buf.duration(), sr.duration_seconds(num_samples));
+        
+        for c in 0..ch {
+            for s in 0..num_samples {
+                let val = ((c * 100 + s + 76) as f64 * 0.01).sin();
+                buf.set_sample(c, s, val).unwrap();
+                assert_eq!(buf.get_sample(c, s), Some(val));
+            }
+        }
+        
+        let mono = buf.to_mono();
+        assert_eq!(mono.channels(), 1);
+        assert_eq!(mono.num_samples(), num_samples);
+        
+        let sliced = buf.slice(10, 50).unwrap();
+        assert_eq!(sliced.num_samples(), 40);
+        assert_eq!(sliced.channels(), ch);
+        
+        let t = buf.to_tensor();
+        assert_eq!(t.shape(), &[ch, num_samples]);
+        let buf2 = AudioBuffer::from_tensor(&t, sr).unwrap();
+        assert_eq!(buf, buf2);
+    }
+
+    #[test]
+    fn test_audio_core_stress_077() {
+        let sr = SampleRate::new(23700).unwrap();
+        let ch = ((77 % 4) + 1) as usize;
+        let num_samples = 128 + (77 * 7) % 256;
+        let mut buf = AudioBuffer::zeros(ch, num_samples, sr).unwrap();
+        assert_eq!(buf.channels(), ch);
+        assert_eq!(buf.num_samples(), num_samples);
+        assert_eq!(buf.duration(), sr.duration_seconds(num_samples));
+        
+        for c in 0..ch {
+            for s in 0..num_samples {
+                let val = ((c * 100 + s + 77) as f64 * 0.01).sin();
+                buf.set_sample(c, s, val).unwrap();
+                assert_eq!(buf.get_sample(c, s), Some(val));
+            }
+        }
+        
+        let mono = buf.to_mono();
+        assert_eq!(mono.channels(), 1);
+        assert_eq!(mono.num_samples(), num_samples);
+        
+        let sliced = buf.slice(10, 50).unwrap();
+        assert_eq!(sliced.num_samples(), 40);
+        assert_eq!(sliced.channels(), ch);
+        
+        let t = buf.to_tensor();
+        assert_eq!(t.shape(), &[ch, num_samples]);
+        let buf2 = AudioBuffer::from_tensor(&t, sr).unwrap();
+        assert_eq!(buf, buf2);
+    }
+
+    #[test]
+    fn test_audio_core_stress_078() {
+        let sr = SampleRate::new(23800).unwrap();
+        let ch = ((78 % 4) + 1) as usize;
+        let num_samples = 128 + (78 * 7) % 256;
+        let mut buf = AudioBuffer::zeros(ch, num_samples, sr).unwrap();
+        assert_eq!(buf.channels(), ch);
+        assert_eq!(buf.num_samples(), num_samples);
+        assert_eq!(buf.duration(), sr.duration_seconds(num_samples));
+        
+        for c in 0..ch {
+            for s in 0..num_samples {
+                let val = ((c * 100 + s + 78) as f64 * 0.01).sin();
+                buf.set_sample(c, s, val).unwrap();
+                assert_eq!(buf.get_sample(c, s), Some(val));
+            }
+        }
+        
+        let mono = buf.to_mono();
+        assert_eq!(mono.channels(), 1);
+        assert_eq!(mono.num_samples(), num_samples);
+        
+        let sliced = buf.slice(10, 50).unwrap();
+        assert_eq!(sliced.num_samples(), 40);
+        assert_eq!(sliced.channels(), ch);
+        
+        let t = buf.to_tensor();
+        assert_eq!(t.shape(), &[ch, num_samples]);
+        let buf2 = AudioBuffer::from_tensor(&t, sr).unwrap();
+        assert_eq!(buf, buf2);
+    }
+
+    #[test]
+    fn test_audio_core_stress_079() {
+        let sr = SampleRate::new(23900).unwrap();
+        let ch = ((79 % 4) + 1) as usize;
+        let num_samples = 128 + (79 * 7) % 256;
+        let mut buf = AudioBuffer::zeros(ch, num_samples, sr).unwrap();
+        assert_eq!(buf.channels(), ch);
+        assert_eq!(buf.num_samples(), num_samples);
+        assert_eq!(buf.duration(), sr.duration_seconds(num_samples));
+        
+        for c in 0..ch {
+            for s in 0..num_samples {
+                let val = ((c * 100 + s + 79) as f64 * 0.01).sin();
+                buf.set_sample(c, s, val).unwrap();
+                assert_eq!(buf.get_sample(c, s), Some(val));
+            }
+        }
+        
+        let mono = buf.to_mono();
+        assert_eq!(mono.channels(), 1);
+        assert_eq!(mono.num_samples(), num_samples);
+        
+        let sliced = buf.slice(10, 50).unwrap();
+        assert_eq!(sliced.num_samples(), 40);
+        assert_eq!(sliced.channels(), ch);
+        
+        let t = buf.to_tensor();
+        assert_eq!(t.shape(), &[ch, num_samples]);
+        let buf2 = AudioBuffer::from_tensor(&t, sr).unwrap();
+        assert_eq!(buf, buf2);
+    }
+
+    #[test]
+    fn test_audio_core_stress_080() {
+        let sr = SampleRate::new(24000).unwrap();
+        let ch = ((80 % 4) + 1) as usize;
+        let num_samples = 128 + (80 * 7) % 256;
+        let mut buf = AudioBuffer::zeros(ch, num_samples, sr).unwrap();
+        assert_eq!(buf.channels(), ch);
+        assert_eq!(buf.num_samples(), num_samples);
+        assert_eq!(buf.duration(), sr.duration_seconds(num_samples));
+        
+        for c in 0..ch {
+            for s in 0..num_samples {
+                let val = ((c * 100 + s + 80) as f64 * 0.01).sin();
+                buf.set_sample(c, s, val).unwrap();
+                assert_eq!(buf.get_sample(c, s), Some(val));
+            }
+        }
+        
+        let mono = buf.to_mono();
+        assert_eq!(mono.channels(), 1);
+        assert_eq!(mono.num_samples(), num_samples);
+        
+        let sliced = buf.slice(10, 50).unwrap();
+        assert_eq!(sliced.num_samples(), 40);
+        assert_eq!(sliced.channels(), ch);
+        
+        let t = buf.to_tensor();
+        assert_eq!(t.shape(), &[ch, num_samples]);
+        let buf2 = AudioBuffer::from_tensor(&t, sr).unwrap();
+        assert_eq!(buf, buf2);
+    }
+
+    #[test]
+    fn test_audio_core_stress_081() {
+        let sr = SampleRate::new(24100).unwrap();
+        let ch = ((81 % 4) + 1) as usize;
+        let num_samples = 128 + (81 * 7) % 256;
+        let mut buf = AudioBuffer::zeros(ch, num_samples, sr).unwrap();
+        assert_eq!(buf.channels(), ch);
+        assert_eq!(buf.num_samples(), num_samples);
+        assert_eq!(buf.duration(), sr.duration_seconds(num_samples));
+        
+        for c in 0..ch {
+            for s in 0..num_samples {
+                let val = ((c * 100 + s + 81) as f64 * 0.01).sin();
+                buf.set_sample(c, s, val).unwrap();
+                assert_eq!(buf.get_sample(c, s), Some(val));
+            }
+        }
+        
+        let mono = buf.to_mono();
+        assert_eq!(mono.channels(), 1);
+        assert_eq!(mono.num_samples(), num_samples);
+        
+        let sliced = buf.slice(10, 50).unwrap();
+        assert_eq!(sliced.num_samples(), 40);
+        assert_eq!(sliced.channels(), ch);
+        
+        let t = buf.to_tensor();
+        assert_eq!(t.shape(), &[ch, num_samples]);
+        let buf2 = AudioBuffer::from_tensor(&t, sr).unwrap();
+        assert_eq!(buf, buf2);
+    }
+
+    #[test]
+    fn test_audio_core_stress_082() {
+        let sr = SampleRate::new(24200).unwrap();
+        let ch = ((82 % 4) + 1) as usize;
+        let num_samples = 128 + (82 * 7) % 256;
+        let mut buf = AudioBuffer::zeros(ch, num_samples, sr).unwrap();
+        assert_eq!(buf.channels(), ch);
+        assert_eq!(buf.num_samples(), num_samples);
+        assert_eq!(buf.duration(), sr.duration_seconds(num_samples));
+        
+        for c in 0..ch {
+            for s in 0..num_samples {
+                let val = ((c * 100 + s + 82) as f64 * 0.01).sin();
+                buf.set_sample(c, s, val).unwrap();
+                assert_eq!(buf.get_sample(c, s), Some(val));
+            }
+        }
+        
+        let mono = buf.to_mono();
+        assert_eq!(mono.channels(), 1);
+        assert_eq!(mono.num_samples(), num_samples);
+        
+        let sliced = buf.slice(10, 50).unwrap();
+        assert_eq!(sliced.num_samples(), 40);
+        assert_eq!(sliced.channels(), ch);
+        
+        let t = buf.to_tensor();
+        assert_eq!(t.shape(), &[ch, num_samples]);
+        let buf2 = AudioBuffer::from_tensor(&t, sr).unwrap();
+        assert_eq!(buf, buf2);
+    }
+
+    #[test]
+    fn test_audio_core_stress_083() {
+        let sr = SampleRate::new(24300).unwrap();
+        let ch = ((83 % 4) + 1) as usize;
+        let num_samples = 128 + (83 * 7) % 256;
+        let mut buf = AudioBuffer::zeros(ch, num_samples, sr).unwrap();
+        assert_eq!(buf.channels(), ch);
+        assert_eq!(buf.num_samples(), num_samples);
+        assert_eq!(buf.duration(), sr.duration_seconds(num_samples));
+        
+        for c in 0..ch {
+            for s in 0..num_samples {
+                let val = ((c * 100 + s + 83) as f64 * 0.01).sin();
+                buf.set_sample(c, s, val).unwrap();
+                assert_eq!(buf.get_sample(c, s), Some(val));
+            }
+        }
+        
+        let mono = buf.to_mono();
+        assert_eq!(mono.channels(), 1);
+        assert_eq!(mono.num_samples(), num_samples);
+        
+        let sliced = buf.slice(10, 50).unwrap();
+        assert_eq!(sliced.num_samples(), 40);
+        assert_eq!(sliced.channels(), ch);
+        
+        let t = buf.to_tensor();
+        assert_eq!(t.shape(), &[ch, num_samples]);
+        let buf2 = AudioBuffer::from_tensor(&t, sr).unwrap();
+        assert_eq!(buf, buf2);
+    }
+
+    #[test]
+    fn test_audio_core_stress_084() {
+        let sr = SampleRate::new(24400).unwrap();
+        let ch = ((84 % 4) + 1) as usize;
+        let num_samples = 128 + (84 * 7) % 256;
+        let mut buf = AudioBuffer::zeros(ch, num_samples, sr).unwrap();
+        assert_eq!(buf.channels(), ch);
+        assert_eq!(buf.num_samples(), num_samples);
+        assert_eq!(buf.duration(), sr.duration_seconds(num_samples));
+        
+        for c in 0..ch {
+            for s in 0..num_samples {
+                let val = ((c * 100 + s + 84) as f64 * 0.01).sin();
+                buf.set_sample(c, s, val).unwrap();
+                assert_eq!(buf.get_sample(c, s), Some(val));
+            }
+        }
+        
+        let mono = buf.to_mono();
+        assert_eq!(mono.channels(), 1);
+        assert_eq!(mono.num_samples(), num_samples);
+        
+        let sliced = buf.slice(10, 50).unwrap();
+        assert_eq!(sliced.num_samples(), 40);
+        assert_eq!(sliced.channels(), ch);
+        
+        let t = buf.to_tensor();
+        assert_eq!(t.shape(), &[ch, num_samples]);
+        let buf2 = AudioBuffer::from_tensor(&t, sr).unwrap();
+        assert_eq!(buf, buf2);
+    }
+
+    #[test]
+    fn test_audio_core_stress_085() {
+        let sr = SampleRate::new(24500).unwrap();
+        let ch = ((85 % 4) + 1) as usize;
+        let num_samples = 128 + (85 * 7) % 256;
+        let mut buf = AudioBuffer::zeros(ch, num_samples, sr).unwrap();
+        assert_eq!(buf.channels(), ch);
+        assert_eq!(buf.num_samples(), num_samples);
+        assert_eq!(buf.duration(), sr.duration_seconds(num_samples));
+        
+        for c in 0..ch {
+            for s in 0..num_samples {
+                let val = ((c * 100 + s + 85) as f64 * 0.01).sin();
+                buf.set_sample(c, s, val).unwrap();
+                assert_eq!(buf.get_sample(c, s), Some(val));
+            }
+        }
+        
+        let mono = buf.to_mono();
+        assert_eq!(mono.channels(), 1);
+        assert_eq!(mono.num_samples(), num_samples);
+        
+        let sliced = buf.slice(10, 50).unwrap();
+        assert_eq!(sliced.num_samples(), 40);
+        assert_eq!(sliced.channels(), ch);
+        
+        let t = buf.to_tensor();
+        assert_eq!(t.shape(), &[ch, num_samples]);
+        let buf2 = AudioBuffer::from_tensor(&t, sr).unwrap();
+        assert_eq!(buf, buf2);
+    }
+
+    #[test]
+    fn test_audio_core_stress_086() {
+        let sr = SampleRate::new(24600).unwrap();
+        let ch = ((86 % 4) + 1) as usize;
+        let num_samples = 128 + (86 * 7) % 256;
+        let mut buf = AudioBuffer::zeros(ch, num_samples, sr).unwrap();
+        assert_eq!(buf.channels(), ch);
+        assert_eq!(buf.num_samples(), num_samples);
+        assert_eq!(buf.duration(), sr.duration_seconds(num_samples));
+        
+        for c in 0..ch {
+            for s in 0..num_samples {
+                let val = ((c * 100 + s + 86) as f64 * 0.01).sin();
+                buf.set_sample(c, s, val).unwrap();
+                assert_eq!(buf.get_sample(c, s), Some(val));
+            }
+        }
+        
+        let mono = buf.to_mono();
+        assert_eq!(mono.channels(), 1);
+        assert_eq!(mono.num_samples(), num_samples);
+        
+        let sliced = buf.slice(10, 50).unwrap();
+        assert_eq!(sliced.num_samples(), 40);
+        assert_eq!(sliced.channels(), ch);
+        
+        let t = buf.to_tensor();
+        assert_eq!(t.shape(), &[ch, num_samples]);
+        let buf2 = AudioBuffer::from_tensor(&t, sr).unwrap();
+        assert_eq!(buf, buf2);
+    }
+
+    #[test]
+    fn test_audio_core_stress_087() {
+        let sr = SampleRate::new(24700).unwrap();
+        let ch = ((87 % 4) + 1) as usize;
+        let num_samples = 128 + (87 * 7) % 256;
+        let mut buf = AudioBuffer::zeros(ch, num_samples, sr).unwrap();
+        assert_eq!(buf.channels(), ch);
+        assert_eq!(buf.num_samples(), num_samples);
+        assert_eq!(buf.duration(), sr.duration_seconds(num_samples));
+        
+        for c in 0..ch {
+            for s in 0..num_samples {
+                let val = ((c * 100 + s + 87) as f64 * 0.01).sin();
+                buf.set_sample(c, s, val).unwrap();
+                assert_eq!(buf.get_sample(c, s), Some(val));
+            }
+        }
+        
+        let mono = buf.to_mono();
+        assert_eq!(mono.channels(), 1);
+        assert_eq!(mono.num_samples(), num_samples);
+        
+        let sliced = buf.slice(10, 50).unwrap();
+        assert_eq!(sliced.num_samples(), 40);
+        assert_eq!(sliced.channels(), ch);
+        
+        let t = buf.to_tensor();
+        assert_eq!(t.shape(), &[ch, num_samples]);
+        let buf2 = AudioBuffer::from_tensor(&t, sr).unwrap();
+        assert_eq!(buf, buf2);
+    }
+
+    #[test]
+    fn test_audio_core_stress_088() {
+        let sr = SampleRate::new(24800).unwrap();
+        let ch = ((88 % 4) + 1) as usize;
+        let num_samples = 128 + (88 * 7) % 256;
+        let mut buf = AudioBuffer::zeros(ch, num_samples, sr).unwrap();
+        assert_eq!(buf.channels(), ch);
+        assert_eq!(buf.num_samples(), num_samples);
+        assert_eq!(buf.duration(), sr.duration_seconds(num_samples));
+        
+        for c in 0..ch {
+            for s in 0..num_samples {
+                let val = ((c * 100 + s + 88) as f64 * 0.01).sin();
+                buf.set_sample(c, s, val).unwrap();
+                assert_eq!(buf.get_sample(c, s), Some(val));
+            }
+        }
+        
+        let mono = buf.to_mono();
+        assert_eq!(mono.channels(), 1);
+        assert_eq!(mono.num_samples(), num_samples);
+        
+        let sliced = buf.slice(10, 50).unwrap();
+        assert_eq!(sliced.num_samples(), 40);
+        assert_eq!(sliced.channels(), ch);
+        
+        let t = buf.to_tensor();
+        assert_eq!(t.shape(), &[ch, num_samples]);
+        let buf2 = AudioBuffer::from_tensor(&t, sr).unwrap();
+        assert_eq!(buf, buf2);
+    }
+
+    #[test]
+    fn test_audio_core_stress_089() {
+        let sr = SampleRate::new(24900).unwrap();
+        let ch = ((89 % 4) + 1) as usize;
+        let num_samples = 128 + (89 * 7) % 256;
+        let mut buf = AudioBuffer::zeros(ch, num_samples, sr).unwrap();
+        assert_eq!(buf.channels(), ch);
+        assert_eq!(buf.num_samples(), num_samples);
+        assert_eq!(buf.duration(), sr.duration_seconds(num_samples));
+        
+        for c in 0..ch {
+            for s in 0..num_samples {
+                let val = ((c * 100 + s + 89) as f64 * 0.01).sin();
+                buf.set_sample(c, s, val).unwrap();
+                assert_eq!(buf.get_sample(c, s), Some(val));
+            }
+        }
+        
+        let mono = buf.to_mono();
+        assert_eq!(mono.channels(), 1);
+        assert_eq!(mono.num_samples(), num_samples);
+        
+        let sliced = buf.slice(10, 50).unwrap();
+        assert_eq!(sliced.num_samples(), 40);
+        assert_eq!(sliced.channels(), ch);
+        
+        let t = buf.to_tensor();
+        assert_eq!(t.shape(), &[ch, num_samples]);
+        let buf2 = AudioBuffer::from_tensor(&t, sr).unwrap();
+        assert_eq!(buf, buf2);
     }
-
-    #[test]
-    fn test_1() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S1::new();
-        let result = fn_1(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
-    }
-
-    #[test]
-    fn test_2() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S2::new();
-        let result = fn_2(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
-    }
-
-    #[test]
-    fn test_3() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S3::new();
-        let result = fn_3(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
-    }
-
-    #[test]
-    fn test_4() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S4::new();
-        let result = fn_4(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
-    }
-
-    #[test]
-    fn test_5() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S5::new();
-        let result = fn_5(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
-    }
-
-    #[test]
-    fn test_6() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S6::new();
-        let result = fn_6(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
-    }
-
-    #[test]
-    fn test_7() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S7::new();
-        let result = fn_7(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
-    }
-
-    #[test]
-    fn test_8() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S8::new();
-        let result = fn_8(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
-    }
-
-    #[test]
-    fn test_9() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S9::new();
-        let result = fn_9(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
-    }
-
-    #[test]
-    fn test_10() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S10::new();
-        let result = fn_10(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
-    }
-
-    #[test]
-    fn test_11() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S11::new();
-        let result = fn_11(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
-    }
-
-    #[test]
-    fn test_12() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S12::new();
-        let result = fn_12(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
-    }
-
-    #[test]
-    fn test_13() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S13::new();
-        let result = fn_13(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
-    }
-
-    #[test]
-    fn test_14() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S14::new();
-        let result = fn_14(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
-    }
-
-    #[test]
-    fn test_15() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S0::new();
-        let result = fn_15(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
-    }
-
-    #[test]
-    fn test_16() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S1::new();
-        let result = fn_16(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
-    }
-
-    #[test]
-    fn test_17() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S2::new();
-        let result = fn_17(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
-    }
-
-    #[test]
-    fn test_18() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S3::new();
-        let result = fn_18(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
-    }
-
-    #[test]
-    fn test_19() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S4::new();
-        let result = fn_19(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
-    }
-
-    #[test]
-    fn test_20() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S5::new();
-        let result = fn_20(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
-    }
-
-    #[test]
-    fn test_21() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S6::new();
-        let result = fn_21(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
-    }
-
-    #[test]
-    fn test_22() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S7::new();
-        let result = fn_22(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
-    }
-
-    #[test]
-    fn test_23() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S8::new();
-        let result = fn_23(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
-    }
-
-    #[test]
-    fn test_24() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S9::new();
-        let result = fn_24(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
-    }
-
-    #[test]
-    fn test_25() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S10::new();
-        let result = fn_25(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
-    }
-
-    #[test]
-    fn test_26() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S11::new();
-        let result = fn_26(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
-    }
-
-    #[test]
-    fn test_27() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S12::new();
-        let result = fn_27(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
-    }
-
-    #[test]
-    fn test_28() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S13::new();
-        let result = fn_28(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
-    }
-
-    #[test]
-    fn test_29() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S14::new();
-        let result = fn_29(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
-    }
-
-    #[test]
-    fn test_30() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S0::new();
-        let result = fn_30(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
-    }
-
-    #[test]
-    fn test_31() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S1::new();
-        let result = fn_31(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
-    }
-
-    #[test]
-    fn test_32() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S2::new();
-        let result = fn_32(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
-    }
-
-    #[test]
-    fn test_33() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S3::new();
-        let result = fn_33(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
-    }
-
-    #[test]
-    fn test_34() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S4::new();
-        let result = fn_34(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
-    }
-
-    #[test]
-    fn test_35() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S5::new();
-        let result = fn_35(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
-    }
-
-    #[test]
-    fn test_36() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S6::new();
-        let result = fn_36(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
-    }
-
-    #[test]
-    fn test_37() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S7::new();
-        let result = fn_37(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
-    }
-
-    #[test]
-    fn test_38() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S8::new();
-        let result = fn_38(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
-    }
-
-    #[test]
-    fn test_39() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S9::new();
-        let result = fn_39(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
-    }
-
-    #[test]
-    fn test_40() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S10::new();
-        let result = fn_40(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
-    }
-
-    #[test]
-    fn test_41() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S11::new();
-        let result = fn_41(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
-    }
-
-    #[test]
-    fn test_42() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S12::new();
-        let result = fn_42(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
-    }
-
-    #[test]
-    fn test_43() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S13::new();
-        let result = fn_43(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
-    }
-
-    #[test]
-    fn test_44() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S14::new();
-        let result = fn_44(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
-    }
-
-    #[test]
-    fn test_45() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S0::new();
-        let result = fn_45(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
-    }
-
-    #[test]
-    fn test_46() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S1::new();
-        let result = fn_46(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
-    }
-
-    #[test]
-    fn test_47() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S2::new();
-        let result = fn_47(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
-    }
-
-    #[test]
-    fn test_48() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S3::new();
-        let result = fn_48(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
-    }
-
-    #[test]
-    fn test_49() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S4::new();
-        let result = fn_49(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
-    }
-
-    #[test]
-    fn test_50() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S5::new();
-        let result = fn_50(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
-    }
-
-    #[test]
-    fn test_51() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S6::new();
-        let result = fn_51(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
-    }
-
-    #[test]
-    fn test_52() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S7::new();
-        let result = fn_52(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
-    }
-
-    #[test]
-    fn test_53() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S8::new();
-        let result = fn_53(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
-    }
-
-    #[test]
-    fn test_54() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S9::new();
-        let result = fn_54(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
-    }
-
-    #[test]
-    fn test_55() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S10::new();
-        let result = fn_55(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
-    }
-
-    #[test]
-    fn test_56() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S11::new();
-        let result = fn_56(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
-    }
-
-    #[test]
-    fn test_57() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S12::new();
-        let result = fn_57(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
-    }
-
-    #[test]
-    fn test_58() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S13::new();
-        let result = fn_58(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
-    }
-
-    #[test]
-    fn test_59() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S14::new();
-        let result = fn_59(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
-    }
-
-    #[test]
-    fn test_60() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S0::new();
-        let result = fn_60(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
-    }
-
-    #[test]
-    fn test_61() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S1::new();
-        let result = fn_61(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
-    }
-
-    #[test]
-    fn test_62() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S2::new();
-        let result = fn_62(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
-    }
-
-    #[test]
-    fn test_63() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S3::new();
-        let result = fn_63(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
-    }
-
-    #[test]
-    fn test_64() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S4::new();
-        let result = fn_64(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
-    }
-
-    #[test]
-    fn test_65() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S5::new();
-        let result = fn_65(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
-    }
-
-    #[test]
-    fn test_66() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S6::new();
-        let result = fn_66(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
-    }
-
-    #[test]
-    fn test_67() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S7::new();
-        let result = fn_67(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
-    }
-
-    #[test]
-    fn test_68() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S8::new();
-        let result = fn_68(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
-    }
-
-    #[test]
-    fn test_69() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S9::new();
-        let result = fn_69(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
-    }
-
-    #[test]
-    fn test_70() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S10::new();
-        let result = fn_70(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
-    }
-
-    #[test]
-    fn test_71() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S11::new();
-        let result = fn_71(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
-    }
-
-    #[test]
-    fn test_72() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S12::new();
-        let result = fn_72(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
-    }
-
-    #[test]
-    fn test_73() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S13::new();
-        let result = fn_73(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
-    }
-
-    #[test]
-    fn test_74() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S14::new();
-        let result = fn_74(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
-    }
-
-    #[test]
-    fn test_75() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S0::new();
-        let result = fn_75(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
-    }
-
-    #[test]
-    fn test_76() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S1::new();
-        let result = fn_76(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
-    }
-
-    #[test]
-    fn test_77() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S2::new();
-        let result = fn_77(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
-    }
-
-    #[test]
-    fn test_78() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S3::new();
-        let result = fn_78(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
-    }
-
-    #[test]
-    fn test_79() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S4::new();
-        let result = fn_79(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
-    }
-
 }

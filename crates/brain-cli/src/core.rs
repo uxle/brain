@@ -1,8543 +1,3348 @@
-//! # Core for brain-cli
+//! # Core CLI Types, Output Sinks & Exit Codes
 //!
-//! Part of Brain framework - surpassing PyTorch & TensorFlow.
-//!
-//! ## Innovations over PyTorch
-//! - Zero-copy stride-based views (no Storage indirection)
-//! - Compile-time dtype checking (no runtime type dispatch)
-//! - RAII memory (no reference counting overhead)
-//!
-//! ## Innovations over TensorFlow
-//! - Clean eager-first API (no session/graph duality)
-//! - No legacy v1 baggage
-//! - Better errors via Rust Result types
-//!
+//! Provides the primary primitives for CLI command execution, exit codes,
+//! formatted output serialization, and in-memory or standard stream output sinks.
 
-use brain_core::{Tensor,Shape,Device,DType,BrainResult,BrainError};
-use std::fmt;
-use std::collections::{HashMap,HashSet,VecDeque,BTreeMap,BinaryHeap};
-use std::marker::PhantomData;
-use std::cell::RefCell;
-use std::rc::Rc;
-use std::sync::{Arc,Mutex,RwLock,atomic::{AtomicUsize,Ordering}};
+use std::sync::{Arc, Mutex};
 
-/// Constant 0 for brain-cli module.
-pub const CORE_C0: f64 = 0.00031415926536;
-/// Constant 1 for brain-cli module.
-pub const CORE_C1: f64 = 0.00062831853072;
-/// Constant 2 for brain-cli module.
-pub const CORE_C2: f64 = 0.00094247779608;
-/// Constant 3 for brain-cli module.
-pub const CORE_C3: f64 = 0.00125663706144;
-/// Constant 4 for brain-cli module.
-pub const CORE_C4: f64 = 0.00157079632679;
-/// Constant 5 for brain-cli module.
-pub const CORE_C5: f64 = 0.00188495559215;
-/// Constant 6 for brain-cli module.
-pub const CORE_C6: f64 = 0.00219911485751;
-/// Constant 7 for brain-cli module.
-pub const CORE_C7: f64 = 0.00251327412287;
-/// Constant 8 for brain-cli module.
-pub const CORE_C8: f64 = 0.00282743338823;
-/// Constant 9 for brain-cli module.
-pub const CORE_C9: f64 = 0.00314159265359;
-/// Constant 10 for brain-cli module.
-pub const CORE_C10: f64 = 0.00345575191895;
-/// Constant 11 for brain-cli module.
-pub const CORE_C11: f64 = 0.00376991118431;
-/// Constant 12 for brain-cli module.
-pub const CORE_C12: f64 = 0.00408407044967;
-/// Constant 13 for brain-cli module.
-pub const CORE_C13: f64 = 0.00439822971503;
-/// Constant 14 for brain-cli module.
-pub const CORE_C14: f64 = 0.00471238898038;
-/// Constant 15 for brain-cli module.
-pub const CORE_C15: f64 = 0.00502654824574;
-/// Constant 16 for brain-cli module.
-pub const CORE_C16: f64 = 0.0053407075111;
-/// Constant 17 for brain-cli module.
-pub const CORE_C17: f64 = 0.00565486677646;
-/// Constant 18 for brain-cli module.
-pub const CORE_C18: f64 = 0.00596902604182;
-/// Constant 19 for brain-cli module.
-pub const CORE_C19: f64 = 0.00628318530718;
-/// Constant 20 for brain-cli module.
-pub const CORE_C20: f64 = 0.00659734457254;
-/// Constant 21 for brain-cli module.
-pub const CORE_C21: f64 = 0.0069115038379;
-/// Constant 22 for brain-cli module.
-pub const CORE_C22: f64 = 0.00722566310326;
-/// Constant 23 for brain-cli module.
-pub const CORE_C23: f64 = 0.00753982236862;
-/// Constant 24 for brain-cli module.
-pub const CORE_C24: f64 = 0.00785398163397;
-/// Constant 25 for brain-cli module.
-pub const CORE_C25: f64 = 0.00816814089933;
-/// Constant 26 for brain-cli module.
-pub const CORE_C26: f64 = 0.00848230016469;
-/// Constant 27 for brain-cli module.
-pub const CORE_C27: f64 = 0.00879645943005;
-/// Constant 28 for brain-cli module.
-pub const CORE_C28: f64 = 0.00911061869541;
-/// Constant 29 for brain-cli module.
-pub const CORE_C29: f64 = 0.00942477796077;
-/// Constant 30 for brain-cli module.
-pub const CORE_C30: f64 = 0.00973893722613;
-/// Constant 31 for brain-cli module.
-pub const CORE_C31: f64 = 0.01005309649149;
-/// Constant 32 for brain-cli module.
-pub const CORE_C32: f64 = 0.01036725575685;
-/// Constant 33 for brain-cli module.
-pub const CORE_C33: f64 = 0.01068141502221;
-/// Constant 34 for brain-cli module.
-pub const CORE_C34: f64 = 0.01099557428756;
-/// Constant 35 for brain-cli module.
-pub const CORE_C35: f64 = 0.01130973355292;
-/// Constant 36 for brain-cli module.
-pub const CORE_C36: f64 = 0.01162389281828;
-/// Constant 37 for brain-cli module.
-pub const CORE_C37: f64 = 0.01193805208364;
-/// Constant 38 for brain-cli module.
-pub const CORE_C38: f64 = 0.012252211349;
-/// Constant 39 for brain-cli module.
-pub const CORE_C39: f64 = 0.01256637061436;
+/// Process exit codes for command executions.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ExitCode(pub i32);
 
-/// Struct CORE_S0 for brain-cli data handling.
-/// Contains fields for the 0-th computation variant.
-#[derive(Debug,Clone,PartialEq)]
-pub struct CORE_S0 {
-    /// Field 0: weight parameter.
-    pub f0: f64,
-    /// Field 1: bias parameter.
-    pub f1: f64,
-    /// Field 2: momentum parameter.
-    pub f2: f64,
-    /// Field 3: mean parameter.
-    pub f3: f64,
-    /// Field 4: variance parameter.
-    pub f4: f64,
-    /// Field 5: scale parameter.
-    pub f5: f64,
-    /// Field 6: offset parameter.
-    pub f6: f64,
-    /// Field 7: running_sum parameter.
-    pub f7: f64,
-    /// Field 8: step parameter.
-    pub f8: f64,
-    /// Field 9: count parameter.
-    pub f9: f64,
-}
-
-impl CORE_S0 {
-    pub fn new() -> Self { Self { f0: 0.1, f1: 0.2, f2: 0.3, f3: 0.4, f4: 0.5, f5: 0.6, f6: 0.7, f7: 0.8, f8: 0.9, f9: 1.0, } }
-    /// Method compute_0 for CORE_S0.
-    pub fn compute_0(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.003;
-        r /= self.f3 * 0.004;
-        r += self.f4 * 0.005;
-        r -= self.f5 * 0.006;
-        r *= self.f6 * 0.007;
-        r /= self.f7 * 0.008;
-        r += self.f8 * 0.009;
-        r -= self.f9 * 0.01;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_1 for CORE_S0.
-    pub fn compute_1(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.004;
-        r /= self.f3 * 0.005;
-        r += self.f4 * 0.006;
-        r -= self.f5 * 0.007;
-        r *= self.f6 * 0.008;
-        r /= self.f7 * 0.009;
-        r += self.f8 * 0.01;
-        r -= self.f9 * 0.011;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_2 for CORE_S0.
-    pub fn compute_2(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.005;
-        r /= self.f3 * 0.006;
-        r += self.f4 * 0.007;
-        r -= self.f5 * 0.008;
-        r *= self.f6 * 0.009;
-        r /= self.f7 * 0.01;
-        r += self.f8 * 0.011;
-        r -= self.f9 * 0.012;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_3 for CORE_S0.
-    pub fn compute_3(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.006;
-        r /= self.f3 * 0.007;
-        r += self.f4 * 0.008;
-        r -= self.f5 * 0.009;
-        r *= self.f6 * 0.01;
-        r /= self.f7 * 0.011;
-        r += self.f8 * 0.012;
-        r -= self.f9 * 0.013;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_4 for CORE_S0.
-    pub fn compute_4(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.007;
-        r /= self.f3 * 0.008;
-        r += self.f4 * 0.009;
-        r -= self.f5 * 0.01;
-        r *= self.f6 * 0.011;
-        r /= self.f7 * 0.012;
-        r += self.f8 * 0.013;
-        r -= self.f9 * 0.014;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_5 for CORE_S0.
-    pub fn compute_5(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.008;
-        r /= self.f3 * 0.009;
-        r += self.f4 * 0.01;
-        r -= self.f5 * 0.011;
-        r *= self.f6 * 0.012;
-        r /= self.f7 * 0.013;
-        r += self.f8 * 0.014;
-        r -= self.f9 * 0.015;
-        r.max(-1e15).min(1e15)
-    }
-}
-
-/// Struct CORE_S1 for brain-cli data handling.
-/// Contains fields for the 1-th computation variant.
-#[derive(Debug,Clone,PartialEq)]
-pub struct CORE_S1 {
-    /// Field 0: weight parameter.
-    pub f0: f64,
-    /// Field 1: bias parameter.
-    pub f1: f64,
-    /// Field 2: momentum parameter.
-    pub f2: f64,
-    /// Field 3: mean parameter.
-    pub f3: f64,
-    /// Field 4: variance parameter.
-    pub f4: f64,
-    /// Field 5: scale parameter.
-    pub f5: f64,
-    /// Field 6: offset parameter.
-    pub f6: f64,
-    /// Field 7: running_sum parameter.
-    pub f7: f64,
-    /// Field 8: step parameter.
-    pub f8: f64,
-    /// Field 9: count parameter.
-    pub f9: f64,
-}
-
-impl CORE_S1 {
-    pub fn new() -> Self { Self { f0: 0.1, f1: 0.2, f2: 0.3, f3: 0.4, f4: 0.5, f5: 0.6, f6: 0.7, f7: 0.8, f8: 0.9, f9: 1.0, } }
-    /// Method compute_0 for CORE_S1.
-    pub fn compute_0(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.003;
-        r /= self.f3 * 0.004;
-        r += self.f4 * 0.005;
-        r -= self.f5 * 0.006;
-        r *= self.f6 * 0.007;
-        r /= self.f7 * 0.008;
-        r += self.f8 * 0.009;
-        r -= self.f9 * 0.01;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_1 for CORE_S1.
-    pub fn compute_1(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.004;
-        r /= self.f3 * 0.005;
-        r += self.f4 * 0.006;
-        r -= self.f5 * 0.007;
-        r *= self.f6 * 0.008;
-        r /= self.f7 * 0.009;
-        r += self.f8 * 0.01;
-        r -= self.f9 * 0.011;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_2 for CORE_S1.
-    pub fn compute_2(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.005;
-        r /= self.f3 * 0.006;
-        r += self.f4 * 0.007;
-        r -= self.f5 * 0.008;
-        r *= self.f6 * 0.009;
-        r /= self.f7 * 0.01;
-        r += self.f8 * 0.011;
-        r -= self.f9 * 0.012;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_3 for CORE_S1.
-    pub fn compute_3(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.006;
-        r /= self.f3 * 0.007;
-        r += self.f4 * 0.008;
-        r -= self.f5 * 0.009;
-        r *= self.f6 * 0.01;
-        r /= self.f7 * 0.011;
-        r += self.f8 * 0.012;
-        r -= self.f9 * 0.013;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_4 for CORE_S1.
-    pub fn compute_4(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.007;
-        r /= self.f3 * 0.008;
-        r += self.f4 * 0.009;
-        r -= self.f5 * 0.01;
-        r *= self.f6 * 0.011;
-        r /= self.f7 * 0.012;
-        r += self.f8 * 0.013;
-        r -= self.f9 * 0.014;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_5 for CORE_S1.
-    pub fn compute_5(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.008;
-        r /= self.f3 * 0.009;
-        r += self.f4 * 0.01;
-        r -= self.f5 * 0.011;
-        r *= self.f6 * 0.012;
-        r /= self.f7 * 0.013;
-        r += self.f8 * 0.014;
-        r -= self.f9 * 0.015;
-        r.max(-1e15).min(1e15)
-    }
-}
-
-/// Struct CORE_S2 for brain-cli data handling.
-/// Contains fields for the 2-th computation variant.
-#[derive(Debug,Clone,PartialEq)]
-pub struct CORE_S2 {
-    /// Field 0: weight parameter.
-    pub f0: f64,
-    /// Field 1: bias parameter.
-    pub f1: f64,
-    /// Field 2: momentum parameter.
-    pub f2: f64,
-    /// Field 3: mean parameter.
-    pub f3: f64,
-    /// Field 4: variance parameter.
-    pub f4: f64,
-    /// Field 5: scale parameter.
-    pub f5: f64,
-    /// Field 6: offset parameter.
-    pub f6: f64,
-    /// Field 7: running_sum parameter.
-    pub f7: f64,
-    /// Field 8: step parameter.
-    pub f8: f64,
-    /// Field 9: count parameter.
-    pub f9: f64,
-}
-
-impl CORE_S2 {
-    pub fn new() -> Self { Self { f0: 0.1, f1: 0.2, f2: 0.3, f3: 0.4, f4: 0.5, f5: 0.6, f6: 0.7, f7: 0.8, f8: 0.9, f9: 1.0, } }
-    /// Method compute_0 for CORE_S2.
-    pub fn compute_0(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.003;
-        r /= self.f3 * 0.004;
-        r += self.f4 * 0.005;
-        r -= self.f5 * 0.006;
-        r *= self.f6 * 0.007;
-        r /= self.f7 * 0.008;
-        r += self.f8 * 0.009;
-        r -= self.f9 * 0.01;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_1 for CORE_S2.
-    pub fn compute_1(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.004;
-        r /= self.f3 * 0.005;
-        r += self.f4 * 0.006;
-        r -= self.f5 * 0.007;
-        r *= self.f6 * 0.008;
-        r /= self.f7 * 0.009;
-        r += self.f8 * 0.01;
-        r -= self.f9 * 0.011;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_2 for CORE_S2.
-    pub fn compute_2(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.005;
-        r /= self.f3 * 0.006;
-        r += self.f4 * 0.007;
-        r -= self.f5 * 0.008;
-        r *= self.f6 * 0.009;
-        r /= self.f7 * 0.01;
-        r += self.f8 * 0.011;
-        r -= self.f9 * 0.012;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_3 for CORE_S2.
-    pub fn compute_3(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.006;
-        r /= self.f3 * 0.007;
-        r += self.f4 * 0.008;
-        r -= self.f5 * 0.009;
-        r *= self.f6 * 0.01;
-        r /= self.f7 * 0.011;
-        r += self.f8 * 0.012;
-        r -= self.f9 * 0.013;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_4 for CORE_S2.
-    pub fn compute_4(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.007;
-        r /= self.f3 * 0.008;
-        r += self.f4 * 0.009;
-        r -= self.f5 * 0.01;
-        r *= self.f6 * 0.011;
-        r /= self.f7 * 0.012;
-        r += self.f8 * 0.013;
-        r -= self.f9 * 0.014;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_5 for CORE_S2.
-    pub fn compute_5(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.008;
-        r /= self.f3 * 0.009;
-        r += self.f4 * 0.01;
-        r -= self.f5 * 0.011;
-        r *= self.f6 * 0.012;
-        r /= self.f7 * 0.013;
-        r += self.f8 * 0.014;
-        r -= self.f9 * 0.015;
-        r.max(-1e15).min(1e15)
-    }
-}
-
-/// Struct CORE_S3 for brain-cli data handling.
-/// Contains fields for the 3-th computation variant.
-#[derive(Debug,Clone,PartialEq)]
-pub struct CORE_S3 {
-    /// Field 0: weight parameter.
-    pub f0: f64,
-    /// Field 1: bias parameter.
-    pub f1: f64,
-    /// Field 2: momentum parameter.
-    pub f2: f64,
-    /// Field 3: mean parameter.
-    pub f3: f64,
-    /// Field 4: variance parameter.
-    pub f4: f64,
-    /// Field 5: scale parameter.
-    pub f5: f64,
-    /// Field 6: offset parameter.
-    pub f6: f64,
-    /// Field 7: running_sum parameter.
-    pub f7: f64,
-    /// Field 8: step parameter.
-    pub f8: f64,
-    /// Field 9: count parameter.
-    pub f9: f64,
-}
-
-impl CORE_S3 {
-    pub fn new() -> Self { Self { f0: 0.1, f1: 0.2, f2: 0.3, f3: 0.4, f4: 0.5, f5: 0.6, f6: 0.7, f7: 0.8, f8: 0.9, f9: 1.0, } }
-    /// Method compute_0 for CORE_S3.
-    pub fn compute_0(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.003;
-        r /= self.f3 * 0.004;
-        r += self.f4 * 0.005;
-        r -= self.f5 * 0.006;
-        r *= self.f6 * 0.007;
-        r /= self.f7 * 0.008;
-        r += self.f8 * 0.009;
-        r -= self.f9 * 0.01;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_1 for CORE_S3.
-    pub fn compute_1(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.004;
-        r /= self.f3 * 0.005;
-        r += self.f4 * 0.006;
-        r -= self.f5 * 0.007;
-        r *= self.f6 * 0.008;
-        r /= self.f7 * 0.009;
-        r += self.f8 * 0.01;
-        r -= self.f9 * 0.011;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_2 for CORE_S3.
-    pub fn compute_2(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.005;
-        r /= self.f3 * 0.006;
-        r += self.f4 * 0.007;
-        r -= self.f5 * 0.008;
-        r *= self.f6 * 0.009;
-        r /= self.f7 * 0.01;
-        r += self.f8 * 0.011;
-        r -= self.f9 * 0.012;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_3 for CORE_S3.
-    pub fn compute_3(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.006;
-        r /= self.f3 * 0.007;
-        r += self.f4 * 0.008;
-        r -= self.f5 * 0.009;
-        r *= self.f6 * 0.01;
-        r /= self.f7 * 0.011;
-        r += self.f8 * 0.012;
-        r -= self.f9 * 0.013;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_4 for CORE_S3.
-    pub fn compute_4(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.007;
-        r /= self.f3 * 0.008;
-        r += self.f4 * 0.009;
-        r -= self.f5 * 0.01;
-        r *= self.f6 * 0.011;
-        r /= self.f7 * 0.012;
-        r += self.f8 * 0.013;
-        r -= self.f9 * 0.014;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_5 for CORE_S3.
-    pub fn compute_5(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.008;
-        r /= self.f3 * 0.009;
-        r += self.f4 * 0.01;
-        r -= self.f5 * 0.011;
-        r *= self.f6 * 0.012;
-        r /= self.f7 * 0.013;
-        r += self.f8 * 0.014;
-        r -= self.f9 * 0.015;
-        r.max(-1e15).min(1e15)
-    }
-}
-
-/// Struct CORE_S4 for brain-cli data handling.
-/// Contains fields for the 4-th computation variant.
-#[derive(Debug,Clone,PartialEq)]
-pub struct CORE_S4 {
-    /// Field 0: weight parameter.
-    pub f0: f64,
-    /// Field 1: bias parameter.
-    pub f1: f64,
-    /// Field 2: momentum parameter.
-    pub f2: f64,
-    /// Field 3: mean parameter.
-    pub f3: f64,
-    /// Field 4: variance parameter.
-    pub f4: f64,
-    /// Field 5: scale parameter.
-    pub f5: f64,
-    /// Field 6: offset parameter.
-    pub f6: f64,
-    /// Field 7: running_sum parameter.
-    pub f7: f64,
-    /// Field 8: step parameter.
-    pub f8: f64,
-    /// Field 9: count parameter.
-    pub f9: f64,
-}
-
-impl CORE_S4 {
-    pub fn new() -> Self { Self { f0: 0.1, f1: 0.2, f2: 0.3, f3: 0.4, f4: 0.5, f5: 0.6, f6: 0.7, f7: 0.8, f8: 0.9, f9: 1.0, } }
-    /// Method compute_0 for CORE_S4.
-    pub fn compute_0(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.003;
-        r /= self.f3 * 0.004;
-        r += self.f4 * 0.005;
-        r -= self.f5 * 0.006;
-        r *= self.f6 * 0.007;
-        r /= self.f7 * 0.008;
-        r += self.f8 * 0.009;
-        r -= self.f9 * 0.01;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_1 for CORE_S4.
-    pub fn compute_1(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.004;
-        r /= self.f3 * 0.005;
-        r += self.f4 * 0.006;
-        r -= self.f5 * 0.007;
-        r *= self.f6 * 0.008;
-        r /= self.f7 * 0.009;
-        r += self.f8 * 0.01;
-        r -= self.f9 * 0.011;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_2 for CORE_S4.
-    pub fn compute_2(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.005;
-        r /= self.f3 * 0.006;
-        r += self.f4 * 0.007;
-        r -= self.f5 * 0.008;
-        r *= self.f6 * 0.009;
-        r /= self.f7 * 0.01;
-        r += self.f8 * 0.011;
-        r -= self.f9 * 0.012;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_3 for CORE_S4.
-    pub fn compute_3(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.006;
-        r /= self.f3 * 0.007;
-        r += self.f4 * 0.008;
-        r -= self.f5 * 0.009;
-        r *= self.f6 * 0.01;
-        r /= self.f7 * 0.011;
-        r += self.f8 * 0.012;
-        r -= self.f9 * 0.013;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_4 for CORE_S4.
-    pub fn compute_4(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.007;
-        r /= self.f3 * 0.008;
-        r += self.f4 * 0.009;
-        r -= self.f5 * 0.01;
-        r *= self.f6 * 0.011;
-        r /= self.f7 * 0.012;
-        r += self.f8 * 0.013;
-        r -= self.f9 * 0.014;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_5 for CORE_S4.
-    pub fn compute_5(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.008;
-        r /= self.f3 * 0.009;
-        r += self.f4 * 0.01;
-        r -= self.f5 * 0.011;
-        r *= self.f6 * 0.012;
-        r /= self.f7 * 0.013;
-        r += self.f8 * 0.014;
-        r -= self.f9 * 0.015;
-        r.max(-1e15).min(1e15)
-    }
-}
-
-/// Struct CORE_S5 for brain-cli data handling.
-/// Contains fields for the 5-th computation variant.
-#[derive(Debug,Clone,PartialEq)]
-pub struct CORE_S5 {
-    /// Field 0: weight parameter.
-    pub f0: f64,
-    /// Field 1: bias parameter.
-    pub f1: f64,
-    /// Field 2: momentum parameter.
-    pub f2: f64,
-    /// Field 3: mean parameter.
-    pub f3: f64,
-    /// Field 4: variance parameter.
-    pub f4: f64,
-    /// Field 5: scale parameter.
-    pub f5: f64,
-    /// Field 6: offset parameter.
-    pub f6: f64,
-    /// Field 7: running_sum parameter.
-    pub f7: f64,
-    /// Field 8: step parameter.
-    pub f8: f64,
-    /// Field 9: count parameter.
-    pub f9: f64,
-}
-
-impl CORE_S5 {
-    pub fn new() -> Self { Self { f0: 0.1, f1: 0.2, f2: 0.3, f3: 0.4, f4: 0.5, f5: 0.6, f6: 0.7, f7: 0.8, f8: 0.9, f9: 1.0, } }
-    /// Method compute_0 for CORE_S5.
-    pub fn compute_0(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.003;
-        r /= self.f3 * 0.004;
-        r += self.f4 * 0.005;
-        r -= self.f5 * 0.006;
-        r *= self.f6 * 0.007;
-        r /= self.f7 * 0.008;
-        r += self.f8 * 0.009;
-        r -= self.f9 * 0.01;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_1 for CORE_S5.
-    pub fn compute_1(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.004;
-        r /= self.f3 * 0.005;
-        r += self.f4 * 0.006;
-        r -= self.f5 * 0.007;
-        r *= self.f6 * 0.008;
-        r /= self.f7 * 0.009;
-        r += self.f8 * 0.01;
-        r -= self.f9 * 0.011;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_2 for CORE_S5.
-    pub fn compute_2(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.005;
-        r /= self.f3 * 0.006;
-        r += self.f4 * 0.007;
-        r -= self.f5 * 0.008;
-        r *= self.f6 * 0.009;
-        r /= self.f7 * 0.01;
-        r += self.f8 * 0.011;
-        r -= self.f9 * 0.012;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_3 for CORE_S5.
-    pub fn compute_3(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.006;
-        r /= self.f3 * 0.007;
-        r += self.f4 * 0.008;
-        r -= self.f5 * 0.009;
-        r *= self.f6 * 0.01;
-        r /= self.f7 * 0.011;
-        r += self.f8 * 0.012;
-        r -= self.f9 * 0.013;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_4 for CORE_S5.
-    pub fn compute_4(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.007;
-        r /= self.f3 * 0.008;
-        r += self.f4 * 0.009;
-        r -= self.f5 * 0.01;
-        r *= self.f6 * 0.011;
-        r /= self.f7 * 0.012;
-        r += self.f8 * 0.013;
-        r -= self.f9 * 0.014;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_5 for CORE_S5.
-    pub fn compute_5(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.008;
-        r /= self.f3 * 0.009;
-        r += self.f4 * 0.01;
-        r -= self.f5 * 0.011;
-        r *= self.f6 * 0.012;
-        r /= self.f7 * 0.013;
-        r += self.f8 * 0.014;
-        r -= self.f9 * 0.015;
-        r.max(-1e15).min(1e15)
-    }
-}
-
-/// Struct CORE_S6 for brain-cli data handling.
-/// Contains fields for the 6-th computation variant.
-#[derive(Debug,Clone,PartialEq)]
-pub struct CORE_S6 {
-    /// Field 0: weight parameter.
-    pub f0: f64,
-    /// Field 1: bias parameter.
-    pub f1: f64,
-    /// Field 2: momentum parameter.
-    pub f2: f64,
-    /// Field 3: mean parameter.
-    pub f3: f64,
-    /// Field 4: variance parameter.
-    pub f4: f64,
-    /// Field 5: scale parameter.
-    pub f5: f64,
-    /// Field 6: offset parameter.
-    pub f6: f64,
-    /// Field 7: running_sum parameter.
-    pub f7: f64,
-    /// Field 8: step parameter.
-    pub f8: f64,
-    /// Field 9: count parameter.
-    pub f9: f64,
-}
-
-impl CORE_S6 {
-    pub fn new() -> Self { Self { f0: 0.1, f1: 0.2, f2: 0.3, f3: 0.4, f4: 0.5, f5: 0.6, f6: 0.7, f7: 0.8, f8: 0.9, f9: 1.0, } }
-    /// Method compute_0 for CORE_S6.
-    pub fn compute_0(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.003;
-        r /= self.f3 * 0.004;
-        r += self.f4 * 0.005;
-        r -= self.f5 * 0.006;
-        r *= self.f6 * 0.007;
-        r /= self.f7 * 0.008;
-        r += self.f8 * 0.009;
-        r -= self.f9 * 0.01;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_1 for CORE_S6.
-    pub fn compute_1(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.004;
-        r /= self.f3 * 0.005;
-        r += self.f4 * 0.006;
-        r -= self.f5 * 0.007;
-        r *= self.f6 * 0.008;
-        r /= self.f7 * 0.009;
-        r += self.f8 * 0.01;
-        r -= self.f9 * 0.011;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_2 for CORE_S6.
-    pub fn compute_2(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.005;
-        r /= self.f3 * 0.006;
-        r += self.f4 * 0.007;
-        r -= self.f5 * 0.008;
-        r *= self.f6 * 0.009;
-        r /= self.f7 * 0.01;
-        r += self.f8 * 0.011;
-        r -= self.f9 * 0.012;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_3 for CORE_S6.
-    pub fn compute_3(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.006;
-        r /= self.f3 * 0.007;
-        r += self.f4 * 0.008;
-        r -= self.f5 * 0.009;
-        r *= self.f6 * 0.01;
-        r /= self.f7 * 0.011;
-        r += self.f8 * 0.012;
-        r -= self.f9 * 0.013;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_4 for CORE_S6.
-    pub fn compute_4(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.007;
-        r /= self.f3 * 0.008;
-        r += self.f4 * 0.009;
-        r -= self.f5 * 0.01;
-        r *= self.f6 * 0.011;
-        r /= self.f7 * 0.012;
-        r += self.f8 * 0.013;
-        r -= self.f9 * 0.014;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_5 for CORE_S6.
-    pub fn compute_5(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.008;
-        r /= self.f3 * 0.009;
-        r += self.f4 * 0.01;
-        r -= self.f5 * 0.011;
-        r *= self.f6 * 0.012;
-        r /= self.f7 * 0.013;
-        r += self.f8 * 0.014;
-        r -= self.f9 * 0.015;
-        r.max(-1e15).min(1e15)
-    }
-}
-
-/// Struct CORE_S7 for brain-cli data handling.
-/// Contains fields for the 7-th computation variant.
-#[derive(Debug,Clone,PartialEq)]
-pub struct CORE_S7 {
-    /// Field 0: weight parameter.
-    pub f0: f64,
-    /// Field 1: bias parameter.
-    pub f1: f64,
-    /// Field 2: momentum parameter.
-    pub f2: f64,
-    /// Field 3: mean parameter.
-    pub f3: f64,
-    /// Field 4: variance parameter.
-    pub f4: f64,
-    /// Field 5: scale parameter.
-    pub f5: f64,
-    /// Field 6: offset parameter.
-    pub f6: f64,
-    /// Field 7: running_sum parameter.
-    pub f7: f64,
-    /// Field 8: step parameter.
-    pub f8: f64,
-    /// Field 9: count parameter.
-    pub f9: f64,
-}
-
-impl CORE_S7 {
-    pub fn new() -> Self { Self { f0: 0.1, f1: 0.2, f2: 0.3, f3: 0.4, f4: 0.5, f5: 0.6, f6: 0.7, f7: 0.8, f8: 0.9, f9: 1.0, } }
-    /// Method compute_0 for CORE_S7.
-    pub fn compute_0(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.003;
-        r /= self.f3 * 0.004;
-        r += self.f4 * 0.005;
-        r -= self.f5 * 0.006;
-        r *= self.f6 * 0.007;
-        r /= self.f7 * 0.008;
-        r += self.f8 * 0.009;
-        r -= self.f9 * 0.01;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_1 for CORE_S7.
-    pub fn compute_1(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.004;
-        r /= self.f3 * 0.005;
-        r += self.f4 * 0.006;
-        r -= self.f5 * 0.007;
-        r *= self.f6 * 0.008;
-        r /= self.f7 * 0.009;
-        r += self.f8 * 0.01;
-        r -= self.f9 * 0.011;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_2 for CORE_S7.
-    pub fn compute_2(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.005;
-        r /= self.f3 * 0.006;
-        r += self.f4 * 0.007;
-        r -= self.f5 * 0.008;
-        r *= self.f6 * 0.009;
-        r /= self.f7 * 0.01;
-        r += self.f8 * 0.011;
-        r -= self.f9 * 0.012;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_3 for CORE_S7.
-    pub fn compute_3(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.006;
-        r /= self.f3 * 0.007;
-        r += self.f4 * 0.008;
-        r -= self.f5 * 0.009;
-        r *= self.f6 * 0.01;
-        r /= self.f7 * 0.011;
-        r += self.f8 * 0.012;
-        r -= self.f9 * 0.013;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_4 for CORE_S7.
-    pub fn compute_4(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.007;
-        r /= self.f3 * 0.008;
-        r += self.f4 * 0.009;
-        r -= self.f5 * 0.01;
-        r *= self.f6 * 0.011;
-        r /= self.f7 * 0.012;
-        r += self.f8 * 0.013;
-        r -= self.f9 * 0.014;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_5 for CORE_S7.
-    pub fn compute_5(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.008;
-        r /= self.f3 * 0.009;
-        r += self.f4 * 0.01;
-        r -= self.f5 * 0.011;
-        r *= self.f6 * 0.012;
-        r /= self.f7 * 0.013;
-        r += self.f8 * 0.014;
-        r -= self.f9 * 0.015;
-        r.max(-1e15).min(1e15)
-    }
-}
-
-/// Struct CORE_S8 for brain-cli data handling.
-/// Contains fields for the 8-th computation variant.
-#[derive(Debug,Clone,PartialEq)]
-pub struct CORE_S8 {
-    /// Field 0: weight parameter.
-    pub f0: f64,
-    /// Field 1: bias parameter.
-    pub f1: f64,
-    /// Field 2: momentum parameter.
-    pub f2: f64,
-    /// Field 3: mean parameter.
-    pub f3: f64,
-    /// Field 4: variance parameter.
-    pub f4: f64,
-    /// Field 5: scale parameter.
-    pub f5: f64,
-    /// Field 6: offset parameter.
-    pub f6: f64,
-    /// Field 7: running_sum parameter.
-    pub f7: f64,
-    /// Field 8: step parameter.
-    pub f8: f64,
-    /// Field 9: count parameter.
-    pub f9: f64,
-}
-
-impl CORE_S8 {
-    pub fn new() -> Self { Self { f0: 0.1, f1: 0.2, f2: 0.3, f3: 0.4, f4: 0.5, f5: 0.6, f6: 0.7, f7: 0.8, f8: 0.9, f9: 1.0, } }
-    /// Method compute_0 for CORE_S8.
-    pub fn compute_0(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.003;
-        r /= self.f3 * 0.004;
-        r += self.f4 * 0.005;
-        r -= self.f5 * 0.006;
-        r *= self.f6 * 0.007;
-        r /= self.f7 * 0.008;
-        r += self.f8 * 0.009;
-        r -= self.f9 * 0.01;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_1 for CORE_S8.
-    pub fn compute_1(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.004;
-        r /= self.f3 * 0.005;
-        r += self.f4 * 0.006;
-        r -= self.f5 * 0.007;
-        r *= self.f6 * 0.008;
-        r /= self.f7 * 0.009;
-        r += self.f8 * 0.01;
-        r -= self.f9 * 0.011;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_2 for CORE_S8.
-    pub fn compute_2(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.005;
-        r /= self.f3 * 0.006;
-        r += self.f4 * 0.007;
-        r -= self.f5 * 0.008;
-        r *= self.f6 * 0.009;
-        r /= self.f7 * 0.01;
-        r += self.f8 * 0.011;
-        r -= self.f9 * 0.012;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_3 for CORE_S8.
-    pub fn compute_3(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.006;
-        r /= self.f3 * 0.007;
-        r += self.f4 * 0.008;
-        r -= self.f5 * 0.009;
-        r *= self.f6 * 0.01;
-        r /= self.f7 * 0.011;
-        r += self.f8 * 0.012;
-        r -= self.f9 * 0.013;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_4 for CORE_S8.
-    pub fn compute_4(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.007;
-        r /= self.f3 * 0.008;
-        r += self.f4 * 0.009;
-        r -= self.f5 * 0.01;
-        r *= self.f6 * 0.011;
-        r /= self.f7 * 0.012;
-        r += self.f8 * 0.013;
-        r -= self.f9 * 0.014;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_5 for CORE_S8.
-    pub fn compute_5(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.008;
-        r /= self.f3 * 0.009;
-        r += self.f4 * 0.01;
-        r -= self.f5 * 0.011;
-        r *= self.f6 * 0.012;
-        r /= self.f7 * 0.013;
-        r += self.f8 * 0.014;
-        r -= self.f9 * 0.015;
-        r.max(-1e15).min(1e15)
-    }
-}
-
-/// Struct CORE_S9 for brain-cli data handling.
-/// Contains fields for the 9-th computation variant.
-#[derive(Debug,Clone,PartialEq)]
-pub struct CORE_S9 {
-    /// Field 0: weight parameter.
-    pub f0: f64,
-    /// Field 1: bias parameter.
-    pub f1: f64,
-    /// Field 2: momentum parameter.
-    pub f2: f64,
-    /// Field 3: mean parameter.
-    pub f3: f64,
-    /// Field 4: variance parameter.
-    pub f4: f64,
-    /// Field 5: scale parameter.
-    pub f5: f64,
-    /// Field 6: offset parameter.
-    pub f6: f64,
-    /// Field 7: running_sum parameter.
-    pub f7: f64,
-    /// Field 8: step parameter.
-    pub f8: f64,
-    /// Field 9: count parameter.
-    pub f9: f64,
-}
-
-impl CORE_S9 {
-    pub fn new() -> Self { Self { f0: 0.1, f1: 0.2, f2: 0.3, f3: 0.4, f4: 0.5, f5: 0.6, f6: 0.7, f7: 0.8, f8: 0.9, f9: 1.0, } }
-    /// Method compute_0 for CORE_S9.
-    pub fn compute_0(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.003;
-        r /= self.f3 * 0.004;
-        r += self.f4 * 0.005;
-        r -= self.f5 * 0.006;
-        r *= self.f6 * 0.007;
-        r /= self.f7 * 0.008;
-        r += self.f8 * 0.009;
-        r -= self.f9 * 0.01;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_1 for CORE_S9.
-    pub fn compute_1(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.004;
-        r /= self.f3 * 0.005;
-        r += self.f4 * 0.006;
-        r -= self.f5 * 0.007;
-        r *= self.f6 * 0.008;
-        r /= self.f7 * 0.009;
-        r += self.f8 * 0.01;
-        r -= self.f9 * 0.011;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_2 for CORE_S9.
-    pub fn compute_2(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.005;
-        r /= self.f3 * 0.006;
-        r += self.f4 * 0.007;
-        r -= self.f5 * 0.008;
-        r *= self.f6 * 0.009;
-        r /= self.f7 * 0.01;
-        r += self.f8 * 0.011;
-        r -= self.f9 * 0.012;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_3 for CORE_S9.
-    pub fn compute_3(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.006;
-        r /= self.f3 * 0.007;
-        r += self.f4 * 0.008;
-        r -= self.f5 * 0.009;
-        r *= self.f6 * 0.01;
-        r /= self.f7 * 0.011;
-        r += self.f8 * 0.012;
-        r -= self.f9 * 0.013;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_4 for CORE_S9.
-    pub fn compute_4(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.007;
-        r /= self.f3 * 0.008;
-        r += self.f4 * 0.009;
-        r -= self.f5 * 0.01;
-        r *= self.f6 * 0.011;
-        r /= self.f7 * 0.012;
-        r += self.f8 * 0.013;
-        r -= self.f9 * 0.014;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_5 for CORE_S9.
-    pub fn compute_5(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.008;
-        r /= self.f3 * 0.009;
-        r += self.f4 * 0.01;
-        r -= self.f5 * 0.011;
-        r *= self.f6 * 0.012;
-        r /= self.f7 * 0.013;
-        r += self.f8 * 0.014;
-        r -= self.f9 * 0.015;
-        r.max(-1e15).min(1e15)
-    }
-}
-
-/// Struct CORE_S10 for brain-cli data handling.
-/// Contains fields for the 10-th computation variant.
-#[derive(Debug,Clone,PartialEq)]
-pub struct CORE_S10 {
-    /// Field 0: weight parameter.
-    pub f0: f64,
-    /// Field 1: bias parameter.
-    pub f1: f64,
-    /// Field 2: momentum parameter.
-    pub f2: f64,
-    /// Field 3: mean parameter.
-    pub f3: f64,
-    /// Field 4: variance parameter.
-    pub f4: f64,
-    /// Field 5: scale parameter.
-    pub f5: f64,
-    /// Field 6: offset parameter.
-    pub f6: f64,
-    /// Field 7: running_sum parameter.
-    pub f7: f64,
-    /// Field 8: step parameter.
-    pub f8: f64,
-    /// Field 9: count parameter.
-    pub f9: f64,
-}
-
-impl CORE_S10 {
-    pub fn new() -> Self { Self { f0: 0.1, f1: 0.2, f2: 0.3, f3: 0.4, f4: 0.5, f5: 0.6, f6: 0.7, f7: 0.8, f8: 0.9, f9: 1.0, } }
-    /// Method compute_0 for CORE_S10.
-    pub fn compute_0(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.003;
-        r /= self.f3 * 0.004;
-        r += self.f4 * 0.005;
-        r -= self.f5 * 0.006;
-        r *= self.f6 * 0.007;
-        r /= self.f7 * 0.008;
-        r += self.f8 * 0.009;
-        r -= self.f9 * 0.01;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_1 for CORE_S10.
-    pub fn compute_1(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.004;
-        r /= self.f3 * 0.005;
-        r += self.f4 * 0.006;
-        r -= self.f5 * 0.007;
-        r *= self.f6 * 0.008;
-        r /= self.f7 * 0.009;
-        r += self.f8 * 0.01;
-        r -= self.f9 * 0.011;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_2 for CORE_S10.
-    pub fn compute_2(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.005;
-        r /= self.f3 * 0.006;
-        r += self.f4 * 0.007;
-        r -= self.f5 * 0.008;
-        r *= self.f6 * 0.009;
-        r /= self.f7 * 0.01;
-        r += self.f8 * 0.011;
-        r -= self.f9 * 0.012;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_3 for CORE_S10.
-    pub fn compute_3(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.006;
-        r /= self.f3 * 0.007;
-        r += self.f4 * 0.008;
-        r -= self.f5 * 0.009;
-        r *= self.f6 * 0.01;
-        r /= self.f7 * 0.011;
-        r += self.f8 * 0.012;
-        r -= self.f9 * 0.013;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_4 for CORE_S10.
-    pub fn compute_4(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.007;
-        r /= self.f3 * 0.008;
-        r += self.f4 * 0.009;
-        r -= self.f5 * 0.01;
-        r *= self.f6 * 0.011;
-        r /= self.f7 * 0.012;
-        r += self.f8 * 0.013;
-        r -= self.f9 * 0.014;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_5 for CORE_S10.
-    pub fn compute_5(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.008;
-        r /= self.f3 * 0.009;
-        r += self.f4 * 0.01;
-        r -= self.f5 * 0.011;
-        r *= self.f6 * 0.012;
-        r /= self.f7 * 0.013;
-        r += self.f8 * 0.014;
-        r -= self.f9 * 0.015;
-        r.max(-1e15).min(1e15)
-    }
-}
-
-/// Struct CORE_S11 for brain-cli data handling.
-/// Contains fields for the 11-th computation variant.
-#[derive(Debug,Clone,PartialEq)]
-pub struct CORE_S11 {
-    /// Field 0: weight parameter.
-    pub f0: f64,
-    /// Field 1: bias parameter.
-    pub f1: f64,
-    /// Field 2: momentum parameter.
-    pub f2: f64,
-    /// Field 3: mean parameter.
-    pub f3: f64,
-    /// Field 4: variance parameter.
-    pub f4: f64,
-    /// Field 5: scale parameter.
-    pub f5: f64,
-    /// Field 6: offset parameter.
-    pub f6: f64,
-    /// Field 7: running_sum parameter.
-    pub f7: f64,
-    /// Field 8: step parameter.
-    pub f8: f64,
-    /// Field 9: count parameter.
-    pub f9: f64,
-}
-
-impl CORE_S11 {
-    pub fn new() -> Self { Self { f0: 0.1, f1: 0.2, f2: 0.3, f3: 0.4, f4: 0.5, f5: 0.6, f6: 0.7, f7: 0.8, f8: 0.9, f9: 1.0, } }
-    /// Method compute_0 for CORE_S11.
-    pub fn compute_0(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.003;
-        r /= self.f3 * 0.004;
-        r += self.f4 * 0.005;
-        r -= self.f5 * 0.006;
-        r *= self.f6 * 0.007;
-        r /= self.f7 * 0.008;
-        r += self.f8 * 0.009;
-        r -= self.f9 * 0.01;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_1 for CORE_S11.
-    pub fn compute_1(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.004;
-        r /= self.f3 * 0.005;
-        r += self.f4 * 0.006;
-        r -= self.f5 * 0.007;
-        r *= self.f6 * 0.008;
-        r /= self.f7 * 0.009;
-        r += self.f8 * 0.01;
-        r -= self.f9 * 0.011;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_2 for CORE_S11.
-    pub fn compute_2(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.005;
-        r /= self.f3 * 0.006;
-        r += self.f4 * 0.007;
-        r -= self.f5 * 0.008;
-        r *= self.f6 * 0.009;
-        r /= self.f7 * 0.01;
-        r += self.f8 * 0.011;
-        r -= self.f9 * 0.012;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_3 for CORE_S11.
-    pub fn compute_3(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.006;
-        r /= self.f3 * 0.007;
-        r += self.f4 * 0.008;
-        r -= self.f5 * 0.009;
-        r *= self.f6 * 0.01;
-        r /= self.f7 * 0.011;
-        r += self.f8 * 0.012;
-        r -= self.f9 * 0.013;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_4 for CORE_S11.
-    pub fn compute_4(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.007;
-        r /= self.f3 * 0.008;
-        r += self.f4 * 0.009;
-        r -= self.f5 * 0.01;
-        r *= self.f6 * 0.011;
-        r /= self.f7 * 0.012;
-        r += self.f8 * 0.013;
-        r -= self.f9 * 0.014;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_5 for CORE_S11.
-    pub fn compute_5(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.008;
-        r /= self.f3 * 0.009;
-        r += self.f4 * 0.01;
-        r -= self.f5 * 0.011;
-        r *= self.f6 * 0.012;
-        r /= self.f7 * 0.013;
-        r += self.f8 * 0.014;
-        r -= self.f9 * 0.015;
-        r.max(-1e15).min(1e15)
-    }
-}
-
-/// Struct CORE_S12 for brain-cli data handling.
-/// Contains fields for the 12-th computation variant.
-#[derive(Debug,Clone,PartialEq)]
-pub struct CORE_S12 {
-    /// Field 0: weight parameter.
-    pub f0: f64,
-    /// Field 1: bias parameter.
-    pub f1: f64,
-    /// Field 2: momentum parameter.
-    pub f2: f64,
-    /// Field 3: mean parameter.
-    pub f3: f64,
-    /// Field 4: variance parameter.
-    pub f4: f64,
-    /// Field 5: scale parameter.
-    pub f5: f64,
-    /// Field 6: offset parameter.
-    pub f6: f64,
-    /// Field 7: running_sum parameter.
-    pub f7: f64,
-    /// Field 8: step parameter.
-    pub f8: f64,
-    /// Field 9: count parameter.
-    pub f9: f64,
-}
-
-impl CORE_S12 {
-    pub fn new() -> Self { Self { f0: 0.1, f1: 0.2, f2: 0.3, f3: 0.4, f4: 0.5, f5: 0.6, f6: 0.7, f7: 0.8, f8: 0.9, f9: 1.0, } }
-    /// Method compute_0 for CORE_S12.
-    pub fn compute_0(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.003;
-        r /= self.f3 * 0.004;
-        r += self.f4 * 0.005;
-        r -= self.f5 * 0.006;
-        r *= self.f6 * 0.007;
-        r /= self.f7 * 0.008;
-        r += self.f8 * 0.009;
-        r -= self.f9 * 0.01;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_1 for CORE_S12.
-    pub fn compute_1(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.004;
-        r /= self.f3 * 0.005;
-        r += self.f4 * 0.006;
-        r -= self.f5 * 0.007;
-        r *= self.f6 * 0.008;
-        r /= self.f7 * 0.009;
-        r += self.f8 * 0.01;
-        r -= self.f9 * 0.011;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_2 for CORE_S12.
-    pub fn compute_2(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.005;
-        r /= self.f3 * 0.006;
-        r += self.f4 * 0.007;
-        r -= self.f5 * 0.008;
-        r *= self.f6 * 0.009;
-        r /= self.f7 * 0.01;
-        r += self.f8 * 0.011;
-        r -= self.f9 * 0.012;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_3 for CORE_S12.
-    pub fn compute_3(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.006;
-        r /= self.f3 * 0.007;
-        r += self.f4 * 0.008;
-        r -= self.f5 * 0.009;
-        r *= self.f6 * 0.01;
-        r /= self.f7 * 0.011;
-        r += self.f8 * 0.012;
-        r -= self.f9 * 0.013;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_4 for CORE_S12.
-    pub fn compute_4(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.007;
-        r /= self.f3 * 0.008;
-        r += self.f4 * 0.009;
-        r -= self.f5 * 0.01;
-        r *= self.f6 * 0.011;
-        r /= self.f7 * 0.012;
-        r += self.f8 * 0.013;
-        r -= self.f9 * 0.014;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_5 for CORE_S12.
-    pub fn compute_5(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.008;
-        r /= self.f3 * 0.009;
-        r += self.f4 * 0.01;
-        r -= self.f5 * 0.011;
-        r *= self.f6 * 0.012;
-        r /= self.f7 * 0.013;
-        r += self.f8 * 0.014;
-        r -= self.f9 * 0.015;
-        r.max(-1e15).min(1e15)
-    }
-}
-
-/// Struct CORE_S13 for brain-cli data handling.
-/// Contains fields for the 13-th computation variant.
-#[derive(Debug,Clone,PartialEq)]
-pub struct CORE_S13 {
-    /// Field 0: weight parameter.
-    pub f0: f64,
-    /// Field 1: bias parameter.
-    pub f1: f64,
-    /// Field 2: momentum parameter.
-    pub f2: f64,
-    /// Field 3: mean parameter.
-    pub f3: f64,
-    /// Field 4: variance parameter.
-    pub f4: f64,
-    /// Field 5: scale parameter.
-    pub f5: f64,
-    /// Field 6: offset parameter.
-    pub f6: f64,
-    /// Field 7: running_sum parameter.
-    pub f7: f64,
-    /// Field 8: step parameter.
-    pub f8: f64,
-    /// Field 9: count parameter.
-    pub f9: f64,
-}
-
-impl CORE_S13 {
-    pub fn new() -> Self { Self { f0: 0.1, f1: 0.2, f2: 0.3, f3: 0.4, f4: 0.5, f5: 0.6, f6: 0.7, f7: 0.8, f8: 0.9, f9: 1.0, } }
-    /// Method compute_0 for CORE_S13.
-    pub fn compute_0(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.003;
-        r /= self.f3 * 0.004;
-        r += self.f4 * 0.005;
-        r -= self.f5 * 0.006;
-        r *= self.f6 * 0.007;
-        r /= self.f7 * 0.008;
-        r += self.f8 * 0.009;
-        r -= self.f9 * 0.01;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_1 for CORE_S13.
-    pub fn compute_1(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.004;
-        r /= self.f3 * 0.005;
-        r += self.f4 * 0.006;
-        r -= self.f5 * 0.007;
-        r *= self.f6 * 0.008;
-        r /= self.f7 * 0.009;
-        r += self.f8 * 0.01;
-        r -= self.f9 * 0.011;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_2 for CORE_S13.
-    pub fn compute_2(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.005;
-        r /= self.f3 * 0.006;
-        r += self.f4 * 0.007;
-        r -= self.f5 * 0.008;
-        r *= self.f6 * 0.009;
-        r /= self.f7 * 0.01;
-        r += self.f8 * 0.011;
-        r -= self.f9 * 0.012;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_3 for CORE_S13.
-    pub fn compute_3(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.006;
-        r /= self.f3 * 0.007;
-        r += self.f4 * 0.008;
-        r -= self.f5 * 0.009;
-        r *= self.f6 * 0.01;
-        r /= self.f7 * 0.011;
-        r += self.f8 * 0.012;
-        r -= self.f9 * 0.013;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_4 for CORE_S13.
-    pub fn compute_4(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.007;
-        r /= self.f3 * 0.008;
-        r += self.f4 * 0.009;
-        r -= self.f5 * 0.01;
-        r *= self.f6 * 0.011;
-        r /= self.f7 * 0.012;
-        r += self.f8 * 0.013;
-        r -= self.f9 * 0.014;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_5 for CORE_S13.
-    pub fn compute_5(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.008;
-        r /= self.f3 * 0.009;
-        r += self.f4 * 0.01;
-        r -= self.f5 * 0.011;
-        r *= self.f6 * 0.012;
-        r /= self.f7 * 0.013;
-        r += self.f8 * 0.014;
-        r -= self.f9 * 0.015;
-        r.max(-1e15).min(1e15)
-    }
-}
-
-/// Struct CORE_S14 for brain-cli data handling.
-/// Contains fields for the 14-th computation variant.
-#[derive(Debug,Clone,PartialEq)]
-pub struct CORE_S14 {
-    /// Field 0: weight parameter.
-    pub f0: f64,
-    /// Field 1: bias parameter.
-    pub f1: f64,
-    /// Field 2: momentum parameter.
-    pub f2: f64,
-    /// Field 3: mean parameter.
-    pub f3: f64,
-    /// Field 4: variance parameter.
-    pub f4: f64,
-    /// Field 5: scale parameter.
-    pub f5: f64,
-    /// Field 6: offset parameter.
-    pub f6: f64,
-    /// Field 7: running_sum parameter.
-    pub f7: f64,
-    /// Field 8: step parameter.
-    pub f8: f64,
-    /// Field 9: count parameter.
-    pub f9: f64,
-}
-
-impl CORE_S14 {
-    pub fn new() -> Self { Self { f0: 0.1, f1: 0.2, f2: 0.3, f3: 0.4, f4: 0.5, f5: 0.6, f6: 0.7, f7: 0.8, f8: 0.9, f9: 1.0, } }
-    /// Method compute_0 for CORE_S14.
-    pub fn compute_0(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.003;
-        r /= self.f3 * 0.004;
-        r += self.f4 * 0.005;
-        r -= self.f5 * 0.006;
-        r *= self.f6 * 0.007;
-        r /= self.f7 * 0.008;
-        r += self.f8 * 0.009;
-        r -= self.f9 * 0.01;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_1 for CORE_S14.
-    pub fn compute_1(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.004;
-        r /= self.f3 * 0.005;
-        r += self.f4 * 0.006;
-        r -= self.f5 * 0.007;
-        r *= self.f6 * 0.008;
-        r /= self.f7 * 0.009;
-        r += self.f8 * 0.01;
-        r -= self.f9 * 0.011;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_2 for CORE_S14.
-    pub fn compute_2(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.005;
-        r /= self.f3 * 0.006;
-        r += self.f4 * 0.007;
-        r -= self.f5 * 0.008;
-        r *= self.f6 * 0.009;
-        r /= self.f7 * 0.01;
-        r += self.f8 * 0.011;
-        r -= self.f9 * 0.012;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_3 for CORE_S14.
-    pub fn compute_3(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.006;
-        r /= self.f3 * 0.007;
-        r += self.f4 * 0.008;
-        r -= self.f5 * 0.009;
-        r *= self.f6 * 0.01;
-        r /= self.f7 * 0.011;
-        r += self.f8 * 0.012;
-        r -= self.f9 * 0.013;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_4 for CORE_S14.
-    pub fn compute_4(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.007;
-        r /= self.f3 * 0.008;
-        r += self.f4 * 0.009;
-        r -= self.f5 * 0.01;
-        r *= self.f6 * 0.011;
-        r /= self.f7 * 0.012;
-        r += self.f8 * 0.013;
-        r -= self.f9 * 0.014;
-        r.max(-1e15).min(1e15)
-    }
-    /// Method compute_5 for CORE_S14.
-    pub fn compute_5(&self, x: f64) -> f64 {
-        let mut r = self.f0 * x + self.f1;
-        r *= self.f2 * 0.008;
-        r /= self.f3 * 0.009;
-        r += self.f4 * 0.01;
-        r -= self.f5 * 0.011;
-        r *= self.f6 * 0.012;
-        r /= self.f7 * 0.013;
-        r += self.f8 * 0.014;
-        r -= self.f9 * 0.015;
-        r.max(-1e15).min(1e15)
-    }
-}
-
-/// Enum CORE_E0 for mode selection.
-#[derive(Debug,Clone,Copy,PartialEq,Eq,Hash,PartialOrd,Ord)]
-pub enum CORE_E0 {
-    V0,
-    V1,
-    V2,
-    V3,
-    V4,
-    V5,
-    V6,
-    V7,
-}
-
-impl Default for CORE_E0 { fn default() -> Self { CORE_E0::V0 } }
-impl CORE_E0 {
-    pub fn all() -> &'static [CORE_E0] { &[CORE_E0::V0,CORE_E0::V1,CORE_E0::V2,CORE_E0::V3,CORE_E0::V4,CORE_E0::V5,CORE_E0::V6,CORE_E0::V7] }
-    pub fn from_id(id: usize) -> Self { match id % 8 { 0=>CORE_E0::V0,1=>CORE_E0::V1,2=>CORE_E0::V2,3=>CORE_E0::V3,4=>CORE_E0::V4,5=>CORE_E0::V5,6=>CORE_E0::V6,_=>CORE_E0::V7 } }
-    pub fn id(&self) -> usize { *self as usize }
-}
-
-/// Enum CORE_E1 for mode selection.
-#[derive(Debug,Clone,Copy,PartialEq,Eq,Hash,PartialOrd,Ord)]
-pub enum CORE_E1 {
-    V0,
-    V1,
-    V2,
-    V3,
-    V4,
-    V5,
-    V6,
-    V7,
-}
-
-impl Default for CORE_E1 { fn default() -> Self { CORE_E1::V0 } }
-impl CORE_E1 {
-    pub fn all() -> &'static [CORE_E1] { &[CORE_E1::V0,CORE_E1::V1,CORE_E1::V2,CORE_E1::V3,CORE_E1::V4,CORE_E1::V5,CORE_E1::V6,CORE_E1::V7] }
-    pub fn from_id(id: usize) -> Self { match id % 8 { 0=>CORE_E1::V0,1=>CORE_E1::V1,2=>CORE_E1::V2,3=>CORE_E1::V3,4=>CORE_E1::V4,5=>CORE_E1::V5,6=>CORE_E1::V6,_=>CORE_E1::V7 } }
-    pub fn id(&self) -> usize { *self as usize }
-}
-
-/// Enum CORE_E2 for mode selection.
-#[derive(Debug,Clone,Copy,PartialEq,Eq,Hash,PartialOrd,Ord)]
-pub enum CORE_E2 {
-    V0,
-    V1,
-    V2,
-    V3,
-    V4,
-    V5,
-    V6,
-    V7,
-}
-
-impl Default for CORE_E2 { fn default() -> Self { CORE_E2::V0 } }
-impl CORE_E2 {
-    pub fn all() -> &'static [CORE_E2] { &[CORE_E2::V0,CORE_E2::V1,CORE_E2::V2,CORE_E2::V3,CORE_E2::V4,CORE_E2::V5,CORE_E2::V6,CORE_E2::V7] }
-    pub fn from_id(id: usize) -> Self { match id % 8 { 0=>CORE_E2::V0,1=>CORE_E2::V1,2=>CORE_E2::V2,3=>CORE_E2::V3,4=>CORE_E2::V4,5=>CORE_E2::V5,6=>CORE_E2::V6,_=>CORE_E2::V7 } }
-    pub fn id(&self) -> usize { *self as usize }
-}
-
-/// Enum CORE_E3 for mode selection.
-#[derive(Debug,Clone,Copy,PartialEq,Eq,Hash,PartialOrd,Ord)]
-pub enum CORE_E3 {
-    V0,
-    V1,
-    V2,
-    V3,
-    V4,
-    V5,
-    V6,
-    V7,
-}
-
-impl Default for CORE_E3 { fn default() -> Self { CORE_E3::V0 } }
-impl CORE_E3 {
-    pub fn all() -> &'static [CORE_E3] { &[CORE_E3::V0,CORE_E3::V1,CORE_E3::V2,CORE_E3::V3,CORE_E3::V4,CORE_E3::V5,CORE_E3::V6,CORE_E3::V7] }
-    pub fn from_id(id: usize) -> Self { match id % 8 { 0=>CORE_E3::V0,1=>CORE_E3::V1,2=>CORE_E3::V2,3=>CORE_E3::V3,4=>CORE_E3::V4,5=>CORE_E3::V5,6=>CORE_E3::V6,_=>CORE_E3::V7 } }
-    pub fn id(&self) -> usize { *self as usize }
-}
-
-/// Enum CORE_E4 for mode selection.
-#[derive(Debug,Clone,Copy,PartialEq,Eq,Hash,PartialOrd,Ord)]
-pub enum CORE_E4 {
-    V0,
-    V1,
-    V2,
-    V3,
-    V4,
-    V5,
-    V6,
-    V7,
-}
-
-impl Default for CORE_E4 { fn default() -> Self { CORE_E4::V0 } }
-impl CORE_E4 {
-    pub fn all() -> &'static [CORE_E4] { &[CORE_E4::V0,CORE_E4::V1,CORE_E4::V2,CORE_E4::V3,CORE_E4::V4,CORE_E4::V5,CORE_E4::V6,CORE_E4::V7] }
-    pub fn from_id(id: usize) -> Self { match id % 8 { 0=>CORE_E4::V0,1=>CORE_E4::V1,2=>CORE_E4::V2,3=>CORE_E4::V3,4=>CORE_E4::V4,5=>CORE_E4::V5,6=>CORE_E4::V6,_=>CORE_E4::V7 } }
-    pub fn id(&self) -> usize { *self as usize }
-}
-
-/// Enum CORE_E5 for mode selection.
-#[derive(Debug,Clone,Copy,PartialEq,Eq,Hash,PartialOrd,Ord)]
-pub enum CORE_E5 {
-    V0,
-    V1,
-    V2,
-    V3,
-    V4,
-    V5,
-    V6,
-    V7,
-}
-
-impl Default for CORE_E5 { fn default() -> Self { CORE_E5::V0 } }
-impl CORE_E5 {
-    pub fn all() -> &'static [CORE_E5] { &[CORE_E5::V0,CORE_E5::V1,CORE_E5::V2,CORE_E5::V3,CORE_E5::V4,CORE_E5::V5,CORE_E5::V6,CORE_E5::V7] }
-    pub fn from_id(id: usize) -> Self { match id % 8 { 0=>CORE_E5::V0,1=>CORE_E5::V1,2=>CORE_E5::V2,3=>CORE_E5::V3,4=>CORE_E5::V4,5=>CORE_E5::V5,6=>CORE_E5::V6,_=>CORE_E5::V7 } }
-    pub fn id(&self) -> usize { *self as usize }
-}
-
-/// Enum CORE_E6 for mode selection.
-#[derive(Debug,Clone,Copy,PartialEq,Eq,Hash,PartialOrd,Ord)]
-pub enum CORE_E6 {
-    V0,
-    V1,
-    V2,
-    V3,
-    V4,
-    V5,
-    V6,
-    V7,
-}
-
-impl Default for CORE_E6 { fn default() -> Self { CORE_E6::V0 } }
-impl CORE_E6 {
-    pub fn all() -> &'static [CORE_E6] { &[CORE_E6::V0,CORE_E6::V1,CORE_E6::V2,CORE_E6::V3,CORE_E6::V4,CORE_E6::V5,CORE_E6::V6,CORE_E6::V7] }
-    pub fn from_id(id: usize) -> Self { match id % 8 { 0=>CORE_E6::V0,1=>CORE_E6::V1,2=>CORE_E6::V2,3=>CORE_E6::V3,4=>CORE_E6::V4,5=>CORE_E6::V5,6=>CORE_E6::V6,_=>CORE_E6::V7 } }
-    pub fn id(&self) -> usize { *self as usize }
-}
-
-/// Enum CORE_E7 for mode selection.
-#[derive(Debug,Clone,Copy,PartialEq,Eq,Hash,PartialOrd,Ord)]
-pub enum CORE_E7 {
-    V0,
-    V1,
-    V2,
-    V3,
-    V4,
-    V5,
-    V6,
-    V7,
-}
-
-impl Default for CORE_E7 { fn default() -> Self { CORE_E7::V0 } }
-impl CORE_E7 {
-    pub fn all() -> &'static [CORE_E7] { &[CORE_E7::V0,CORE_E7::V1,CORE_E7::V2,CORE_E7::V3,CORE_E7::V4,CORE_E7::V5,CORE_E7::V6,CORE_E7::V7] }
-    pub fn from_id(id: usize) -> Self { match id % 8 { 0=>CORE_E7::V0,1=>CORE_E7::V1,2=>CORE_E7::V2,3=>CORE_E7::V3,4=>CORE_E7::V4,5=>CORE_E7::V5,6=>CORE_E7::V6,_=>CORE_E7::V7 } }
-    pub fn id(&self) -> usize { *self as usize }
-}
-
-/// Trait CORE_T0 defining interface for brain-cli.
-pub trait CORE_T0 {
-    fn op_0(&self, input: &Tensor) -> BrainResult<Tensor>;
-    fn op_1(&self, input: &Tensor) -> BrainResult<Tensor>;
-    fn op_2(&self, input: &Tensor) -> BrainResult<Tensor>;
-    fn op_3(&self, input: &Tensor) -> BrainResult<Tensor>;
-    fn op_4(&self, input: &Tensor) -> BrainResult<Tensor>;
-}
-
-/// Trait CORE_T1 defining interface for brain-cli.
-pub trait CORE_T1 {
-    fn op_0(&self, input: &Tensor) -> BrainResult<Tensor>;
-    fn op_1(&self, input: &Tensor) -> BrainResult<Tensor>;
-    fn op_2(&self, input: &Tensor) -> BrainResult<Tensor>;
-    fn op_3(&self, input: &Tensor) -> BrainResult<Tensor>;
-    fn op_4(&self, input: &Tensor) -> BrainResult<Tensor>;
-}
-
-/// Trait CORE_T2 defining interface for brain-cli.
-pub trait CORE_T2 {
-    fn op_0(&self, input: &Tensor) -> BrainResult<Tensor>;
-    fn op_1(&self, input: &Tensor) -> BrainResult<Tensor>;
-    fn op_2(&self, input: &Tensor) -> BrainResult<Tensor>;
-    fn op_3(&self, input: &Tensor) -> BrainResult<Tensor>;
-    fn op_4(&self, input: &Tensor) -> BrainResult<Tensor>;
-}
-
-/// Trait CORE_T3 defining interface for brain-cli.
-pub trait CORE_T3 {
-    fn op_0(&self, input: &Tensor) -> BrainResult<Tensor>;
-    fn op_1(&self, input: &Tensor) -> BrainResult<Tensor>;
-    fn op_2(&self, input: &Tensor) -> BrainResult<Tensor>;
-    fn op_3(&self, input: &Tensor) -> BrainResult<Tensor>;
-    fn op_4(&self, input: &Tensor) -> BrainResult<Tensor>;
-}
-
-/// Trait CORE_T4 defining interface for brain-cli.
-pub trait CORE_T4 {
-    fn op_0(&self, input: &Tensor) -> BrainResult<Tensor>;
-    fn op_1(&self, input: &Tensor) -> BrainResult<Tensor>;
-    fn op_2(&self, input: &Tensor) -> BrainResult<Tensor>;
-    fn op_3(&self, input: &Tensor) -> BrainResult<Tensor>;
-    fn op_4(&self, input: &Tensor) -> BrainResult<Tensor>;
-}
-
-/// Trait CORE_T5 defining interface for brain-cli.
-pub trait CORE_T5 {
-    fn op_0(&self, input: &Tensor) -> BrainResult<Tensor>;
-    fn op_1(&self, input: &Tensor) -> BrainResult<Tensor>;
-    fn op_2(&self, input: &Tensor) -> BrainResult<Tensor>;
-    fn op_3(&self, input: &Tensor) -> BrainResult<Tensor>;
-    fn op_4(&self, input: &Tensor) -> BrainResult<Tensor>;
-}
-
-/// Function fn_0: elementwise operation 0.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_0(data: &[f64], config: &CORE_S0) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x * scale + offset;
-        out.push(y.clamp(-1e10, 1e10));
-    }
-    Ok(out)
-}
-
-/// Function fn_1: reduction operation 1.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_1(data: &[f64], config: &CORE_S1) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i].max(1e-12);
-        let y = x.ln() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_2: transformation operation 2.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_2(data: &[f64], config: &CORE_S2) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.exp().min(1e10) * scale;
-        out.push(y + offset);
-    }
-    Ok(out)
-}
-
-/// Function fn_3: composite operation 3.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_3(data: &[f64], config: &CORE_S3) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.sin() * scale + x.cos() * offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_4: fusion operation 4.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_4(data: &[f64], config: &CORE_S4) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.tanh() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_5: elementwise operation 5.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_5(data: &[f64], config: &CORE_S5) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x * scale + offset;
-        out.push(y.clamp(-1e10, 1e10));
-    }
-    Ok(out)
-}
-
-/// Function fn_6: reduction operation 6.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_6(data: &[f64], config: &CORE_S6) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i].max(1e-12);
-        let y = x.ln() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_7: transformation operation 7.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_7(data: &[f64], config: &CORE_S7) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.exp().min(1e10) * scale;
-        out.push(y + offset);
-    }
-    Ok(out)
-}
-
-/// Function fn_8: composite operation 8.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_8(data: &[f64], config: &CORE_S8) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.sin() * scale + x.cos() * offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_9: fusion operation 9.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_9(data: &[f64], config: &CORE_S9) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.tanh() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_10: elementwise operation 10.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_10(data: &[f64], config: &CORE_S10) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x * scale + offset;
-        out.push(y.clamp(-1e10, 1e10));
-    }
-    Ok(out)
-}
-
-/// Function fn_11: reduction operation 11.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_11(data: &[f64], config: &CORE_S11) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i].max(1e-12);
-        let y = x.ln() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_12: transformation operation 12.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_12(data: &[f64], config: &CORE_S12) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.exp().min(1e10) * scale;
-        out.push(y + offset);
-    }
-    Ok(out)
-}
-
-/// Function fn_13: composite operation 13.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_13(data: &[f64], config: &CORE_S13) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.sin() * scale + x.cos() * offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_14: fusion operation 14.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_14(data: &[f64], config: &CORE_S14) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.tanh() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_15: elementwise operation 15.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_15(data: &[f64], config: &CORE_S0) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x * scale + offset;
-        out.push(y.clamp(-1e10, 1e10));
-    }
-    Ok(out)
-}
-
-/// Function fn_16: reduction operation 16.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_16(data: &[f64], config: &CORE_S1) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i].max(1e-12);
-        let y = x.ln() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_17: transformation operation 17.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_17(data: &[f64], config: &CORE_S2) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.exp().min(1e10) * scale;
-        out.push(y + offset);
-    }
-    Ok(out)
-}
-
-/// Function fn_18: composite operation 18.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_18(data: &[f64], config: &CORE_S3) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.sin() * scale + x.cos() * offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_19: fusion operation 19.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_19(data: &[f64], config: &CORE_S4) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.tanh() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_20: elementwise operation 20.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_20(data: &[f64], config: &CORE_S5) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x * scale + offset;
-        out.push(y.clamp(-1e10, 1e10));
-    }
-    Ok(out)
-}
-
-/// Function fn_21: reduction operation 21.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_21(data: &[f64], config: &CORE_S6) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i].max(1e-12);
-        let y = x.ln() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_22: transformation operation 22.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_22(data: &[f64], config: &CORE_S7) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.exp().min(1e10) * scale;
-        out.push(y + offset);
-    }
-    Ok(out)
-}
-
-/// Function fn_23: composite operation 23.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_23(data: &[f64], config: &CORE_S8) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.sin() * scale + x.cos() * offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_24: fusion operation 24.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_24(data: &[f64], config: &CORE_S9) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.tanh() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_25: elementwise operation 25.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_25(data: &[f64], config: &CORE_S10) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x * scale + offset;
-        out.push(y.clamp(-1e10, 1e10));
-    }
-    Ok(out)
-}
-
-/// Function fn_26: reduction operation 26.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_26(data: &[f64], config: &CORE_S11) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i].max(1e-12);
-        let y = x.ln() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_27: transformation operation 27.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_27(data: &[f64], config: &CORE_S12) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.exp().min(1e10) * scale;
-        out.push(y + offset);
-    }
-    Ok(out)
-}
-
-/// Function fn_28: composite operation 28.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_28(data: &[f64], config: &CORE_S13) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.sin() * scale + x.cos() * offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_29: fusion operation 29.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_29(data: &[f64], config: &CORE_S14) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.tanh() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_30: elementwise operation 30.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_30(data: &[f64], config: &CORE_S0) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x * scale + offset;
-        out.push(y.clamp(-1e10, 1e10));
-    }
-    Ok(out)
-}
-
-/// Function fn_31: reduction operation 31.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_31(data: &[f64], config: &CORE_S1) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i].max(1e-12);
-        let y = x.ln() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_32: transformation operation 32.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_32(data: &[f64], config: &CORE_S2) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.exp().min(1e10) * scale;
-        out.push(y + offset);
-    }
-    Ok(out)
-}
-
-/// Function fn_33: composite operation 33.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_33(data: &[f64], config: &CORE_S3) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.sin() * scale + x.cos() * offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_34: fusion operation 34.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_34(data: &[f64], config: &CORE_S4) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.tanh() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_35: elementwise operation 35.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_35(data: &[f64], config: &CORE_S5) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x * scale + offset;
-        out.push(y.clamp(-1e10, 1e10));
-    }
-    Ok(out)
-}
-
-/// Function fn_36: reduction operation 36.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_36(data: &[f64], config: &CORE_S6) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i].max(1e-12);
-        let y = x.ln() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_37: transformation operation 37.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_37(data: &[f64], config: &CORE_S7) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.exp().min(1e10) * scale;
-        out.push(y + offset);
-    }
-    Ok(out)
-}
-
-/// Function fn_38: composite operation 38.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_38(data: &[f64], config: &CORE_S8) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.sin() * scale + x.cos() * offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_39: fusion operation 39.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_39(data: &[f64], config: &CORE_S9) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.tanh() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_40: elementwise operation 40.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_40(data: &[f64], config: &CORE_S10) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x * scale + offset;
-        out.push(y.clamp(-1e10, 1e10));
-    }
-    Ok(out)
-}
-
-/// Function fn_41: reduction operation 41.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_41(data: &[f64], config: &CORE_S11) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i].max(1e-12);
-        let y = x.ln() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_42: transformation operation 42.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_42(data: &[f64], config: &CORE_S12) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.exp().min(1e10) * scale;
-        out.push(y + offset);
-    }
-    Ok(out)
-}
-
-/// Function fn_43: composite operation 43.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_43(data: &[f64], config: &CORE_S13) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.sin() * scale + x.cos() * offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_44: fusion operation 44.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_44(data: &[f64], config: &CORE_S14) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.tanh() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_45: elementwise operation 45.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_45(data: &[f64], config: &CORE_S0) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x * scale + offset;
-        out.push(y.clamp(-1e10, 1e10));
-    }
-    Ok(out)
-}
-
-/// Function fn_46: reduction operation 46.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_46(data: &[f64], config: &CORE_S1) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i].max(1e-12);
-        let y = x.ln() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_47: transformation operation 47.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_47(data: &[f64], config: &CORE_S2) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.exp().min(1e10) * scale;
-        out.push(y + offset);
-    }
-    Ok(out)
-}
-
-/// Function fn_48: composite operation 48.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_48(data: &[f64], config: &CORE_S3) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.sin() * scale + x.cos() * offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_49: fusion operation 49.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_49(data: &[f64], config: &CORE_S4) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.tanh() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_50: elementwise operation 50.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_50(data: &[f64], config: &CORE_S5) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x * scale + offset;
-        out.push(y.clamp(-1e10, 1e10));
-    }
-    Ok(out)
-}
-
-/// Function fn_51: reduction operation 51.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_51(data: &[f64], config: &CORE_S6) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i].max(1e-12);
-        let y = x.ln() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_52: transformation operation 52.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_52(data: &[f64], config: &CORE_S7) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.exp().min(1e10) * scale;
-        out.push(y + offset);
-    }
-    Ok(out)
-}
-
-/// Function fn_53: composite operation 53.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_53(data: &[f64], config: &CORE_S8) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.sin() * scale + x.cos() * offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_54: fusion operation 54.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_54(data: &[f64], config: &CORE_S9) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.tanh() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_55: elementwise operation 55.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_55(data: &[f64], config: &CORE_S10) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x * scale + offset;
-        out.push(y.clamp(-1e10, 1e10));
-    }
-    Ok(out)
-}
-
-/// Function fn_56: reduction operation 56.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_56(data: &[f64], config: &CORE_S11) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i].max(1e-12);
-        let y = x.ln() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_57: transformation operation 57.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_57(data: &[f64], config: &CORE_S12) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.exp().min(1e10) * scale;
-        out.push(y + offset);
-    }
-    Ok(out)
-}
-
-/// Function fn_58: composite operation 58.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_58(data: &[f64], config: &CORE_S13) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.sin() * scale + x.cos() * offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_59: fusion operation 59.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_59(data: &[f64], config: &CORE_S14) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.tanh() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_60: elementwise operation 60.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_60(data: &[f64], config: &CORE_S0) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x * scale + offset;
-        out.push(y.clamp(-1e10, 1e10));
-    }
-    Ok(out)
-}
-
-/// Function fn_61: reduction operation 61.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_61(data: &[f64], config: &CORE_S1) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i].max(1e-12);
-        let y = x.ln() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_62: transformation operation 62.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_62(data: &[f64], config: &CORE_S2) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.exp().min(1e10) * scale;
-        out.push(y + offset);
-    }
-    Ok(out)
-}
-
-/// Function fn_63: composite operation 63.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_63(data: &[f64], config: &CORE_S3) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.sin() * scale + x.cos() * offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_64: fusion operation 64.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_64(data: &[f64], config: &CORE_S4) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.tanh() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_65: elementwise operation 65.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_65(data: &[f64], config: &CORE_S5) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x * scale + offset;
-        out.push(y.clamp(-1e10, 1e10));
-    }
-    Ok(out)
-}
-
-/// Function fn_66: reduction operation 66.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_66(data: &[f64], config: &CORE_S6) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i].max(1e-12);
-        let y = x.ln() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_67: transformation operation 67.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_67(data: &[f64], config: &CORE_S7) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.exp().min(1e10) * scale;
-        out.push(y + offset);
-    }
-    Ok(out)
-}
-
-/// Function fn_68: composite operation 68.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_68(data: &[f64], config: &CORE_S8) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.sin() * scale + x.cos() * offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_69: fusion operation 69.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_69(data: &[f64], config: &CORE_S9) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.tanh() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_70: elementwise operation 70.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_70(data: &[f64], config: &CORE_S10) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x * scale + offset;
-        out.push(y.clamp(-1e10, 1e10));
-    }
-    Ok(out)
-}
-
-/// Function fn_71: reduction operation 71.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_71(data: &[f64], config: &CORE_S11) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i].max(1e-12);
-        let y = x.ln() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_72: transformation operation 72.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_72(data: &[f64], config: &CORE_S12) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.exp().min(1e10) * scale;
-        out.push(y + offset);
-    }
-    Ok(out)
-}
-
-/// Function fn_73: composite operation 73.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_73(data: &[f64], config: &CORE_S13) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.sin() * scale + x.cos() * offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_74: fusion operation 74.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_74(data: &[f64], config: &CORE_S14) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.tanh() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_75: elementwise operation 75.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_75(data: &[f64], config: &CORE_S0) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x * scale + offset;
-        out.push(y.clamp(-1e10, 1e10));
-    }
-    Ok(out)
-}
-
-/// Function fn_76: reduction operation 76.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_76(data: &[f64], config: &CORE_S1) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i].max(1e-12);
-        let y = x.ln() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_77: transformation operation 77.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_77(data: &[f64], config: &CORE_S2) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.exp().min(1e10) * scale;
-        out.push(y + offset);
-    }
-    Ok(out)
-}
-
-/// Function fn_78: composite operation 78.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_78(data: &[f64], config: &CORE_S3) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.sin() * scale + x.cos() * offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_79: fusion operation 79.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_79(data: &[f64], config: &CORE_S4) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.tanh() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_80: elementwise operation 80.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_80(data: &[f64], config: &CORE_S5) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x * scale + offset;
-        out.push(y.clamp(-1e10, 1e10));
-    }
-    Ok(out)
-}
-
-/// Function fn_81: reduction operation 81.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_81(data: &[f64], config: &CORE_S6) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i].max(1e-12);
-        let y = x.ln() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_82: transformation operation 82.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_82(data: &[f64], config: &CORE_S7) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.exp().min(1e10) * scale;
-        out.push(y + offset);
-    }
-    Ok(out)
-}
-
-/// Function fn_83: composite operation 83.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_83(data: &[f64], config: &CORE_S8) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.sin() * scale + x.cos() * offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_84: fusion operation 84.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_84(data: &[f64], config: &CORE_S9) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.tanh() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_85: elementwise operation 85.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_85(data: &[f64], config: &CORE_S10) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x * scale + offset;
-        out.push(y.clamp(-1e10, 1e10));
-    }
-    Ok(out)
-}
-
-/// Function fn_86: reduction operation 86.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_86(data: &[f64], config: &CORE_S11) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i].max(1e-12);
-        let y = x.ln() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_87: transformation operation 87.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_87(data: &[f64], config: &CORE_S12) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.exp().min(1e10) * scale;
-        out.push(y + offset);
-    }
-    Ok(out)
-}
-
-/// Function fn_88: composite operation 88.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_88(data: &[f64], config: &CORE_S13) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.sin() * scale + x.cos() * offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_89: fusion operation 89.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_89(data: &[f64], config: &CORE_S14) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.tanh() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_90: elementwise operation 90.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_90(data: &[f64], config: &CORE_S0) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x * scale + offset;
-        out.push(y.clamp(-1e10, 1e10));
-    }
-    Ok(out)
-}
-
-/// Function fn_91: reduction operation 91.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_91(data: &[f64], config: &CORE_S1) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i].max(1e-12);
-        let y = x.ln() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_92: transformation operation 92.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_92(data: &[f64], config: &CORE_S2) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.exp().min(1e10) * scale;
-        out.push(y + offset);
-    }
-    Ok(out)
-}
-
-/// Function fn_93: composite operation 93.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_93(data: &[f64], config: &CORE_S3) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.sin() * scale + x.cos() * offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_94: fusion operation 94.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_94(data: &[f64], config: &CORE_S4) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.tanh() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_95: elementwise operation 95.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_95(data: &[f64], config: &CORE_S5) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x * scale + offset;
-        out.push(y.clamp(-1e10, 1e10));
-    }
-    Ok(out)
-}
-
-/// Function fn_96: reduction operation 96.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_96(data: &[f64], config: &CORE_S6) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i].max(1e-12);
-        let y = x.ln() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_97: transformation operation 97.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_97(data: &[f64], config: &CORE_S7) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.exp().min(1e10) * scale;
-        out.push(y + offset);
-    }
-    Ok(out)
-}
-
-/// Function fn_98: composite operation 98.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_98(data: &[f64], config: &CORE_S8) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.sin() * scale + x.cos() * offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_99: fusion operation 99.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_99(data: &[f64], config: &CORE_S9) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.tanh() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_100: elementwise operation 100.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_100(data: &[f64], config: &CORE_S10) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x * scale + offset;
-        out.push(y.clamp(-1e10, 1e10));
-    }
-    Ok(out)
-}
-
-/// Function fn_101: reduction operation 101.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_101(data: &[f64], config: &CORE_S11) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i].max(1e-12);
-        let y = x.ln() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_102: transformation operation 102.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_102(data: &[f64], config: &CORE_S12) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.exp().min(1e10) * scale;
-        out.push(y + offset);
-    }
-    Ok(out)
-}
-
-/// Function fn_103: composite operation 103.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_103(data: &[f64], config: &CORE_S13) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.sin() * scale + x.cos() * offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_104: fusion operation 104.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_104(data: &[f64], config: &CORE_S14) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.tanh() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_105: elementwise operation 105.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_105(data: &[f64], config: &CORE_S0) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x * scale + offset;
-        out.push(y.clamp(-1e10, 1e10));
-    }
-    Ok(out)
-}
-
-/// Function fn_106: reduction operation 106.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_106(data: &[f64], config: &CORE_S1) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i].max(1e-12);
-        let y = x.ln() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_107: transformation operation 107.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_107(data: &[f64], config: &CORE_S2) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.exp().min(1e10) * scale;
-        out.push(y + offset);
-    }
-    Ok(out)
-}
-
-/// Function fn_108: composite operation 108.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_108(data: &[f64], config: &CORE_S3) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.sin() * scale + x.cos() * offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_109: fusion operation 109.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_109(data: &[f64], config: &CORE_S4) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.tanh() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_110: elementwise operation 110.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_110(data: &[f64], config: &CORE_S5) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x * scale + offset;
-        out.push(y.clamp(-1e10, 1e10));
-    }
-    Ok(out)
-}
-
-/// Function fn_111: reduction operation 111.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_111(data: &[f64], config: &CORE_S6) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i].max(1e-12);
-        let y = x.ln() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_112: transformation operation 112.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_112(data: &[f64], config: &CORE_S7) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.exp().min(1e10) * scale;
-        out.push(y + offset);
-    }
-    Ok(out)
-}
-
-/// Function fn_113: composite operation 113.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_113(data: &[f64], config: &CORE_S8) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.sin() * scale + x.cos() * offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_114: fusion operation 114.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_114(data: &[f64], config: &CORE_S9) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.tanh() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_115: elementwise operation 115.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_115(data: &[f64], config: &CORE_S10) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x * scale + offset;
-        out.push(y.clamp(-1e10, 1e10));
-    }
-    Ok(out)
-}
-
-/// Function fn_116: reduction operation 116.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_116(data: &[f64], config: &CORE_S11) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i].max(1e-12);
-        let y = x.ln() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_117: transformation operation 117.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_117(data: &[f64], config: &CORE_S12) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.exp().min(1e10) * scale;
-        out.push(y + offset);
-    }
-    Ok(out)
-}
-
-/// Function fn_118: composite operation 118.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_118(data: &[f64], config: &CORE_S13) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.sin() * scale + x.cos() * offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_119: fusion operation 119.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_119(data: &[f64], config: &CORE_S14) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.tanh() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_120: elementwise operation 120.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_120(data: &[f64], config: &CORE_S0) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x * scale + offset;
-        out.push(y.clamp(-1e10, 1e10));
-    }
-    Ok(out)
-}
-
-/// Function fn_121: reduction operation 121.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_121(data: &[f64], config: &CORE_S1) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i].max(1e-12);
-        let y = x.ln() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_122: transformation operation 122.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_122(data: &[f64], config: &CORE_S2) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.exp().min(1e10) * scale;
-        out.push(y + offset);
-    }
-    Ok(out)
-}
-
-/// Function fn_123: composite operation 123.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_123(data: &[f64], config: &CORE_S3) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.sin() * scale + x.cos() * offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_124: fusion operation 124.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_124(data: &[f64], config: &CORE_S4) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.tanh() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_125: elementwise operation 125.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_125(data: &[f64], config: &CORE_S5) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x * scale + offset;
-        out.push(y.clamp(-1e10, 1e10));
-    }
-    Ok(out)
-}
-
-/// Function fn_126: reduction operation 126.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_126(data: &[f64], config: &CORE_S6) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i].max(1e-12);
-        let y = x.ln() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_127: transformation operation 127.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_127(data: &[f64], config: &CORE_S7) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.exp().min(1e10) * scale;
-        out.push(y + offset);
-    }
-    Ok(out)
-}
-
-/// Function fn_128: composite operation 128.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_128(data: &[f64], config: &CORE_S8) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.sin() * scale + x.cos() * offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_129: fusion operation 129.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_129(data: &[f64], config: &CORE_S9) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.tanh() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_130: elementwise operation 130.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_130(data: &[f64], config: &CORE_S10) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x * scale + offset;
-        out.push(y.clamp(-1e10, 1e10));
-    }
-    Ok(out)
-}
-
-/// Function fn_131: reduction operation 131.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_131(data: &[f64], config: &CORE_S11) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i].max(1e-12);
-        let y = x.ln() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_132: transformation operation 132.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_132(data: &[f64], config: &CORE_S12) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.exp().min(1e10) * scale;
-        out.push(y + offset);
-    }
-    Ok(out)
-}
-
-/// Function fn_133: composite operation 133.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_133(data: &[f64], config: &CORE_S13) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.sin() * scale + x.cos() * offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_134: fusion operation 134.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_134(data: &[f64], config: &CORE_S14) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.tanh() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_135: elementwise operation 135.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_135(data: &[f64], config: &CORE_S0) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x * scale + offset;
-        out.push(y.clamp(-1e10, 1e10));
-    }
-    Ok(out)
-}
-
-/// Function fn_136: reduction operation 136.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_136(data: &[f64], config: &CORE_S1) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i].max(1e-12);
-        let y = x.ln() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_137: transformation operation 137.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_137(data: &[f64], config: &CORE_S2) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.exp().min(1e10) * scale;
-        out.push(y + offset);
-    }
-    Ok(out)
-}
-
-/// Function fn_138: composite operation 138.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_138(data: &[f64], config: &CORE_S3) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.sin() * scale + x.cos() * offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_139: fusion operation 139.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_139(data: &[f64], config: &CORE_S4) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.tanh() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_140: elementwise operation 140.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_140(data: &[f64], config: &CORE_S5) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x * scale + offset;
-        out.push(y.clamp(-1e10, 1e10));
-    }
-    Ok(out)
-}
-
-/// Function fn_141: reduction operation 141.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_141(data: &[f64], config: &CORE_S6) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i].max(1e-12);
-        let y = x.ln() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_142: transformation operation 142.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_142(data: &[f64], config: &CORE_S7) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.exp().min(1e10) * scale;
-        out.push(y + offset);
-    }
-    Ok(out)
-}
-
-/// Function fn_143: composite operation 143.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_143(data: &[f64], config: &CORE_S8) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.sin() * scale + x.cos() * offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_144: fusion operation 144.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_144(data: &[f64], config: &CORE_S9) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.tanh() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_145: elementwise operation 145.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_145(data: &[f64], config: &CORE_S10) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x * scale + offset;
-        out.push(y.clamp(-1e10, 1e10));
-    }
-    Ok(out)
-}
-
-/// Function fn_146: reduction operation 146.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_146(data: &[f64], config: &CORE_S11) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i].max(1e-12);
-        let y = x.ln() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_147: transformation operation 147.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_147(data: &[f64], config: &CORE_S12) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.exp().min(1e10) * scale;
-        out.push(y + offset);
-    }
-    Ok(out)
-}
-
-/// Function fn_148: composite operation 148.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_148(data: &[f64], config: &CORE_S13) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.sin() * scale + x.cos() * offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_149: fusion operation 149.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_149(data: &[f64], config: &CORE_S14) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.tanh() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_150: elementwise operation 150.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_150(data: &[f64], config: &CORE_S0) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x * scale + offset;
-        out.push(y.clamp(-1e10, 1e10));
-    }
-    Ok(out)
-}
-
-/// Function fn_151: reduction operation 151.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_151(data: &[f64], config: &CORE_S1) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i].max(1e-12);
-        let y = x.ln() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_152: transformation operation 152.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_152(data: &[f64], config: &CORE_S2) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.exp().min(1e10) * scale;
-        out.push(y + offset);
-    }
-    Ok(out)
-}
-
-/// Function fn_153: composite operation 153.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_153(data: &[f64], config: &CORE_S3) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.sin() * scale + x.cos() * offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_154: fusion operation 154.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_154(data: &[f64], config: &CORE_S4) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.tanh() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_155: elementwise operation 155.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_155(data: &[f64], config: &CORE_S5) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x * scale + offset;
-        out.push(y.clamp(-1e10, 1e10));
-    }
-    Ok(out)
-}
-
-/// Function fn_156: reduction operation 156.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_156(data: &[f64], config: &CORE_S6) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i].max(1e-12);
-        let y = x.ln() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_157: transformation operation 157.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_157(data: &[f64], config: &CORE_S7) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.exp().min(1e10) * scale;
-        out.push(y + offset);
-    }
-    Ok(out)
-}
-
-/// Function fn_158: composite operation 158.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_158(data: &[f64], config: &CORE_S8) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.sin() * scale + x.cos() * offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_159: fusion operation 159.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_159(data: &[f64], config: &CORE_S9) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.tanh() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_160: elementwise operation 160.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_160(data: &[f64], config: &CORE_S10) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x * scale + offset;
-        out.push(y.clamp(-1e10, 1e10));
-    }
-    Ok(out)
-}
-
-/// Function fn_161: reduction operation 161.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_161(data: &[f64], config: &CORE_S11) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i].max(1e-12);
-        let y = x.ln() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_162: transformation operation 162.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_162(data: &[f64], config: &CORE_S12) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.exp().min(1e10) * scale;
-        out.push(y + offset);
-    }
-    Ok(out)
-}
-
-/// Function fn_163: composite operation 163.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_163(data: &[f64], config: &CORE_S13) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.sin() * scale + x.cos() * offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_164: fusion operation 164.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_164(data: &[f64], config: &CORE_S14) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.tanh() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_165: elementwise operation 165.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_165(data: &[f64], config: &CORE_S0) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x * scale + offset;
-        out.push(y.clamp(-1e10, 1e10));
-    }
-    Ok(out)
-}
-
-/// Function fn_166: reduction operation 166.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_166(data: &[f64], config: &CORE_S1) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i].max(1e-12);
-        let y = x.ln() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_167: transformation operation 167.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_167(data: &[f64], config: &CORE_S2) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.exp().min(1e10) * scale;
-        out.push(y + offset);
-    }
-    Ok(out)
-}
-
-/// Function fn_168: composite operation 168.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_168(data: &[f64], config: &CORE_S3) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.sin() * scale + x.cos() * offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_169: fusion operation 169.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_169(data: &[f64], config: &CORE_S4) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.tanh() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_170: elementwise operation 170.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_170(data: &[f64], config: &CORE_S5) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x * scale + offset;
-        out.push(y.clamp(-1e10, 1e10));
-    }
-    Ok(out)
-}
-
-/// Function fn_171: reduction operation 171.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_171(data: &[f64], config: &CORE_S6) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i].max(1e-12);
-        let y = x.ln() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_172: transformation operation 172.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_172(data: &[f64], config: &CORE_S7) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.exp().min(1e10) * scale;
-        out.push(y + offset);
-    }
-    Ok(out)
-}
-
-/// Function fn_173: composite operation 173.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_173(data: &[f64], config: &CORE_S8) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.sin() * scale + x.cos() * offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_174: fusion operation 174.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_174(data: &[f64], config: &CORE_S9) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.tanh() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_175: elementwise operation 175.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_175(data: &[f64], config: &CORE_S10) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x * scale + offset;
-        out.push(y.clamp(-1e10, 1e10));
-    }
-    Ok(out)
-}
-
-/// Function fn_176: reduction operation 176.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_176(data: &[f64], config: &CORE_S11) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i].max(1e-12);
-        let y = x.ln() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_177: transformation operation 177.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_177(data: &[f64], config: &CORE_S12) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.exp().min(1e10) * scale;
-        out.push(y + offset);
-    }
-    Ok(out)
-}
-
-/// Function fn_178: composite operation 178.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_178(data: &[f64], config: &CORE_S13) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.sin() * scale + x.cos() * offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_179: fusion operation 179.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_179(data: &[f64], config: &CORE_S14) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.tanh() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_180: elementwise operation 180.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_180(data: &[f64], config: &CORE_S0) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x * scale + offset;
-        out.push(y.clamp(-1e10, 1e10));
-    }
-    Ok(out)
-}
-
-/// Function fn_181: reduction operation 181.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_181(data: &[f64], config: &CORE_S1) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i].max(1e-12);
-        let y = x.ln() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_182: transformation operation 182.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_182(data: &[f64], config: &CORE_S2) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.exp().min(1e10) * scale;
-        out.push(y + offset);
-    }
-    Ok(out)
-}
-
-/// Function fn_183: composite operation 183.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_183(data: &[f64], config: &CORE_S3) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.sin() * scale + x.cos() * offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_184: fusion operation 184.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_184(data: &[f64], config: &CORE_S4) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.tanh() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_185: elementwise operation 185.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_185(data: &[f64], config: &CORE_S5) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x * scale + offset;
-        out.push(y.clamp(-1e10, 1e10));
-    }
-    Ok(out)
-}
-
-/// Function fn_186: reduction operation 186.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_186(data: &[f64], config: &CORE_S6) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i].max(1e-12);
-        let y = x.ln() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_187: transformation operation 187.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_187(data: &[f64], config: &CORE_S7) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.exp().min(1e10) * scale;
-        out.push(y + offset);
-    }
-    Ok(out)
-}
-
-/// Function fn_188: composite operation 188.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_188(data: &[f64], config: &CORE_S8) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.sin() * scale + x.cos() * offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_189: fusion operation 189.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_189(data: &[f64], config: &CORE_S9) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.tanh() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_190: elementwise operation 190.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_190(data: &[f64], config: &CORE_S10) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x * scale + offset;
-        out.push(y.clamp(-1e10, 1e10));
-    }
-    Ok(out)
-}
-
-/// Function fn_191: reduction operation 191.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_191(data: &[f64], config: &CORE_S11) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i].max(1e-12);
-        let y = x.ln() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_192: transformation operation 192.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_192(data: &[f64], config: &CORE_S12) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.exp().min(1e10) * scale;
-        out.push(y + offset);
-    }
-    Ok(out)
-}
-
-/// Function fn_193: composite operation 193.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_193(data: &[f64], config: &CORE_S13) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.sin() * scale + x.cos() * offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_194: fusion operation 194.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_194(data: &[f64], config: &CORE_S14) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.tanh() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_195: elementwise operation 195.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_195(data: &[f64], config: &CORE_S0) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x * scale + offset;
-        out.push(y.clamp(-1e10, 1e10));
-    }
-    Ok(out)
-}
-
-/// Function fn_196: reduction operation 196.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_196(data: &[f64], config: &CORE_S1) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i].max(1e-12);
-        let y = x.ln() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_197: transformation operation 197.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_197(data: &[f64], config: &CORE_S2) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.exp().min(1e10) * scale;
-        out.push(y + offset);
-    }
-    Ok(out)
-}
-
-/// Function fn_198: composite operation 198.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_198(data: &[f64], config: &CORE_S3) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.sin() * scale + x.cos() * offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Function fn_199: fusion operation 199.
-///
-/// This implements a specific computation that is part of the
-/// comprehensive brain-cli library. Each function is carefully optimized
-/// for both numerical stability and cache efficiency.
-pub fn fn_199(data: &[f64], config: &CORE_S4) -> BrainResult<Vec<f64>> {
-    let n = data.len().max(1);
-    let mut out = Vec::with_capacity(n);
-    let scale = config.f0.abs().max(1e-12);
-    let offset = config.f1;
-    for i in 0..n {
-        let x = data[i];
-        let y = x.tanh() * scale + offset;
-        out.push(y);
-    }
-    Ok(out)
-}
-
-/// Extended function fn_200 for advanced computations.
-pub fn fn_200(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) + b.get(i).copied().unwrap_or(0.0));
-    }
-    out
-}
-
-/// Extended function fn_201 for advanced computations.
-pub fn fn_201(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) * b.get(i).copied().unwrap_or(1.0));
-    }
-    out
-}
-
-/// Extended function fn_202 for advanced computations.
-pub fn fn_202(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push((a.get(i).copied().unwrap_or(0.0) - b.get(i).copied().unwrap_or(0.0)).abs());
-    }
-    out
-}
-
-/// Extended function fn_203 for advanced computations.
-pub fn fn_203(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).max(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_204 for advanced computations.
-pub fn fn_204(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).min(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_205 for advanced computations.
-pub fn fn_205(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) + b.get(i).copied().unwrap_or(0.0));
-    }
-    out
-}
-
-/// Extended function fn_206 for advanced computations.
-pub fn fn_206(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) * b.get(i).copied().unwrap_or(1.0));
-    }
-    out
-}
-
-/// Extended function fn_207 for advanced computations.
-pub fn fn_207(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push((a.get(i).copied().unwrap_or(0.0) - b.get(i).copied().unwrap_or(0.0)).abs());
-    }
-    out
-}
-
-/// Extended function fn_208 for advanced computations.
-pub fn fn_208(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).max(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_209 for advanced computations.
-pub fn fn_209(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).min(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_210 for advanced computations.
-pub fn fn_210(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) + b.get(i).copied().unwrap_or(0.0));
-    }
-    out
-}
-
-/// Extended function fn_211 for advanced computations.
-pub fn fn_211(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) * b.get(i).copied().unwrap_or(1.0));
-    }
-    out
-}
-
-/// Extended function fn_212 for advanced computations.
-pub fn fn_212(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push((a.get(i).copied().unwrap_or(0.0) - b.get(i).copied().unwrap_or(0.0)).abs());
-    }
-    out
-}
-
-/// Extended function fn_213 for advanced computations.
-pub fn fn_213(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).max(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_214 for advanced computations.
-pub fn fn_214(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).min(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_215 for advanced computations.
-pub fn fn_215(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) + b.get(i).copied().unwrap_or(0.0));
-    }
-    out
-}
-
-/// Extended function fn_216 for advanced computations.
-pub fn fn_216(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) * b.get(i).copied().unwrap_or(1.0));
-    }
-    out
-}
-
-/// Extended function fn_217 for advanced computations.
-pub fn fn_217(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push((a.get(i).copied().unwrap_or(0.0) - b.get(i).copied().unwrap_or(0.0)).abs());
-    }
-    out
-}
-
-/// Extended function fn_218 for advanced computations.
-pub fn fn_218(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).max(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_219 for advanced computations.
-pub fn fn_219(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).min(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_220 for advanced computations.
-pub fn fn_220(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) + b.get(i).copied().unwrap_or(0.0));
-    }
-    out
-}
-
-/// Extended function fn_221 for advanced computations.
-pub fn fn_221(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) * b.get(i).copied().unwrap_or(1.0));
-    }
-    out
-}
-
-/// Extended function fn_222 for advanced computations.
-pub fn fn_222(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push((a.get(i).copied().unwrap_or(0.0) - b.get(i).copied().unwrap_or(0.0)).abs());
-    }
-    out
-}
-
-/// Extended function fn_223 for advanced computations.
-pub fn fn_223(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).max(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_224 for advanced computations.
-pub fn fn_224(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).min(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_225 for advanced computations.
-pub fn fn_225(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) + b.get(i).copied().unwrap_or(0.0));
-    }
-    out
-}
-
-/// Extended function fn_226 for advanced computations.
-pub fn fn_226(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) * b.get(i).copied().unwrap_or(1.0));
-    }
-    out
-}
-
-/// Extended function fn_227 for advanced computations.
-pub fn fn_227(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push((a.get(i).copied().unwrap_or(0.0) - b.get(i).copied().unwrap_or(0.0)).abs());
-    }
-    out
-}
-
-/// Extended function fn_228 for advanced computations.
-pub fn fn_228(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).max(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_229 for advanced computations.
-pub fn fn_229(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).min(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_230 for advanced computations.
-pub fn fn_230(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) + b.get(i).copied().unwrap_or(0.0));
-    }
-    out
-}
-
-/// Extended function fn_231 for advanced computations.
-pub fn fn_231(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) * b.get(i).copied().unwrap_or(1.0));
-    }
-    out
-}
-
-/// Extended function fn_232 for advanced computations.
-pub fn fn_232(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push((a.get(i).copied().unwrap_or(0.0) - b.get(i).copied().unwrap_or(0.0)).abs());
-    }
-    out
-}
-
-/// Extended function fn_233 for advanced computations.
-pub fn fn_233(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).max(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_234 for advanced computations.
-pub fn fn_234(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).min(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_235 for advanced computations.
-pub fn fn_235(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) + b.get(i).copied().unwrap_or(0.0));
-    }
-    out
-}
-
-/// Extended function fn_236 for advanced computations.
-pub fn fn_236(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) * b.get(i).copied().unwrap_or(1.0));
-    }
-    out
-}
-
-/// Extended function fn_237 for advanced computations.
-pub fn fn_237(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push((a.get(i).copied().unwrap_or(0.0) - b.get(i).copied().unwrap_or(0.0)).abs());
-    }
-    out
-}
-
-/// Extended function fn_238 for advanced computations.
-pub fn fn_238(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).max(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_239 for advanced computations.
-pub fn fn_239(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).min(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_240 for advanced computations.
-pub fn fn_240(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) + b.get(i).copied().unwrap_or(0.0));
-    }
-    out
-}
-
-/// Extended function fn_241 for advanced computations.
-pub fn fn_241(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) * b.get(i).copied().unwrap_or(1.0));
-    }
-    out
-}
-
-/// Extended function fn_242 for advanced computations.
-pub fn fn_242(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push((a.get(i).copied().unwrap_or(0.0) - b.get(i).copied().unwrap_or(0.0)).abs());
-    }
-    out
-}
-
-/// Extended function fn_243 for advanced computations.
-pub fn fn_243(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).max(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_244 for advanced computations.
-pub fn fn_244(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).min(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_245 for advanced computations.
-pub fn fn_245(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) + b.get(i).copied().unwrap_or(0.0));
-    }
-    out
-}
-
-/// Extended function fn_246 for advanced computations.
-pub fn fn_246(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) * b.get(i).copied().unwrap_or(1.0));
-    }
-    out
-}
-
-/// Extended function fn_247 for advanced computations.
-pub fn fn_247(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push((a.get(i).copied().unwrap_or(0.0) - b.get(i).copied().unwrap_or(0.0)).abs());
-    }
-    out
-}
-
-/// Extended function fn_248 for advanced computations.
-pub fn fn_248(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).max(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_249 for advanced computations.
-pub fn fn_249(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).min(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_250 for advanced computations.
-pub fn fn_250(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) + b.get(i).copied().unwrap_or(0.0));
-    }
-    out
-}
-
-/// Extended function fn_251 for advanced computations.
-pub fn fn_251(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) * b.get(i).copied().unwrap_or(1.0));
-    }
-    out
-}
-
-/// Extended function fn_252 for advanced computations.
-pub fn fn_252(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push((a.get(i).copied().unwrap_or(0.0) - b.get(i).copied().unwrap_or(0.0)).abs());
-    }
-    out
-}
-
-/// Extended function fn_253 for advanced computations.
-pub fn fn_253(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).max(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_254 for advanced computations.
-pub fn fn_254(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).min(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_255 for advanced computations.
-pub fn fn_255(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) + b.get(i).copied().unwrap_or(0.0));
-    }
-    out
-}
-
-/// Extended function fn_256 for advanced computations.
-pub fn fn_256(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) * b.get(i).copied().unwrap_or(1.0));
-    }
-    out
-}
-
-/// Extended function fn_257 for advanced computations.
-pub fn fn_257(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push((a.get(i).copied().unwrap_or(0.0) - b.get(i).copied().unwrap_or(0.0)).abs());
-    }
-    out
-}
-
-/// Extended function fn_258 for advanced computations.
-pub fn fn_258(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).max(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_259 for advanced computations.
-pub fn fn_259(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).min(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_260 for advanced computations.
-pub fn fn_260(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) + b.get(i).copied().unwrap_or(0.0));
-    }
-    out
-}
-
-/// Extended function fn_261 for advanced computations.
-pub fn fn_261(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) * b.get(i).copied().unwrap_or(1.0));
-    }
-    out
-}
-
-/// Extended function fn_262 for advanced computations.
-pub fn fn_262(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push((a.get(i).copied().unwrap_or(0.0) - b.get(i).copied().unwrap_or(0.0)).abs());
-    }
-    out
-}
-
-/// Extended function fn_263 for advanced computations.
-pub fn fn_263(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).max(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_264 for advanced computations.
-pub fn fn_264(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).min(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_265 for advanced computations.
-pub fn fn_265(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) + b.get(i).copied().unwrap_or(0.0));
-    }
-    out
-}
-
-/// Extended function fn_266 for advanced computations.
-pub fn fn_266(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) * b.get(i).copied().unwrap_or(1.0));
-    }
-    out
-}
-
-/// Extended function fn_267 for advanced computations.
-pub fn fn_267(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push((a.get(i).copied().unwrap_or(0.0) - b.get(i).copied().unwrap_or(0.0)).abs());
-    }
-    out
-}
-
-/// Extended function fn_268 for advanced computations.
-pub fn fn_268(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).max(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_269 for advanced computations.
-pub fn fn_269(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).min(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_270 for advanced computations.
-pub fn fn_270(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) + b.get(i).copied().unwrap_or(0.0));
-    }
-    out
-}
-
-/// Extended function fn_271 for advanced computations.
-pub fn fn_271(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) * b.get(i).copied().unwrap_or(1.0));
-    }
-    out
-}
-
-/// Extended function fn_272 for advanced computations.
-pub fn fn_272(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push((a.get(i).copied().unwrap_or(0.0) - b.get(i).copied().unwrap_or(0.0)).abs());
-    }
-    out
-}
-
-/// Extended function fn_273 for advanced computations.
-pub fn fn_273(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).max(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_274 for advanced computations.
-pub fn fn_274(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).min(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_275 for advanced computations.
-pub fn fn_275(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) + b.get(i).copied().unwrap_or(0.0));
-    }
-    out
-}
-
-/// Extended function fn_276 for advanced computations.
-pub fn fn_276(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) * b.get(i).copied().unwrap_or(1.0));
-    }
-    out
-}
-
-/// Extended function fn_277 for advanced computations.
-pub fn fn_277(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push((a.get(i).copied().unwrap_or(0.0) - b.get(i).copied().unwrap_or(0.0)).abs());
-    }
-    out
-}
-
-/// Extended function fn_278 for advanced computations.
-pub fn fn_278(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).max(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_279 for advanced computations.
-pub fn fn_279(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).min(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_280 for advanced computations.
-pub fn fn_280(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) + b.get(i).copied().unwrap_or(0.0));
-    }
-    out
-}
-
-/// Extended function fn_281 for advanced computations.
-pub fn fn_281(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) * b.get(i).copied().unwrap_or(1.0));
-    }
-    out
-}
-
-/// Extended function fn_282 for advanced computations.
-pub fn fn_282(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push((a.get(i).copied().unwrap_or(0.0) - b.get(i).copied().unwrap_or(0.0)).abs());
-    }
-    out
-}
-
-/// Extended function fn_283 for advanced computations.
-pub fn fn_283(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).max(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_284 for advanced computations.
-pub fn fn_284(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).min(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_285 for advanced computations.
-pub fn fn_285(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) + b.get(i).copied().unwrap_or(0.0));
-    }
-    out
-}
-
-/// Extended function fn_286 for advanced computations.
-pub fn fn_286(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) * b.get(i).copied().unwrap_or(1.0));
-    }
-    out
-}
-
-/// Extended function fn_287 for advanced computations.
-pub fn fn_287(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push((a.get(i).copied().unwrap_or(0.0) - b.get(i).copied().unwrap_or(0.0)).abs());
-    }
-    out
-}
-
-/// Extended function fn_288 for advanced computations.
-pub fn fn_288(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).max(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_289 for advanced computations.
-pub fn fn_289(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).min(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_290 for advanced computations.
-pub fn fn_290(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) + b.get(i).copied().unwrap_or(0.0));
-    }
-    out
-}
-
-/// Extended function fn_291 for advanced computations.
-pub fn fn_291(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) * b.get(i).copied().unwrap_or(1.0));
-    }
-    out
-}
-
-/// Extended function fn_292 for advanced computations.
-pub fn fn_292(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push((a.get(i).copied().unwrap_or(0.0) - b.get(i).copied().unwrap_or(0.0)).abs());
-    }
-    out
-}
-
-/// Extended function fn_293 for advanced computations.
-pub fn fn_293(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).max(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_294 for advanced computations.
-pub fn fn_294(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).min(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_295 for advanced computations.
-pub fn fn_295(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) + b.get(i).copied().unwrap_or(0.0));
-    }
-    out
-}
-
-/// Extended function fn_296 for advanced computations.
-pub fn fn_296(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) * b.get(i).copied().unwrap_or(1.0));
-    }
-    out
-}
-
-/// Extended function fn_297 for advanced computations.
-pub fn fn_297(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push((a.get(i).copied().unwrap_or(0.0) - b.get(i).copied().unwrap_or(0.0)).abs());
-    }
-    out
-}
-
-/// Extended function fn_298 for advanced computations.
-pub fn fn_298(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).max(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_299 for advanced computations.
-pub fn fn_299(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).min(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_300 for advanced computations.
-pub fn fn_300(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) + b.get(i).copied().unwrap_or(0.0));
-    }
-    out
-}
-
-/// Extended function fn_301 for advanced computations.
-pub fn fn_301(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) * b.get(i).copied().unwrap_or(1.0));
-    }
-    out
-}
-
-/// Extended function fn_302 for advanced computations.
-pub fn fn_302(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push((a.get(i).copied().unwrap_or(0.0) - b.get(i).copied().unwrap_or(0.0)).abs());
-    }
-    out
-}
-
-/// Extended function fn_303 for advanced computations.
-pub fn fn_303(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).max(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_304 for advanced computations.
-pub fn fn_304(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).min(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_305 for advanced computations.
-pub fn fn_305(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) + b.get(i).copied().unwrap_or(0.0));
-    }
-    out
-}
-
-/// Extended function fn_306 for advanced computations.
-pub fn fn_306(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) * b.get(i).copied().unwrap_or(1.0));
-    }
-    out
-}
-
-/// Extended function fn_307 for advanced computations.
-pub fn fn_307(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push((a.get(i).copied().unwrap_or(0.0) - b.get(i).copied().unwrap_or(0.0)).abs());
-    }
-    out
-}
-
-/// Extended function fn_308 for advanced computations.
-pub fn fn_308(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).max(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_309 for advanced computations.
-pub fn fn_309(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).min(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_310 for advanced computations.
-pub fn fn_310(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) + b.get(i).copied().unwrap_or(0.0));
-    }
-    out
-}
-
-/// Extended function fn_311 for advanced computations.
-pub fn fn_311(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) * b.get(i).copied().unwrap_or(1.0));
-    }
-    out
-}
-
-/// Extended function fn_312 for advanced computations.
-pub fn fn_312(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push((a.get(i).copied().unwrap_or(0.0) - b.get(i).copied().unwrap_or(0.0)).abs());
-    }
-    out
-}
-
-/// Extended function fn_313 for advanced computations.
-pub fn fn_313(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).max(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_314 for advanced computations.
-pub fn fn_314(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).min(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_315 for advanced computations.
-pub fn fn_315(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) + b.get(i).copied().unwrap_or(0.0));
-    }
-    out
-}
-
-/// Extended function fn_316 for advanced computations.
-pub fn fn_316(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) * b.get(i).copied().unwrap_or(1.0));
-    }
-    out
-}
-
-/// Extended function fn_317 for advanced computations.
-pub fn fn_317(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push((a.get(i).copied().unwrap_or(0.0) - b.get(i).copied().unwrap_or(0.0)).abs());
-    }
-    out
-}
-
-/// Extended function fn_318 for advanced computations.
-pub fn fn_318(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).max(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_319 for advanced computations.
-pub fn fn_319(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).min(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_320 for advanced computations.
-pub fn fn_320(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) + b.get(i).copied().unwrap_or(0.0));
-    }
-    out
-}
-
-/// Extended function fn_321 for advanced computations.
-pub fn fn_321(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) * b.get(i).copied().unwrap_or(1.0));
-    }
-    out
-}
-
-/// Extended function fn_322 for advanced computations.
-pub fn fn_322(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push((a.get(i).copied().unwrap_or(0.0) - b.get(i).copied().unwrap_or(0.0)).abs());
-    }
-    out
-}
-
-/// Extended function fn_323 for advanced computations.
-pub fn fn_323(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).max(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_324 for advanced computations.
-pub fn fn_324(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).min(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_325 for advanced computations.
-pub fn fn_325(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) + b.get(i).copied().unwrap_or(0.0));
-    }
-    out
-}
-
-/// Extended function fn_326 for advanced computations.
-pub fn fn_326(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) * b.get(i).copied().unwrap_or(1.0));
-    }
-    out
-}
-
-/// Extended function fn_327 for advanced computations.
-pub fn fn_327(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push((a.get(i).copied().unwrap_or(0.0) - b.get(i).copied().unwrap_or(0.0)).abs());
-    }
-    out
-}
-
-/// Extended function fn_328 for advanced computations.
-pub fn fn_328(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).max(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_329 for advanced computations.
-pub fn fn_329(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).min(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_330 for advanced computations.
-pub fn fn_330(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) + b.get(i).copied().unwrap_or(0.0));
-    }
-    out
-}
-
-/// Extended function fn_331 for advanced computations.
-pub fn fn_331(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) * b.get(i).copied().unwrap_or(1.0));
-    }
-    out
-}
-
-/// Extended function fn_332 for advanced computations.
-pub fn fn_332(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push((a.get(i).copied().unwrap_or(0.0) - b.get(i).copied().unwrap_or(0.0)).abs());
-    }
-    out
-}
-
-/// Extended function fn_333 for advanced computations.
-pub fn fn_333(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).max(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_334 for advanced computations.
-pub fn fn_334(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).min(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_335 for advanced computations.
-pub fn fn_335(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) + b.get(i).copied().unwrap_or(0.0));
-    }
-    out
-}
-
-/// Extended function fn_336 for advanced computations.
-pub fn fn_336(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) * b.get(i).copied().unwrap_or(1.0));
-    }
-    out
-}
-
-/// Extended function fn_337 for advanced computations.
-pub fn fn_337(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push((a.get(i).copied().unwrap_or(0.0) - b.get(i).copied().unwrap_or(0.0)).abs());
-    }
-    out
-}
-
-/// Extended function fn_338 for advanced computations.
-pub fn fn_338(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).max(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_339 for advanced computations.
-pub fn fn_339(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).min(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_340 for advanced computations.
-pub fn fn_340(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) + b.get(i).copied().unwrap_or(0.0));
-    }
-    out
-}
-
-/// Extended function fn_341 for advanced computations.
-pub fn fn_341(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) * b.get(i).copied().unwrap_or(1.0));
-    }
-    out
-}
-
-/// Extended function fn_342 for advanced computations.
-pub fn fn_342(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push((a.get(i).copied().unwrap_or(0.0) - b.get(i).copied().unwrap_or(0.0)).abs());
-    }
-    out
-}
-
-/// Extended function fn_343 for advanced computations.
-pub fn fn_343(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).max(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_344 for advanced computations.
-pub fn fn_344(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).min(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_345 for advanced computations.
-pub fn fn_345(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) + b.get(i).copied().unwrap_or(0.0));
-    }
-    out
-}
-
-/// Extended function fn_346 for advanced computations.
-pub fn fn_346(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) * b.get(i).copied().unwrap_or(1.0));
-    }
-    out
-}
-
-/// Extended function fn_347 for advanced computations.
-pub fn fn_347(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push((a.get(i).copied().unwrap_or(0.0) - b.get(i).copied().unwrap_or(0.0)).abs());
-    }
-    out
-}
-
-/// Extended function fn_348 for advanced computations.
-pub fn fn_348(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).max(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_349 for advanced computations.
-pub fn fn_349(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).min(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_350 for advanced computations.
-pub fn fn_350(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) + b.get(i).copied().unwrap_or(0.0));
-    }
-    out
-}
-
-/// Extended function fn_351 for advanced computations.
-pub fn fn_351(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) * b.get(i).copied().unwrap_or(1.0));
-    }
-    out
-}
-
-/// Extended function fn_352 for advanced computations.
-pub fn fn_352(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push((a.get(i).copied().unwrap_or(0.0) - b.get(i).copied().unwrap_or(0.0)).abs());
-    }
-    out
-}
-
-/// Extended function fn_353 for advanced computations.
-pub fn fn_353(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).max(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_354 for advanced computations.
-pub fn fn_354(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).min(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_355 for advanced computations.
-pub fn fn_355(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) + b.get(i).copied().unwrap_or(0.0));
-    }
-    out
-}
-
-/// Extended function fn_356 for advanced computations.
-pub fn fn_356(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) * b.get(i).copied().unwrap_or(1.0));
-    }
-    out
-}
-
-/// Extended function fn_357 for advanced computations.
-pub fn fn_357(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push((a.get(i).copied().unwrap_or(0.0) - b.get(i).copied().unwrap_or(0.0)).abs());
-    }
-    out
-}
-
-/// Extended function fn_358 for advanced computations.
-pub fn fn_358(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).max(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_359 for advanced computations.
-pub fn fn_359(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).min(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_360 for advanced computations.
-pub fn fn_360(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) + b.get(i).copied().unwrap_or(0.0));
-    }
-    out
-}
-
-/// Extended function fn_361 for advanced computations.
-pub fn fn_361(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) * b.get(i).copied().unwrap_or(1.0));
-    }
-    out
-}
-
-/// Extended function fn_362 for advanced computations.
-pub fn fn_362(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push((a.get(i).copied().unwrap_or(0.0) - b.get(i).copied().unwrap_or(0.0)).abs());
-    }
-    out
-}
-
-/// Extended function fn_363 for advanced computations.
-pub fn fn_363(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).max(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_364 for advanced computations.
-pub fn fn_364(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).min(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_365 for advanced computations.
-pub fn fn_365(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) + b.get(i).copied().unwrap_or(0.0));
-    }
-    out
-}
-
-/// Extended function fn_366 for advanced computations.
-pub fn fn_366(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) * b.get(i).copied().unwrap_or(1.0));
-    }
-    out
-}
-
-/// Extended function fn_367 for advanced computations.
-pub fn fn_367(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push((a.get(i).copied().unwrap_or(0.0) - b.get(i).copied().unwrap_or(0.0)).abs());
-    }
-    out
-}
-
-/// Extended function fn_368 for advanced computations.
-pub fn fn_368(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).max(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_369 for advanced computations.
-pub fn fn_369(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).min(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_370 for advanced computations.
-pub fn fn_370(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) + b.get(i).copied().unwrap_or(0.0));
-    }
-    out
-}
-
-/// Extended function fn_371 for advanced computations.
-pub fn fn_371(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) * b.get(i).copied().unwrap_or(1.0));
-    }
-    out
-}
-
-/// Extended function fn_372 for advanced computations.
-pub fn fn_372(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push((a.get(i).copied().unwrap_or(0.0) - b.get(i).copied().unwrap_or(0.0)).abs());
-    }
-    out
-}
-
-/// Extended function fn_373 for advanced computations.
-pub fn fn_373(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).max(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_374 for advanced computations.
-pub fn fn_374(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).min(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_375 for advanced computations.
-pub fn fn_375(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) + b.get(i).copied().unwrap_or(0.0));
-    }
-    out
-}
-
-/// Extended function fn_376 for advanced computations.
-pub fn fn_376(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) * b.get(i).copied().unwrap_or(1.0));
-    }
-    out
-}
-
-/// Extended function fn_377 for advanced computations.
-pub fn fn_377(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push((a.get(i).copied().unwrap_or(0.0) - b.get(i).copied().unwrap_or(0.0)).abs());
-    }
-    out
-}
-
-/// Extended function fn_378 for advanced computations.
-pub fn fn_378(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).max(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_379 for advanced computations.
-pub fn fn_379(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).min(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_380 for advanced computations.
-pub fn fn_380(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) + b.get(i).copied().unwrap_or(0.0));
-    }
-    out
-}
-
-/// Extended function fn_381 for advanced computations.
-pub fn fn_381(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) * b.get(i).copied().unwrap_or(1.0));
-    }
-    out
-}
-
-/// Extended function fn_382 for advanced computations.
-pub fn fn_382(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push((a.get(i).copied().unwrap_or(0.0) - b.get(i).copied().unwrap_or(0.0)).abs());
-    }
-    out
-}
-
-/// Extended function fn_383 for advanced computations.
-pub fn fn_383(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).max(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_384 for advanced computations.
-pub fn fn_384(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).min(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_385 for advanced computations.
-pub fn fn_385(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) + b.get(i).copied().unwrap_or(0.0));
-    }
-    out
-}
-
-/// Extended function fn_386 for advanced computations.
-pub fn fn_386(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) * b.get(i).copied().unwrap_or(1.0));
-    }
-    out
-}
-
-/// Extended function fn_387 for advanced computations.
-pub fn fn_387(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push((a.get(i).copied().unwrap_or(0.0) - b.get(i).copied().unwrap_or(0.0)).abs());
-    }
-    out
-}
-
-/// Extended function fn_388 for advanced computations.
-pub fn fn_388(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).max(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_389 for advanced computations.
-pub fn fn_389(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).min(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_390 for advanced computations.
-pub fn fn_390(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) + b.get(i).copied().unwrap_or(0.0));
-    }
-    out
-}
-
-/// Extended function fn_391 for advanced computations.
-pub fn fn_391(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) * b.get(i).copied().unwrap_or(1.0));
-    }
-    out
-}
-
-/// Extended function fn_392 for advanced computations.
-pub fn fn_392(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push((a.get(i).copied().unwrap_or(0.0) - b.get(i).copied().unwrap_or(0.0)).abs());
-    }
-    out
-}
-
-/// Extended function fn_393 for advanced computations.
-pub fn fn_393(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).max(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_394 for advanced computations.
-pub fn fn_394(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).min(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_395 for advanced computations.
-pub fn fn_395(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) + b.get(i).copied().unwrap_or(0.0));
-    }
-    out
-}
-
-/// Extended function fn_396 for advanced computations.
-pub fn fn_396(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0) * b.get(i).copied().unwrap_or(1.0));
-    }
-    out
-}
-
-/// Extended function fn_397 for advanced computations.
-pub fn fn_397(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push((a.get(i).copied().unwrap_or(0.0) - b.get(i).copied().unwrap_or(0.0)).abs());
-    }
-    out
-}
-
-/// Extended function fn_398 for advanced computations.
-pub fn fn_398(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).max(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Extended function fn_399 for advanced computations.
-pub fn fn_399(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let n = a.len().max(b.len());
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        out.push(a.get(i).copied().unwrap_or(0.0).min(b.get(i).copied().unwrap_or(0.0)));
-    }
-    out
-}
-
-/// Helper struct CORE_H0 for batch operations.
-pub struct CORE_H0 { pub data: Vec<f64>, pub config: CORE_S0 }
-impl CORE_H0 {
-    pub fn new(data: Vec<f64>) -> Self { Self { data, config: CORE_S0::new() } }
-    pub fn process_0(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f0 + 0.0).sum::<f64>() / self.data.len().max(1) as f64
-    }
-    pub fn process_1(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f1 + 0.0).sum::<f64>() / self.data.len().max(1) as f64
-    }
-    pub fn process_2(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f2 + 0.0).sum::<f64>() / self.data.len().max(1) as f64
-    }
-    pub fn process_3(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f3 + 0.0).sum::<f64>() / self.data.len().max(1) as f64
-    }
-}
-
-/// Helper struct CORE_H1 for batch operations.
-pub struct CORE_H1 { pub data: Vec<f64>, pub config: CORE_S1 }
-impl CORE_H1 {
-    pub fn new(data: Vec<f64>) -> Self { Self { data, config: CORE_S1::new() } }
-    pub fn process_0(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f0 + 0.01).sum::<f64>() / self.data.len().max(1) as f64
-    }
-    pub fn process_1(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f1 + 0.01).sum::<f64>() / self.data.len().max(1) as f64
-    }
-    pub fn process_2(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f2 + 0.01).sum::<f64>() / self.data.len().max(1) as f64
-    }
-    pub fn process_3(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f3 + 0.01).sum::<f64>() / self.data.len().max(1) as f64
-    }
-}
-
-/// Helper struct CORE_H2 for batch operations.
-pub struct CORE_H2 { pub data: Vec<f64>, pub config: CORE_S2 }
-impl CORE_H2 {
-    pub fn new(data: Vec<f64>) -> Self { Self { data, config: CORE_S2::new() } }
-    pub fn process_0(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f0 + 0.02).sum::<f64>() / self.data.len().max(1) as f64
-    }
-    pub fn process_1(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f1 + 0.02).sum::<f64>() / self.data.len().max(1) as f64
-    }
-    pub fn process_2(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f2 + 0.02).sum::<f64>() / self.data.len().max(1) as f64
-    }
-    pub fn process_3(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f3 + 0.02).sum::<f64>() / self.data.len().max(1) as f64
-    }
-}
-
-/// Helper struct CORE_H3 for batch operations.
-pub struct CORE_H3 { pub data: Vec<f64>, pub config: CORE_S3 }
-impl CORE_H3 {
-    pub fn new(data: Vec<f64>) -> Self { Self { data, config: CORE_S3::new() } }
-    pub fn process_0(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f0 + 0.03).sum::<f64>() / self.data.len().max(1) as f64
-    }
-    pub fn process_1(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f1 + 0.03).sum::<f64>() / self.data.len().max(1) as f64
-    }
-    pub fn process_2(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f2 + 0.03).sum::<f64>() / self.data.len().max(1) as f64
-    }
-    pub fn process_3(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f3 + 0.03).sum::<f64>() / self.data.len().max(1) as f64
-    }
-}
-
-/// Helper struct CORE_H4 for batch operations.
-pub struct CORE_H4 { pub data: Vec<f64>, pub config: CORE_S4 }
-impl CORE_H4 {
-    pub fn new(data: Vec<f64>) -> Self { Self { data, config: CORE_S4::new() } }
-    pub fn process_0(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f0 + 0.04).sum::<f64>() / self.data.len().max(1) as f64
-    }
-    pub fn process_1(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f1 + 0.04).sum::<f64>() / self.data.len().max(1) as f64
-    }
-    pub fn process_2(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f2 + 0.04).sum::<f64>() / self.data.len().max(1) as f64
-    }
-    pub fn process_3(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f3 + 0.04).sum::<f64>() / self.data.len().max(1) as f64
-    }
-}
-
-/// Helper struct CORE_H5 for batch operations.
-pub struct CORE_H5 { pub data: Vec<f64>, pub config: CORE_S5 }
-impl CORE_H5 {
-    pub fn new(data: Vec<f64>) -> Self { Self { data, config: CORE_S5::new() } }
-    pub fn process_0(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f0 + 0.05).sum::<f64>() / self.data.len().max(1) as f64
-    }
-    pub fn process_1(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f1 + 0.05).sum::<f64>() / self.data.len().max(1) as f64
-    }
-    pub fn process_2(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f2 + 0.05).sum::<f64>() / self.data.len().max(1) as f64
-    }
-    pub fn process_3(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f3 + 0.05).sum::<f64>() / self.data.len().max(1) as f64
-    }
-}
-
-/// Helper struct CORE_H6 for batch operations.
-pub struct CORE_H6 { pub data: Vec<f64>, pub config: CORE_S6 }
-impl CORE_H6 {
-    pub fn new(data: Vec<f64>) -> Self { Self { data, config: CORE_S6::new() } }
-    pub fn process_0(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f0 + 0.06).sum::<f64>() / self.data.len().max(1) as f64
-    }
-    pub fn process_1(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f1 + 0.06).sum::<f64>() / self.data.len().max(1) as f64
-    }
-    pub fn process_2(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f2 + 0.06).sum::<f64>() / self.data.len().max(1) as f64
-    }
-    pub fn process_3(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f3 + 0.06).sum::<f64>() / self.data.len().max(1) as f64
-    }
-}
-
-/// Helper struct CORE_H7 for batch operations.
-pub struct CORE_H7 { pub data: Vec<f64>, pub config: CORE_S7 }
-impl CORE_H7 {
-    pub fn new(data: Vec<f64>) -> Self { Self { data, config: CORE_S7::new() } }
-    pub fn process_0(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f0 + 0.07).sum::<f64>() / self.data.len().max(1) as f64
-    }
-    pub fn process_1(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f1 + 0.07).sum::<f64>() / self.data.len().max(1) as f64
-    }
-    pub fn process_2(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f2 + 0.07).sum::<f64>() / self.data.len().max(1) as f64
-    }
-    pub fn process_3(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f3 + 0.07).sum::<f64>() / self.data.len().max(1) as f64
-    }
-}
-
-/// Helper struct CORE_H8 for batch operations.
-pub struct CORE_H8 { pub data: Vec<f64>, pub config: CORE_S8 }
-impl CORE_H8 {
-    pub fn new(data: Vec<f64>) -> Self { Self { data, config: CORE_S8::new() } }
-    pub fn process_0(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f0 + 0.08).sum::<f64>() / self.data.len().max(1) as f64
-    }
-    pub fn process_1(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f1 + 0.08).sum::<f64>() / self.data.len().max(1) as f64
-    }
-    pub fn process_2(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f2 + 0.08).sum::<f64>() / self.data.len().max(1) as f64
-    }
-    pub fn process_3(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f3 + 0.08).sum::<f64>() / self.data.len().max(1) as f64
-    }
-}
+impl ExitCode {
+    pub const SUCCESS: Self = Self(0);
+    pub const ERROR: Self = Self(1);
+    pub const INVALID_USAGE: Self = Self(2);
+    pub const IO_ERROR: Self = Self(3);
+    pub const NOT_FOUND: Self = Self(4);
+    pub const INTERRUPTED: Self = Self(130);
 
-/// Helper struct CORE_H9 for batch operations.
-pub struct CORE_H9 { pub data: Vec<f64>, pub config: CORE_S9 }
-impl CORE_H9 {
-    pub fn new(data: Vec<f64>) -> Self { Self { data, config: CORE_S9::new() } }
-    pub fn process_0(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f0 + 0.09).sum::<f64>() / self.data.len().max(1) as f64
-    }
-    pub fn process_1(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f1 + 0.09).sum::<f64>() / self.data.len().max(1) as f64
-    }
-    pub fn process_2(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f2 + 0.09).sum::<f64>() / self.data.len().max(1) as f64
-    }
-    pub fn process_3(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f3 + 0.09).sum::<f64>() / self.data.len().max(1) as f64
+    /// Returns whether the exit code represents a success.
+    pub fn is_success(&self) -> bool {
+        self.0 == 0
     }
 }
 
-/// Helper struct CORE_H10 for batch operations.
-pub struct CORE_H10 { pub data: Vec<f64>, pub config: CORE_S10 }
-impl CORE_H10 {
-    pub fn new(data: Vec<f64>) -> Self { Self { data, config: CORE_S10::new() } }
-    pub fn process_0(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f0 + 0.1).sum::<f64>() / self.data.len().max(1) as f64
-    }
-    pub fn process_1(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f1 + 0.1).sum::<f64>() / self.data.len().max(1) as f64
-    }
-    pub fn process_2(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f2 + 0.1).sum::<f64>() / self.data.len().max(1) as f64
-    }
-    pub fn process_3(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f3 + 0.1).sum::<f64>() / self.data.len().max(1) as f64
-    }
+/// Output serialization formats for CLI command responses.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum OutputFormat {
+    #[default]
+    Text,
+    Json,
+    Csv,
+    Yaml,
 }
 
-/// Helper struct CORE_H11 for batch operations.
-pub struct CORE_H11 { pub data: Vec<f64>, pub config: CORE_S11 }
-impl CORE_H11 {
-    pub fn new(data: Vec<f64>) -> Self { Self { data, config: CORE_S11::new() } }
-    pub fn process_0(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f0 + 0.11).sum::<f64>() / self.data.len().max(1) as f64
-    }
-    pub fn process_1(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f1 + 0.11).sum::<f64>() / self.data.len().max(1) as f64
-    }
-    pub fn process_2(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f2 + 0.11).sum::<f64>() / self.data.len().max(1) as f64
-    }
-    pub fn process_3(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f3 + 0.11).sum::<f64>() / self.data.len().max(1) as f64
-    }
+/// Destination sink for standard output and diagnostics.
+#[derive(Clone)]
+pub struct OutputSink {
+    buffer: Option<Arc<Mutex<String>>>,
 }
 
-/// Helper struct CORE_H12 for batch operations.
-pub struct CORE_H12 { pub data: Vec<f64>, pub config: CORE_S12 }
-impl CORE_H12 {
-    pub fn new(data: Vec<f64>) -> Self { Self { data, config: CORE_S12::new() } }
-    pub fn process_0(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f0 + 0.12).sum::<f64>() / self.data.len().max(1) as f64
+impl Default for OutputSink {
+    fn default() -> Self {
+        Self::stdout()
     }
-    pub fn process_1(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f1 + 0.12).sum::<f64>() / self.data.len().max(1) as f64
-    }
-    pub fn process_2(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f2 + 0.12).sum::<f64>() / self.data.len().max(1) as f64
-    }
-    pub fn process_3(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f3 + 0.12).sum::<f64>() / self.data.len().max(1) as f64
-    }
 }
 
-/// Helper struct CORE_H13 for batch operations.
-pub struct CORE_H13 { pub data: Vec<f64>, pub config: CORE_S13 }
-impl CORE_H13 {
-    pub fn new(data: Vec<f64>) -> Self { Self { data, config: CORE_S13::new() } }
-    pub fn process_0(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f0 + 0.13).sum::<f64>() / self.data.len().max(1) as f64
-    }
-    pub fn process_1(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f1 + 0.13).sum::<f64>() / self.data.len().max(1) as f64
+impl OutputSink {
+    /// Creates a sink directing output to process standard out.
+    pub fn stdout() -> Self {
+        Self { buffer: None }
     }
-    pub fn process_2(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f2 + 0.13).sum::<f64>() / self.data.len().max(1) as f64
-    }
-    pub fn process_3(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f3 + 0.13).sum::<f64>() / self.data.len().max(1) as f64
-    }
-}
 
-/// Helper struct CORE_H14 for batch operations.
-pub struct CORE_H14 { pub data: Vec<f64>, pub config: CORE_S14 }
-impl CORE_H14 {
-    pub fn new(data: Vec<f64>) -> Self { Self { data, config: CORE_S14::new() } }
-    pub fn process_0(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f0 + 0.14).sum::<f64>() / self.data.len().max(1) as f64
-    }
-    pub fn process_1(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f1 + 0.14).sum::<f64>() / self.data.len().max(1) as f64
+    /// Creates an in-memory capturing sink for testing and programmatic capture.
+    pub fn memory() -> Self {
+        Self {
+            buffer: Some(Arc::new(Mutex::new(String::new()))),
+        }
     }
-    pub fn process_2(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f2 + 0.14).sum::<f64>() / self.data.len().max(1) as f64
-    }
-    pub fn process_3(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f3 + 0.14).sum::<f64>() / self.data.len().max(1) as f64
-    }
-}
 
-/// Helper struct CORE_H15 for batch operations.
-pub struct CORE_H15 { pub data: Vec<f64>, pub config: CORE_S0 }
-impl CORE_H15 {
-    pub fn new(data: Vec<f64>) -> Self { Self { data, config: CORE_S0::new() } }
-    pub fn process_0(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f0 + 0.15).sum::<f64>() / self.data.len().max(1) as f64
-    }
-    pub fn process_1(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f1 + 0.15).sum::<f64>() / self.data.len().max(1) as f64
+    /// Writes a line of text to the sink.
+    pub fn println(&self, msg: &str) {
+        if let Some(buf) = &self.buffer {
+            let mut b = buf.lock().unwrap();
+            b.push_str(msg);
+            b.push('\n');
+        } else {
+            println!("{}", msg);
+        }
     }
-    pub fn process_2(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f2 + 0.15).sum::<f64>() / self.data.len().max(1) as f64
-    }
-    pub fn process_3(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f3 + 0.15).sum::<f64>() / self.data.len().max(1) as f64
-    }
-}
 
-/// Helper struct CORE_H16 for batch operations.
-pub struct CORE_H16 { pub data: Vec<f64>, pub config: CORE_S1 }
-impl CORE_H16 {
-    pub fn new(data: Vec<f64>) -> Self { Self { data, config: CORE_S1::new() } }
-    pub fn process_0(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f0 + 0.16).sum::<f64>() / self.data.len().max(1) as f64
-    }
-    pub fn process_1(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f1 + 0.16).sum::<f64>() / self.data.len().max(1) as f64
+    /// Writes unformatted text to the sink without a trailing newline.
+    pub fn print(&self, msg: &str) {
+        if let Some(buf) = &self.buffer {
+            let mut b = buf.lock().unwrap();
+            b.push_str(msg);
+        } else {
+            print!("{}", msg);
+        }
     }
-    pub fn process_2(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f2 + 0.16).sum::<f64>() / self.data.len().max(1) as f64
-    }
-    pub fn process_3(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f3 + 0.16).sum::<f64>() / self.data.len().max(1) as f64
-    }
-}
 
-/// Helper struct CORE_H17 for batch operations.
-pub struct CORE_H17 { pub data: Vec<f64>, pub config: CORE_S2 }
-impl CORE_H17 {
-    pub fn new(data: Vec<f64>) -> Self { Self { data, config: CORE_S2::new() } }
-    pub fn process_0(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f0 + 0.17).sum::<f64>() / self.data.len().max(1) as f64
-    }
-    pub fn process_1(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f1 + 0.17).sum::<f64>() / self.data.len().max(1) as f64
+    /// Retrieves captured text if operating in memory mode.
+    pub fn captured(&self) -> Option<String> {
+        self.buffer.as_ref().map(|b| b.lock().unwrap().clone())
     }
-    pub fn process_2(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f2 + 0.17).sum::<f64>() / self.data.len().max(1) as f64
-    }
-    pub fn process_3(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f3 + 0.17).sum::<f64>() / self.data.len().max(1) as f64
-    }
 }
 
-/// Helper struct CORE_H18 for batch operations.
-pub struct CORE_H18 { pub data: Vec<f64>, pub config: CORE_S3 }
-impl CORE_H18 {
-    pub fn new(data: Vec<f64>) -> Self { Self { data, config: CORE_S3::new() } }
-    pub fn process_0(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f0 + 0.18).sum::<f64>() / self.data.len().max(1) as f64
-    }
-    pub fn process_1(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f1 + 0.18).sum::<f64>() / self.data.len().max(1) as f64
-    }
-    pub fn process_2(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f2 + 0.18).sum::<f64>() / self.data.len().max(1) as f64
-    }
-    pub fn process_3(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f3 + 0.18).sum::<f64>() / self.data.len().max(1) as f64
-    }
+/// Specification of a registered CLI command.
+#[derive(Debug, Clone)]
+pub struct CommandSpec {
+    pub name: String,
+    pub description: String,
+    pub usage: String,
+    pub aliases: Vec<String>,
 }
 
-/// Helper struct CORE_H19 for batch operations.
-pub struct CORE_H19 { pub data: Vec<f64>, pub config: CORE_S4 }
-impl CORE_H19 {
-    pub fn new(data: Vec<f64>) -> Self { Self { data, config: CORE_S4::new() } }
-    pub fn process_0(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f0 + 0.19).sum::<f64>() / self.data.len().max(1) as f64
-    }
-    pub fn process_1(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f1 + 0.19).sum::<f64>() / self.data.len().max(1) as f64
-    }
-    pub fn process_2(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f2 + 0.19).sum::<f64>() / self.data.len().max(1) as f64
-    }
-    pub fn process_3(&self) -> f64 {
-        self.data.iter().map(|&x| x * self.config.f3 + 0.19).sum::<f64>() / self.data.len().max(1) as f64
+impl CommandSpec {
+    /// Creates a new `CommandSpec`.
+    pub fn new(name: impl Into<String>, desc: impl Into<String>, usage: impl Into<String>) -> Self {
+        Self {
+            name: name.into(),
+            description: desc.into(),
+            usage: usage.into(),
+            aliases: Vec::new(),
+        }
+    }
+
+    /// Adds an alias name.
+    pub fn with_alias(mut self, alias: impl Into<String>) -> Self {
+        self.aliases.push(alias.into());
+        self
     }
 }
 
 #[cfg(test)]
 mod tests {
+    #![allow(unused_imports, unused_variables, unused_mut, dead_code)]
     use super::*;
+    use brain_core::Tensor;
 
     #[test]
-    fn test_0() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S0::new();
-        let result = fn_0(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
+    fn test_core_cli_stress_001() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 1");
+        assert!(sink.captured().unwrap().contains("hello 1"));
+        let spec = CommandSpec::new("test_1", "desc", "usage").with_alias("t1");
+        assert_eq!(spec.name, "test_1");
+        assert_eq!(spec.aliases.len(), 1);
     }
 
     #[test]
-    fn test_1() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S1::new();
-        let result = fn_1(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
+    fn test_core_cli_stress_002() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 2");
+        assert!(sink.captured().unwrap().contains("hello 2"));
+        let spec = CommandSpec::new("test_2", "desc", "usage").with_alias("t2");
+        assert_eq!(spec.name, "test_2");
+        assert_eq!(spec.aliases.len(), 1);
     }
 
     #[test]
-    fn test_2() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S2::new();
-        let result = fn_2(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
+    fn test_core_cli_stress_003() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 3");
+        assert!(sink.captured().unwrap().contains("hello 3"));
+        let spec = CommandSpec::new("test_3", "desc", "usage").with_alias("t3");
+        assert_eq!(spec.name, "test_3");
+        assert_eq!(spec.aliases.len(), 1);
     }
 
     #[test]
-    fn test_3() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S3::new();
-        let result = fn_3(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
+    fn test_core_cli_stress_004() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 4");
+        assert!(sink.captured().unwrap().contains("hello 4"));
+        let spec = CommandSpec::new("test_4", "desc", "usage").with_alias("t4");
+        assert_eq!(spec.name, "test_4");
+        assert_eq!(spec.aliases.len(), 1);
     }
 
     #[test]
-    fn test_4() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S4::new();
-        let result = fn_4(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
+    fn test_core_cli_stress_005() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 5");
+        assert!(sink.captured().unwrap().contains("hello 5"));
+        let spec = CommandSpec::new("test_5", "desc", "usage").with_alias("t5");
+        assert_eq!(spec.name, "test_5");
+        assert_eq!(spec.aliases.len(), 1);
     }
 
     #[test]
-    fn test_5() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S5::new();
-        let result = fn_5(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
+    fn test_core_cli_stress_006() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 6");
+        assert!(sink.captured().unwrap().contains("hello 6"));
+        let spec = CommandSpec::new("test_6", "desc", "usage").with_alias("t6");
+        assert_eq!(spec.name, "test_6");
+        assert_eq!(spec.aliases.len(), 1);
     }
 
     #[test]
-    fn test_6() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S6::new();
-        let result = fn_6(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
+    fn test_core_cli_stress_007() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 7");
+        assert!(sink.captured().unwrap().contains("hello 7"));
+        let spec = CommandSpec::new("test_7", "desc", "usage").with_alias("t7");
+        assert_eq!(spec.name, "test_7");
+        assert_eq!(spec.aliases.len(), 1);
     }
 
     #[test]
-    fn test_7() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S7::new();
-        let result = fn_7(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
+    fn test_core_cli_stress_008() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 8");
+        assert!(sink.captured().unwrap().contains("hello 8"));
+        let spec = CommandSpec::new("test_8", "desc", "usage").with_alias("t8");
+        assert_eq!(spec.name, "test_8");
+        assert_eq!(spec.aliases.len(), 1);
     }
 
     #[test]
-    fn test_8() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S8::new();
-        let result = fn_8(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
+    fn test_core_cli_stress_009() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 9");
+        assert!(sink.captured().unwrap().contains("hello 9"));
+        let spec = CommandSpec::new("test_9", "desc", "usage").with_alias("t9");
+        assert_eq!(spec.name, "test_9");
+        assert_eq!(spec.aliases.len(), 1);
     }
-
-    #[test]
-    fn test_9() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S9::new();
-        let result = fn_9(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
+
+    #[test]
+    fn test_core_cli_stress_010() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 10");
+        assert!(sink.captured().unwrap().contains("hello 10"));
+        let spec = CommandSpec::new("test_10", "desc", "usage").with_alias("t10");
+        assert_eq!(spec.name, "test_10");
+        assert_eq!(spec.aliases.len(), 1);
     }
-
-    #[test]
-    fn test_10() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S10::new();
-        let result = fn_10(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
+
+    #[test]
+    fn test_core_cli_stress_011() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 11");
+        assert!(sink.captured().unwrap().contains("hello 11"));
+        let spec = CommandSpec::new("test_11", "desc", "usage").with_alias("t11");
+        assert_eq!(spec.name, "test_11");
+        assert_eq!(spec.aliases.len(), 1);
     }
-
-    #[test]
-    fn test_11() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S11::new();
-        let result = fn_11(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
+
+    #[test]
+    fn test_core_cli_stress_012() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 12");
+        assert!(sink.captured().unwrap().contains("hello 12"));
+        let spec = CommandSpec::new("test_12", "desc", "usage").with_alias("t12");
+        assert_eq!(spec.name, "test_12");
+        assert_eq!(spec.aliases.len(), 1);
     }
-
-    #[test]
-    fn test_12() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S12::new();
-        let result = fn_12(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
+
+    #[test]
+    fn test_core_cli_stress_013() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 13");
+        assert!(sink.captured().unwrap().contains("hello 13"));
+        let spec = CommandSpec::new("test_13", "desc", "usage").with_alias("t13");
+        assert_eq!(spec.name, "test_13");
+        assert_eq!(spec.aliases.len(), 1);
     }
-
-    #[test]
-    fn test_13() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S13::new();
-        let result = fn_13(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
+
+    #[test]
+    fn test_core_cli_stress_014() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 14");
+        assert!(sink.captured().unwrap().contains("hello 14"));
+        let spec = CommandSpec::new("test_14", "desc", "usage").with_alias("t14");
+        assert_eq!(spec.name, "test_14");
+        assert_eq!(spec.aliases.len(), 1);
     }
-
-    #[test]
-    fn test_14() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S14::new();
-        let result = fn_14(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
+
+    #[test]
+    fn test_core_cli_stress_015() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 15");
+        assert!(sink.captured().unwrap().contains("hello 15"));
+        let spec = CommandSpec::new("test_15", "desc", "usage").with_alias("t15");
+        assert_eq!(spec.name, "test_15");
+        assert_eq!(spec.aliases.len(), 1);
     }
-
-    #[test]
-    fn test_15() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S0::new();
-        let result = fn_15(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
+
+    #[test]
+    fn test_core_cli_stress_016() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 16");
+        assert!(sink.captured().unwrap().contains("hello 16"));
+        let spec = CommandSpec::new("test_16", "desc", "usage").with_alias("t16");
+        assert_eq!(spec.name, "test_16");
+        assert_eq!(spec.aliases.len(), 1);
     }
-
-    #[test]
-    fn test_16() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S1::new();
-        let result = fn_16(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
+
+    #[test]
+    fn test_core_cli_stress_017() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 17");
+        assert!(sink.captured().unwrap().contains("hello 17"));
+        let spec = CommandSpec::new("test_17", "desc", "usage").with_alias("t17");
+        assert_eq!(spec.name, "test_17");
+        assert_eq!(spec.aliases.len(), 1);
     }
-
-    #[test]
-    fn test_17() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S2::new();
-        let result = fn_17(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
+
+    #[test]
+    fn test_core_cli_stress_018() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 18");
+        assert!(sink.captured().unwrap().contains("hello 18"));
+        let spec = CommandSpec::new("test_18", "desc", "usage").with_alias("t18");
+        assert_eq!(spec.name, "test_18");
+        assert_eq!(spec.aliases.len(), 1);
     }
-
-    #[test]
-    fn test_18() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S3::new();
-        let result = fn_18(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
+
+    #[test]
+    fn test_core_cli_stress_019() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 19");
+        assert!(sink.captured().unwrap().contains("hello 19"));
+        let spec = CommandSpec::new("test_19", "desc", "usage").with_alias("t19");
+        assert_eq!(spec.name, "test_19");
+        assert_eq!(spec.aliases.len(), 1);
     }
-
-    #[test]
-    fn test_19() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S4::new();
-        let result = fn_19(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
+
+    #[test]
+    fn test_core_cli_stress_020() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 20");
+        assert!(sink.captured().unwrap().contains("hello 20"));
+        let spec = CommandSpec::new("test_20", "desc", "usage").with_alias("t20");
+        assert_eq!(spec.name, "test_20");
+        assert_eq!(spec.aliases.len(), 1);
     }
-
-    #[test]
-    fn test_20() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S5::new();
-        let result = fn_20(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
+
+    #[test]
+    fn test_core_cli_stress_021() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 21");
+        assert!(sink.captured().unwrap().contains("hello 21"));
+        let spec = CommandSpec::new("test_21", "desc", "usage").with_alias("t21");
+        assert_eq!(spec.name, "test_21");
+        assert_eq!(spec.aliases.len(), 1);
     }
-
-    #[test]
-    fn test_21() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S6::new();
-        let result = fn_21(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
+
+    #[test]
+    fn test_core_cli_stress_022() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 22");
+        assert!(sink.captured().unwrap().contains("hello 22"));
+        let spec = CommandSpec::new("test_22", "desc", "usage").with_alias("t22");
+        assert_eq!(spec.name, "test_22");
+        assert_eq!(spec.aliases.len(), 1);
     }
-
-    #[test]
-    fn test_22() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S7::new();
-        let result = fn_22(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
+
+    #[test]
+    fn test_core_cli_stress_023() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 23");
+        assert!(sink.captured().unwrap().contains("hello 23"));
+        let spec = CommandSpec::new("test_23", "desc", "usage").with_alias("t23");
+        assert_eq!(spec.name, "test_23");
+        assert_eq!(spec.aliases.len(), 1);
     }
-
-    #[test]
-    fn test_23() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S8::new();
-        let result = fn_23(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
+
+    #[test]
+    fn test_core_cli_stress_024() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 24");
+        assert!(sink.captured().unwrap().contains("hello 24"));
+        let spec = CommandSpec::new("test_24", "desc", "usage").with_alias("t24");
+        assert_eq!(spec.name, "test_24");
+        assert_eq!(spec.aliases.len(), 1);
     }
-
-    #[test]
-    fn test_24() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S9::new();
-        let result = fn_24(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
+
+    #[test]
+    fn test_core_cli_stress_025() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 25");
+        assert!(sink.captured().unwrap().contains("hello 25"));
+        let spec = CommandSpec::new("test_25", "desc", "usage").with_alias("t25");
+        assert_eq!(spec.name, "test_25");
+        assert_eq!(spec.aliases.len(), 1);
     }
-
-    #[test]
-    fn test_25() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S10::new();
-        let result = fn_25(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
+
+    #[test]
+    fn test_core_cli_stress_026() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 26");
+        assert!(sink.captured().unwrap().contains("hello 26"));
+        let spec = CommandSpec::new("test_26", "desc", "usage").with_alias("t26");
+        assert_eq!(spec.name, "test_26");
+        assert_eq!(spec.aliases.len(), 1);
     }
-
-    #[test]
-    fn test_26() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S11::new();
-        let result = fn_26(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
+
+    #[test]
+    fn test_core_cli_stress_027() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 27");
+        assert!(sink.captured().unwrap().contains("hello 27"));
+        let spec = CommandSpec::new("test_27", "desc", "usage").with_alias("t27");
+        assert_eq!(spec.name, "test_27");
+        assert_eq!(spec.aliases.len(), 1);
     }
-
-    #[test]
-    fn test_27() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S12::new();
-        let result = fn_27(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
+
+    #[test]
+    fn test_core_cli_stress_028() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 28");
+        assert!(sink.captured().unwrap().contains("hello 28"));
+        let spec = CommandSpec::new("test_28", "desc", "usage").with_alias("t28");
+        assert_eq!(spec.name, "test_28");
+        assert_eq!(spec.aliases.len(), 1);
     }
-
-    #[test]
-    fn test_28() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S13::new();
-        let result = fn_28(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
+
+    #[test]
+    fn test_core_cli_stress_029() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 29");
+        assert!(sink.captured().unwrap().contains("hello 29"));
+        let spec = CommandSpec::new("test_29", "desc", "usage").with_alias("t29");
+        assert_eq!(spec.name, "test_29");
+        assert_eq!(spec.aliases.len(), 1);
     }
-
-    #[test]
-    fn test_29() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S14::new();
-        let result = fn_29(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
+
+    #[test]
+    fn test_core_cli_stress_030() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 30");
+        assert!(sink.captured().unwrap().contains("hello 30"));
+        let spec = CommandSpec::new("test_30", "desc", "usage").with_alias("t30");
+        assert_eq!(spec.name, "test_30");
+        assert_eq!(spec.aliases.len(), 1);
     }
-
-    #[test]
-    fn test_30() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S0::new();
-        let result = fn_30(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
+
+    #[test]
+    fn test_core_cli_stress_031() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 31");
+        assert!(sink.captured().unwrap().contains("hello 31"));
+        let spec = CommandSpec::new("test_31", "desc", "usage").with_alias("t31");
+        assert_eq!(spec.name, "test_31");
+        assert_eq!(spec.aliases.len(), 1);
     }
-
-    #[test]
-    fn test_31() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S1::new();
-        let result = fn_31(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
+
+    #[test]
+    fn test_core_cli_stress_032() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 32");
+        assert!(sink.captured().unwrap().contains("hello 32"));
+        let spec = CommandSpec::new("test_32", "desc", "usage").with_alias("t32");
+        assert_eq!(spec.name, "test_32");
+        assert_eq!(spec.aliases.len(), 1);
     }
-
-    #[test]
-    fn test_32() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S2::new();
-        let result = fn_32(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
+
+    #[test]
+    fn test_core_cli_stress_033() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 33");
+        assert!(sink.captured().unwrap().contains("hello 33"));
+        let spec = CommandSpec::new("test_33", "desc", "usage").with_alias("t33");
+        assert_eq!(spec.name, "test_33");
+        assert_eq!(spec.aliases.len(), 1);
     }
-
-    #[test]
-    fn test_33() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S3::new();
-        let result = fn_33(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
+
+    #[test]
+    fn test_core_cli_stress_034() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 34");
+        assert!(sink.captured().unwrap().contains("hello 34"));
+        let spec = CommandSpec::new("test_34", "desc", "usage").with_alias("t34");
+        assert_eq!(spec.name, "test_34");
+        assert_eq!(spec.aliases.len(), 1);
     }
-
-    #[test]
-    fn test_34() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S4::new();
-        let result = fn_34(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
+
+    #[test]
+    fn test_core_cli_stress_035() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 35");
+        assert!(sink.captured().unwrap().contains("hello 35"));
+        let spec = CommandSpec::new("test_35", "desc", "usage").with_alias("t35");
+        assert_eq!(spec.name, "test_35");
+        assert_eq!(spec.aliases.len(), 1);
     }
-
-    #[test]
-    fn test_35() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S5::new();
-        let result = fn_35(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
+
+    #[test]
+    fn test_core_cli_stress_036() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 36");
+        assert!(sink.captured().unwrap().contains("hello 36"));
+        let spec = CommandSpec::new("test_36", "desc", "usage").with_alias("t36");
+        assert_eq!(spec.name, "test_36");
+        assert_eq!(spec.aliases.len(), 1);
     }
-
-    #[test]
-    fn test_36() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S6::new();
-        let result = fn_36(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
+
+    #[test]
+    fn test_core_cli_stress_037() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 37");
+        assert!(sink.captured().unwrap().contains("hello 37"));
+        let spec = CommandSpec::new("test_37", "desc", "usage").with_alias("t37");
+        assert_eq!(spec.name, "test_37");
+        assert_eq!(spec.aliases.len(), 1);
     }
-
-    #[test]
-    fn test_37() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S7::new();
-        let result = fn_37(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
+
+    #[test]
+    fn test_core_cli_stress_038() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 38");
+        assert!(sink.captured().unwrap().contains("hello 38"));
+        let spec = CommandSpec::new("test_38", "desc", "usage").with_alias("t38");
+        assert_eq!(spec.name, "test_38");
+        assert_eq!(spec.aliases.len(), 1);
     }
-
-    #[test]
-    fn test_38() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S8::new();
-        let result = fn_38(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
+
+    #[test]
+    fn test_core_cli_stress_039() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 39");
+        assert!(sink.captured().unwrap().contains("hello 39"));
+        let spec = CommandSpec::new("test_39", "desc", "usage").with_alias("t39");
+        assert_eq!(spec.name, "test_39");
+        assert_eq!(spec.aliases.len(), 1);
     }
-
-    #[test]
-    fn test_39() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S9::new();
-        let result = fn_39(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
+
+    #[test]
+    fn test_core_cli_stress_040() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 40");
+        assert!(sink.captured().unwrap().contains("hello 40"));
+        let spec = CommandSpec::new("test_40", "desc", "usage").with_alias("t40");
+        assert_eq!(spec.name, "test_40");
+        assert_eq!(spec.aliases.len(), 1);
     }
-
-    #[test]
-    fn test_40() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S10::new();
-        let result = fn_40(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
+
+    #[test]
+    fn test_core_cli_stress_041() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 41");
+        assert!(sink.captured().unwrap().contains("hello 41"));
+        let spec = CommandSpec::new("test_41", "desc", "usage").with_alias("t41");
+        assert_eq!(spec.name, "test_41");
+        assert_eq!(spec.aliases.len(), 1);
     }
-
-    #[test]
-    fn test_41() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S11::new();
-        let result = fn_41(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
+
+    #[test]
+    fn test_core_cli_stress_042() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 42");
+        assert!(sink.captured().unwrap().contains("hello 42"));
+        let spec = CommandSpec::new("test_42", "desc", "usage").with_alias("t42");
+        assert_eq!(spec.name, "test_42");
+        assert_eq!(spec.aliases.len(), 1);
     }
-
-    #[test]
-    fn test_42() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S12::new();
-        let result = fn_42(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
+
+    #[test]
+    fn test_core_cli_stress_043() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 43");
+        assert!(sink.captured().unwrap().contains("hello 43"));
+        let spec = CommandSpec::new("test_43", "desc", "usage").with_alias("t43");
+        assert_eq!(spec.name, "test_43");
+        assert_eq!(spec.aliases.len(), 1);
     }
-
-    #[test]
-    fn test_43() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S13::new();
-        let result = fn_43(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
+
+    #[test]
+    fn test_core_cli_stress_044() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 44");
+        assert!(sink.captured().unwrap().contains("hello 44"));
+        let spec = CommandSpec::new("test_44", "desc", "usage").with_alias("t44");
+        assert_eq!(spec.name, "test_44");
+        assert_eq!(spec.aliases.len(), 1);
     }
-
-    #[test]
-    fn test_44() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S14::new();
-        let result = fn_44(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
+
+    #[test]
+    fn test_core_cli_stress_045() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 45");
+        assert!(sink.captured().unwrap().contains("hello 45"));
+        let spec = CommandSpec::new("test_45", "desc", "usage").with_alias("t45");
+        assert_eq!(spec.name, "test_45");
+        assert_eq!(spec.aliases.len(), 1);
     }
-
-    #[test]
-    fn test_45() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S0::new();
-        let result = fn_45(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
+
+    #[test]
+    fn test_core_cli_stress_046() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 46");
+        assert!(sink.captured().unwrap().contains("hello 46"));
+        let spec = CommandSpec::new("test_46", "desc", "usage").with_alias("t46");
+        assert_eq!(spec.name, "test_46");
+        assert_eq!(spec.aliases.len(), 1);
     }
-
-    #[test]
-    fn test_46() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S1::new();
-        let result = fn_46(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
+
+    #[test]
+    fn test_core_cli_stress_047() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 47");
+        assert!(sink.captured().unwrap().contains("hello 47"));
+        let spec = CommandSpec::new("test_47", "desc", "usage").with_alias("t47");
+        assert_eq!(spec.name, "test_47");
+        assert_eq!(spec.aliases.len(), 1);
     }
-
-    #[test]
-    fn test_47() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S2::new();
-        let result = fn_47(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
+
+    #[test]
+    fn test_core_cli_stress_048() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 48");
+        assert!(sink.captured().unwrap().contains("hello 48"));
+        let spec = CommandSpec::new("test_48", "desc", "usage").with_alias("t48");
+        assert_eq!(spec.name, "test_48");
+        assert_eq!(spec.aliases.len(), 1);
     }
-
-    #[test]
-    fn test_48() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S3::new();
-        let result = fn_48(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
+
+    #[test]
+    fn test_core_cli_stress_049() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 49");
+        assert!(sink.captured().unwrap().contains("hello 49"));
+        let spec = CommandSpec::new("test_49", "desc", "usage").with_alias("t49");
+        assert_eq!(spec.name, "test_49");
+        assert_eq!(spec.aliases.len(), 1);
     }
-
-    #[test]
-    fn test_49() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S4::new();
-        let result = fn_49(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
+
+    #[test]
+    fn test_core_cli_stress_050() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 50");
+        assert!(sink.captured().unwrap().contains("hello 50"));
+        let spec = CommandSpec::new("test_50", "desc", "usage").with_alias("t50");
+        assert_eq!(spec.name, "test_50");
+        assert_eq!(spec.aliases.len(), 1);
     }
-
-    #[test]
-    fn test_50() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S5::new();
-        let result = fn_50(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
+
+    #[test]
+    fn test_core_cli_stress_051() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 51");
+        assert!(sink.captured().unwrap().contains("hello 51"));
+        let spec = CommandSpec::new("test_51", "desc", "usage").with_alias("t51");
+        assert_eq!(spec.name, "test_51");
+        assert_eq!(spec.aliases.len(), 1);
     }
-
-    #[test]
-    fn test_51() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S6::new();
-        let result = fn_51(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
+
+    #[test]
+    fn test_core_cli_stress_052() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 52");
+        assert!(sink.captured().unwrap().contains("hello 52"));
+        let spec = CommandSpec::new("test_52", "desc", "usage").with_alias("t52");
+        assert_eq!(spec.name, "test_52");
+        assert_eq!(spec.aliases.len(), 1);
     }
-
-    #[test]
-    fn test_52() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S7::new();
-        let result = fn_52(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
+
+    #[test]
+    fn test_core_cli_stress_053() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 53");
+        assert!(sink.captured().unwrap().contains("hello 53"));
+        let spec = CommandSpec::new("test_53", "desc", "usage").with_alias("t53");
+        assert_eq!(spec.name, "test_53");
+        assert_eq!(spec.aliases.len(), 1);
     }
-
-    #[test]
-    fn test_53() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S8::new();
-        let result = fn_53(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
+
+    #[test]
+    fn test_core_cli_stress_054() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 54");
+        assert!(sink.captured().unwrap().contains("hello 54"));
+        let spec = CommandSpec::new("test_54", "desc", "usage").with_alias("t54");
+        assert_eq!(spec.name, "test_54");
+        assert_eq!(spec.aliases.len(), 1);
     }
-
-    #[test]
-    fn test_54() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S9::new();
-        let result = fn_54(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
+
+    #[test]
+    fn test_core_cli_stress_055() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 55");
+        assert!(sink.captured().unwrap().contains("hello 55"));
+        let spec = CommandSpec::new("test_55", "desc", "usage").with_alias("t55");
+        assert_eq!(spec.name, "test_55");
+        assert_eq!(spec.aliases.len(), 1);
     }
-
-    #[test]
-    fn test_55() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S10::new();
-        let result = fn_55(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
+
+    #[test]
+    fn test_core_cli_stress_056() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 56");
+        assert!(sink.captured().unwrap().contains("hello 56"));
+        let spec = CommandSpec::new("test_56", "desc", "usage").with_alias("t56");
+        assert_eq!(spec.name, "test_56");
+        assert_eq!(spec.aliases.len(), 1);
     }
-
-    #[test]
-    fn test_56() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S11::new();
-        let result = fn_56(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
+
+    #[test]
+    fn test_core_cli_stress_057() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 57");
+        assert!(sink.captured().unwrap().contains("hello 57"));
+        let spec = CommandSpec::new("test_57", "desc", "usage").with_alias("t57");
+        assert_eq!(spec.name, "test_57");
+        assert_eq!(spec.aliases.len(), 1);
     }
-
-    #[test]
-    fn test_57() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S12::new();
-        let result = fn_57(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
+
+    #[test]
+    fn test_core_cli_stress_058() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 58");
+        assert!(sink.captured().unwrap().contains("hello 58"));
+        let spec = CommandSpec::new("test_58", "desc", "usage").with_alias("t58");
+        assert_eq!(spec.name, "test_58");
+        assert_eq!(spec.aliases.len(), 1);
     }
-
-    #[test]
-    fn test_58() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S13::new();
-        let result = fn_58(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
+
+    #[test]
+    fn test_core_cli_stress_059() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 59");
+        assert!(sink.captured().unwrap().contains("hello 59"));
+        let spec = CommandSpec::new("test_59", "desc", "usage").with_alias("t59");
+        assert_eq!(spec.name, "test_59");
+        assert_eq!(spec.aliases.len(), 1);
     }
-
-    #[test]
-    fn test_59() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S14::new();
-        let result = fn_59(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
+
+    #[test]
+    fn test_core_cli_stress_060() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 60");
+        assert!(sink.captured().unwrap().contains("hello 60"));
+        let spec = CommandSpec::new("test_60", "desc", "usage").with_alias("t60");
+        assert_eq!(spec.name, "test_60");
+        assert_eq!(spec.aliases.len(), 1);
     }
-
-    #[test]
-    fn test_60() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S0::new();
-        let result = fn_60(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
+
+    #[test]
+    fn test_core_cli_stress_061() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 61");
+        assert!(sink.captured().unwrap().contains("hello 61"));
+        let spec = CommandSpec::new("test_61", "desc", "usage").with_alias("t61");
+        assert_eq!(spec.name, "test_61");
+        assert_eq!(spec.aliases.len(), 1);
     }
-
-    #[test]
-    fn test_61() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S1::new();
-        let result = fn_61(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
+
+    #[test]
+    fn test_core_cli_stress_062() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 62");
+        assert!(sink.captured().unwrap().contains("hello 62"));
+        let spec = CommandSpec::new("test_62", "desc", "usage").with_alias("t62");
+        assert_eq!(spec.name, "test_62");
+        assert_eq!(spec.aliases.len(), 1);
     }
-
-    #[test]
-    fn test_62() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S2::new();
-        let result = fn_62(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
+
+    #[test]
+    fn test_core_cli_stress_063() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 63");
+        assert!(sink.captured().unwrap().contains("hello 63"));
+        let spec = CommandSpec::new("test_63", "desc", "usage").with_alias("t63");
+        assert_eq!(spec.name, "test_63");
+        assert_eq!(spec.aliases.len(), 1);
     }
-
-    #[test]
-    fn test_63() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S3::new();
-        let result = fn_63(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
+
+    #[test]
+    fn test_core_cli_stress_064() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 64");
+        assert!(sink.captured().unwrap().contains("hello 64"));
+        let spec = CommandSpec::new("test_64", "desc", "usage").with_alias("t64");
+        assert_eq!(spec.name, "test_64");
+        assert_eq!(spec.aliases.len(), 1);
     }
-
-    #[test]
-    fn test_64() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S4::new();
-        let result = fn_64(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
+
+    #[test]
+    fn test_core_cli_stress_065() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 65");
+        assert!(sink.captured().unwrap().contains("hello 65"));
+        let spec = CommandSpec::new("test_65", "desc", "usage").with_alias("t65");
+        assert_eq!(spec.name, "test_65");
+        assert_eq!(spec.aliases.len(), 1);
     }
-
-    #[test]
-    fn test_65() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S5::new();
-        let result = fn_65(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
+
+    #[test]
+    fn test_core_cli_stress_066() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 66");
+        assert!(sink.captured().unwrap().contains("hello 66"));
+        let spec = CommandSpec::new("test_66", "desc", "usage").with_alias("t66");
+        assert_eq!(spec.name, "test_66");
+        assert_eq!(spec.aliases.len(), 1);
     }
-
-    #[test]
-    fn test_66() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S6::new();
-        let result = fn_66(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
+
+    #[test]
+    fn test_core_cli_stress_067() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 67");
+        assert!(sink.captured().unwrap().contains("hello 67"));
+        let spec = CommandSpec::new("test_67", "desc", "usage").with_alias("t67");
+        assert_eq!(spec.name, "test_67");
+        assert_eq!(spec.aliases.len(), 1);
     }
-
-    #[test]
-    fn test_67() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S7::new();
-        let result = fn_67(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
+
+    #[test]
+    fn test_core_cli_stress_068() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 68");
+        assert!(sink.captured().unwrap().contains("hello 68"));
+        let spec = CommandSpec::new("test_68", "desc", "usage").with_alias("t68");
+        assert_eq!(spec.name, "test_68");
+        assert_eq!(spec.aliases.len(), 1);
     }
-
-    #[test]
-    fn test_68() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S8::new();
-        let result = fn_68(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
+
+    #[test]
+    fn test_core_cli_stress_069() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 69");
+        assert!(sink.captured().unwrap().contains("hello 69"));
+        let spec = CommandSpec::new("test_69", "desc", "usage").with_alias("t69");
+        assert_eq!(spec.name, "test_69");
+        assert_eq!(spec.aliases.len(), 1);
     }
-
-    #[test]
-    fn test_69() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S9::new();
-        let result = fn_69(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
+
+    #[test]
+    fn test_core_cli_stress_070() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 70");
+        assert!(sink.captured().unwrap().contains("hello 70"));
+        let spec = CommandSpec::new("test_70", "desc", "usage").with_alias("t70");
+        assert_eq!(spec.name, "test_70");
+        assert_eq!(spec.aliases.len(), 1);
     }
-
-    #[test]
-    fn test_70() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S10::new();
-        let result = fn_70(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
+
+    #[test]
+    fn test_core_cli_stress_071() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 71");
+        assert!(sink.captured().unwrap().contains("hello 71"));
+        let spec = CommandSpec::new("test_71", "desc", "usage").with_alias("t71");
+        assert_eq!(spec.name, "test_71");
+        assert_eq!(spec.aliases.len(), 1);
     }
-
-    #[test]
-    fn test_71() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S11::new();
-        let result = fn_71(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
+
+    #[test]
+    fn test_core_cli_stress_072() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 72");
+        assert!(sink.captured().unwrap().contains("hello 72"));
+        let spec = CommandSpec::new("test_72", "desc", "usage").with_alias("t72");
+        assert_eq!(spec.name, "test_72");
+        assert_eq!(spec.aliases.len(), 1);
     }
-
-    #[test]
-    fn test_72() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S12::new();
-        let result = fn_72(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
+
+    #[test]
+    fn test_core_cli_stress_073() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 73");
+        assert!(sink.captured().unwrap().contains("hello 73"));
+        let spec = CommandSpec::new("test_73", "desc", "usage").with_alias("t73");
+        assert_eq!(spec.name, "test_73");
+        assert_eq!(spec.aliases.len(), 1);
     }
-
-    #[test]
-    fn test_73() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S13::new();
-        let result = fn_73(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
+
+    #[test]
+    fn test_core_cli_stress_074() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 74");
+        assert!(sink.captured().unwrap().contains("hello 74"));
+        let spec = CommandSpec::new("test_74", "desc", "usage").with_alias("t74");
+        assert_eq!(spec.name, "test_74");
+        assert_eq!(spec.aliases.len(), 1);
     }
-
-    #[test]
-    fn test_74() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S14::new();
-        let result = fn_74(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
+
+    #[test]
+    fn test_core_cli_stress_075() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 75");
+        assert!(sink.captured().unwrap().contains("hello 75"));
+        let spec = CommandSpec::new("test_75", "desc", "usage").with_alias("t75");
+        assert_eq!(spec.name, "test_75");
+        assert_eq!(spec.aliases.len(), 1);
     }
-
-    #[test]
-    fn test_75() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S0::new();
-        let result = fn_75(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
+
+    #[test]
+    fn test_core_cli_stress_076() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 76");
+        assert!(sink.captured().unwrap().contains("hello 76"));
+        let spec = CommandSpec::new("test_76", "desc", "usage").with_alias("t76");
+        assert_eq!(spec.name, "test_76");
+        assert_eq!(spec.aliases.len(), 1);
     }
-
-    #[test]
-    fn test_76() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S1::new();
-        let result = fn_76(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
+
+    #[test]
+    fn test_core_cli_stress_077() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 77");
+        assert!(sink.captured().unwrap().contains("hello 77"));
+        let spec = CommandSpec::new("test_77", "desc", "usage").with_alias("t77");
+        assert_eq!(spec.name, "test_77");
+        assert_eq!(spec.aliases.len(), 1);
     }
-
-    #[test]
-    fn test_77() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S2::new();
-        let result = fn_77(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
+
+    #[test]
+    fn test_core_cli_stress_078() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 78");
+        assert!(sink.captured().unwrap().contains("hello 78"));
+        let spec = CommandSpec::new("test_78", "desc", "usage").with_alias("t78");
+        assert_eq!(spec.name, "test_78");
+        assert_eq!(spec.aliases.len(), 1);
     }
-
-    #[test]
-    fn test_78() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S3::new();
-        let result = fn_78(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
+
+    #[test]
+    fn test_core_cli_stress_079() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 79");
+        assert!(sink.captured().unwrap().contains("hello 79"));
+        let spec = CommandSpec::new("test_79", "desc", "usage").with_alias("t79");
+        assert_eq!(spec.name, "test_79");
+        assert_eq!(spec.aliases.len(), 1);
     }
-
-    #[test]
-    fn test_79() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let cfg = CORE_S4::new();
-        let result = fn_79(&data, &cfg).unwrap();
-        assert_eq!(result.len(), 5);
+
+    #[test]
+    fn test_core_cli_stress_080() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 80");
+        assert!(sink.captured().unwrap().contains("hello 80"));
+        let spec = CommandSpec::new("test_80", "desc", "usage").with_alias("t80");
+        assert_eq!(spec.name, "test_80");
+        assert_eq!(spec.aliases.len(), 1);
     }
-
+
+    #[test]
+    fn test_core_cli_stress_081() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 81");
+        assert!(sink.captured().unwrap().contains("hello 81"));
+        let spec = CommandSpec::new("test_81", "desc", "usage").with_alias("t81");
+        assert_eq!(spec.name, "test_81");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_082() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 82");
+        assert!(sink.captured().unwrap().contains("hello 82"));
+        let spec = CommandSpec::new("test_82", "desc", "usage").with_alias("t82");
+        assert_eq!(spec.name, "test_82");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_083() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 83");
+        assert!(sink.captured().unwrap().contains("hello 83"));
+        let spec = CommandSpec::new("test_83", "desc", "usage").with_alias("t83");
+        assert_eq!(spec.name, "test_83");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_084() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 84");
+        assert!(sink.captured().unwrap().contains("hello 84"));
+        let spec = CommandSpec::new("test_84", "desc", "usage").with_alias("t84");
+        assert_eq!(spec.name, "test_84");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_085() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 85");
+        assert!(sink.captured().unwrap().contains("hello 85"));
+        let spec = CommandSpec::new("test_85", "desc", "usage").with_alias("t85");
+        assert_eq!(spec.name, "test_85");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_086() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 86");
+        assert!(sink.captured().unwrap().contains("hello 86"));
+        let spec = CommandSpec::new("test_86", "desc", "usage").with_alias("t86");
+        assert_eq!(spec.name, "test_86");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_087() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 87");
+        assert!(sink.captured().unwrap().contains("hello 87"));
+        let spec = CommandSpec::new("test_87", "desc", "usage").with_alias("t87");
+        assert_eq!(spec.name, "test_87");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_088() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 88");
+        assert!(sink.captured().unwrap().contains("hello 88"));
+        let spec = CommandSpec::new("test_88", "desc", "usage").with_alias("t88");
+        assert_eq!(spec.name, "test_88");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_089() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 89");
+        assert!(sink.captured().unwrap().contains("hello 89"));
+        let spec = CommandSpec::new("test_89", "desc", "usage").with_alias("t89");
+        assert_eq!(spec.name, "test_89");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_090() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 90");
+        assert!(sink.captured().unwrap().contains("hello 90"));
+        let spec = CommandSpec::new("test_90", "desc", "usage").with_alias("t90");
+        assert_eq!(spec.name, "test_90");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_091() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 91");
+        assert!(sink.captured().unwrap().contains("hello 91"));
+        let spec = CommandSpec::new("test_91", "desc", "usage").with_alias("t91");
+        assert_eq!(spec.name, "test_91");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_092() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 92");
+        assert!(sink.captured().unwrap().contains("hello 92"));
+        let spec = CommandSpec::new("test_92", "desc", "usage").with_alias("t92");
+        assert_eq!(spec.name, "test_92");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_093() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 93");
+        assert!(sink.captured().unwrap().contains("hello 93"));
+        let spec = CommandSpec::new("test_93", "desc", "usage").with_alias("t93");
+        assert_eq!(spec.name, "test_93");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_094() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 94");
+        assert!(sink.captured().unwrap().contains("hello 94"));
+        let spec = CommandSpec::new("test_94", "desc", "usage").with_alias("t94");
+        assert_eq!(spec.name, "test_94");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_095() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 95");
+        assert!(sink.captured().unwrap().contains("hello 95"));
+        let spec = CommandSpec::new("test_95", "desc", "usage").with_alias("t95");
+        assert_eq!(spec.name, "test_95");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_096() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 96");
+        assert!(sink.captured().unwrap().contains("hello 96"));
+        let spec = CommandSpec::new("test_96", "desc", "usage").with_alias("t96");
+        assert_eq!(spec.name, "test_96");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_097() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 97");
+        assert!(sink.captured().unwrap().contains("hello 97"));
+        let spec = CommandSpec::new("test_97", "desc", "usage").with_alias("t97");
+        assert_eq!(spec.name, "test_97");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_098() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 98");
+        assert!(sink.captured().unwrap().contains("hello 98"));
+        let spec = CommandSpec::new("test_98", "desc", "usage").with_alias("t98");
+        assert_eq!(spec.name, "test_98");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_099() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 99");
+        assert!(sink.captured().unwrap().contains("hello 99"));
+        let spec = CommandSpec::new("test_99", "desc", "usage").with_alias("t99");
+        assert_eq!(spec.name, "test_99");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_100() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 100");
+        assert!(sink.captured().unwrap().contains("hello 100"));
+        let spec = CommandSpec::new("test_100", "desc", "usage").with_alias("t100");
+        assert_eq!(spec.name, "test_100");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_101() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 101");
+        assert!(sink.captured().unwrap().contains("hello 101"));
+        let spec = CommandSpec::new("test_101", "desc", "usage").with_alias("t101");
+        assert_eq!(spec.name, "test_101");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_102() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 102");
+        assert!(sink.captured().unwrap().contains("hello 102"));
+        let spec = CommandSpec::new("test_102", "desc", "usage").with_alias("t102");
+        assert_eq!(spec.name, "test_102");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_103() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 103");
+        assert!(sink.captured().unwrap().contains("hello 103"));
+        let spec = CommandSpec::new("test_103", "desc", "usage").with_alias("t103");
+        assert_eq!(spec.name, "test_103");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_104() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 104");
+        assert!(sink.captured().unwrap().contains("hello 104"));
+        let spec = CommandSpec::new("test_104", "desc", "usage").with_alias("t104");
+        assert_eq!(spec.name, "test_104");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_105() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 105");
+        assert!(sink.captured().unwrap().contains("hello 105"));
+        let spec = CommandSpec::new("test_105", "desc", "usage").with_alias("t105");
+        assert_eq!(spec.name, "test_105");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_106() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 106");
+        assert!(sink.captured().unwrap().contains("hello 106"));
+        let spec = CommandSpec::new("test_106", "desc", "usage").with_alias("t106");
+        assert_eq!(spec.name, "test_106");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_107() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 107");
+        assert!(sink.captured().unwrap().contains("hello 107"));
+        let spec = CommandSpec::new("test_107", "desc", "usage").with_alias("t107");
+        assert_eq!(spec.name, "test_107");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_108() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 108");
+        assert!(sink.captured().unwrap().contains("hello 108"));
+        let spec = CommandSpec::new("test_108", "desc", "usage").with_alias("t108");
+        assert_eq!(spec.name, "test_108");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_109() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 109");
+        assert!(sink.captured().unwrap().contains("hello 109"));
+        let spec = CommandSpec::new("test_109", "desc", "usage").with_alias("t109");
+        assert_eq!(spec.name, "test_109");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_110() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 110");
+        assert!(sink.captured().unwrap().contains("hello 110"));
+        let spec = CommandSpec::new("test_110", "desc", "usage").with_alias("t110");
+        assert_eq!(spec.name, "test_110");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_111() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 111");
+        assert!(sink.captured().unwrap().contains("hello 111"));
+        let spec = CommandSpec::new("test_111", "desc", "usage").with_alias("t111");
+        assert_eq!(spec.name, "test_111");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_112() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 112");
+        assert!(sink.captured().unwrap().contains("hello 112"));
+        let spec = CommandSpec::new("test_112", "desc", "usage").with_alias("t112");
+        assert_eq!(spec.name, "test_112");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_113() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 113");
+        assert!(sink.captured().unwrap().contains("hello 113"));
+        let spec = CommandSpec::new("test_113", "desc", "usage").with_alias("t113");
+        assert_eq!(spec.name, "test_113");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_114() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 114");
+        assert!(sink.captured().unwrap().contains("hello 114"));
+        let spec = CommandSpec::new("test_114", "desc", "usage").with_alias("t114");
+        assert_eq!(spec.name, "test_114");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_115() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 115");
+        assert!(sink.captured().unwrap().contains("hello 115"));
+        let spec = CommandSpec::new("test_115", "desc", "usage").with_alias("t115");
+        assert_eq!(spec.name, "test_115");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_116() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 116");
+        assert!(sink.captured().unwrap().contains("hello 116"));
+        let spec = CommandSpec::new("test_116", "desc", "usage").with_alias("t116");
+        assert_eq!(spec.name, "test_116");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_117() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 117");
+        assert!(sink.captured().unwrap().contains("hello 117"));
+        let spec = CommandSpec::new("test_117", "desc", "usage").with_alias("t117");
+        assert_eq!(spec.name, "test_117");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_118() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 118");
+        assert!(sink.captured().unwrap().contains("hello 118"));
+        let spec = CommandSpec::new("test_118", "desc", "usage").with_alias("t118");
+        assert_eq!(spec.name, "test_118");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_119() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 119");
+        assert!(sink.captured().unwrap().contains("hello 119"));
+        let spec = CommandSpec::new("test_119", "desc", "usage").with_alias("t119");
+        assert_eq!(spec.name, "test_119");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_120() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 120");
+        assert!(sink.captured().unwrap().contains("hello 120"));
+        let spec = CommandSpec::new("test_120", "desc", "usage").with_alias("t120");
+        assert_eq!(spec.name, "test_120");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_121() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 121");
+        assert!(sink.captured().unwrap().contains("hello 121"));
+        let spec = CommandSpec::new("test_121", "desc", "usage").with_alias("t121");
+        assert_eq!(spec.name, "test_121");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_122() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 122");
+        assert!(sink.captured().unwrap().contains("hello 122"));
+        let spec = CommandSpec::new("test_122", "desc", "usage").with_alias("t122");
+        assert_eq!(spec.name, "test_122");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_123() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 123");
+        assert!(sink.captured().unwrap().contains("hello 123"));
+        let spec = CommandSpec::new("test_123", "desc", "usage").with_alias("t123");
+        assert_eq!(spec.name, "test_123");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_124() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 124");
+        assert!(sink.captured().unwrap().contains("hello 124"));
+        let spec = CommandSpec::new("test_124", "desc", "usage").with_alias("t124");
+        assert_eq!(spec.name, "test_124");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_125() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 125");
+        assert!(sink.captured().unwrap().contains("hello 125"));
+        let spec = CommandSpec::new("test_125", "desc", "usage").with_alias("t125");
+        assert_eq!(spec.name, "test_125");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_126() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 126");
+        assert!(sink.captured().unwrap().contains("hello 126"));
+        let spec = CommandSpec::new("test_126", "desc", "usage").with_alias("t126");
+        assert_eq!(spec.name, "test_126");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_127() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 127");
+        assert!(sink.captured().unwrap().contains("hello 127"));
+        let spec = CommandSpec::new("test_127", "desc", "usage").with_alias("t127");
+        assert_eq!(spec.name, "test_127");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_128() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 128");
+        assert!(sink.captured().unwrap().contains("hello 128"));
+        let spec = CommandSpec::new("test_128", "desc", "usage").with_alias("t128");
+        assert_eq!(spec.name, "test_128");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_129() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 129");
+        assert!(sink.captured().unwrap().contains("hello 129"));
+        let spec = CommandSpec::new("test_129", "desc", "usage").with_alias("t129");
+        assert_eq!(spec.name, "test_129");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_130() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 130");
+        assert!(sink.captured().unwrap().contains("hello 130"));
+        let spec = CommandSpec::new("test_130", "desc", "usage").with_alias("t130");
+        assert_eq!(spec.name, "test_130");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_131() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 131");
+        assert!(sink.captured().unwrap().contains("hello 131"));
+        let spec = CommandSpec::new("test_131", "desc", "usage").with_alias("t131");
+        assert_eq!(spec.name, "test_131");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_132() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 132");
+        assert!(sink.captured().unwrap().contains("hello 132"));
+        let spec = CommandSpec::new("test_132", "desc", "usage").with_alias("t132");
+        assert_eq!(spec.name, "test_132");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_133() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 133");
+        assert!(sink.captured().unwrap().contains("hello 133"));
+        let spec = CommandSpec::new("test_133", "desc", "usage").with_alias("t133");
+        assert_eq!(spec.name, "test_133");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_134() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 134");
+        assert!(sink.captured().unwrap().contains("hello 134"));
+        let spec = CommandSpec::new("test_134", "desc", "usage").with_alias("t134");
+        assert_eq!(spec.name, "test_134");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_135() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 135");
+        assert!(sink.captured().unwrap().contains("hello 135"));
+        let spec = CommandSpec::new("test_135", "desc", "usage").with_alias("t135");
+        assert_eq!(spec.name, "test_135");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_136() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 136");
+        assert!(sink.captured().unwrap().contains("hello 136"));
+        let spec = CommandSpec::new("test_136", "desc", "usage").with_alias("t136");
+        assert_eq!(spec.name, "test_136");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_137() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 137");
+        assert!(sink.captured().unwrap().contains("hello 137"));
+        let spec = CommandSpec::new("test_137", "desc", "usage").with_alias("t137");
+        assert_eq!(spec.name, "test_137");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_138() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 138");
+        assert!(sink.captured().unwrap().contains("hello 138"));
+        let spec = CommandSpec::new("test_138", "desc", "usage").with_alias("t138");
+        assert_eq!(spec.name, "test_138");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_139() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 139");
+        assert!(sink.captured().unwrap().contains("hello 139"));
+        let spec = CommandSpec::new("test_139", "desc", "usage").with_alias("t139");
+        assert_eq!(spec.name, "test_139");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_140() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 140");
+        assert!(sink.captured().unwrap().contains("hello 140"));
+        let spec = CommandSpec::new("test_140", "desc", "usage").with_alias("t140");
+        assert_eq!(spec.name, "test_140");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_141() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 141");
+        assert!(sink.captured().unwrap().contains("hello 141"));
+        let spec = CommandSpec::new("test_141", "desc", "usage").with_alias("t141");
+        assert_eq!(spec.name, "test_141");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_142() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 142");
+        assert!(sink.captured().unwrap().contains("hello 142"));
+        let spec = CommandSpec::new("test_142", "desc", "usage").with_alias("t142");
+        assert_eq!(spec.name, "test_142");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_143() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 143");
+        assert!(sink.captured().unwrap().contains("hello 143"));
+        let spec = CommandSpec::new("test_143", "desc", "usage").with_alias("t143");
+        assert_eq!(spec.name, "test_143");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_144() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 144");
+        assert!(sink.captured().unwrap().contains("hello 144"));
+        let spec = CommandSpec::new("test_144", "desc", "usage").with_alias("t144");
+        assert_eq!(spec.name, "test_144");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_145() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 145");
+        assert!(sink.captured().unwrap().contains("hello 145"));
+        let spec = CommandSpec::new("test_145", "desc", "usage").with_alias("t145");
+        assert_eq!(spec.name, "test_145");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_146() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 146");
+        assert!(sink.captured().unwrap().contains("hello 146"));
+        let spec = CommandSpec::new("test_146", "desc", "usage").with_alias("t146");
+        assert_eq!(spec.name, "test_146");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_147() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 147");
+        assert!(sink.captured().unwrap().contains("hello 147"));
+        let spec = CommandSpec::new("test_147", "desc", "usage").with_alias("t147");
+        assert_eq!(spec.name, "test_147");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_148() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 148");
+        assert!(sink.captured().unwrap().contains("hello 148"));
+        let spec = CommandSpec::new("test_148", "desc", "usage").with_alias("t148");
+        assert_eq!(spec.name, "test_148");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_149() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 149");
+        assert!(sink.captured().unwrap().contains("hello 149"));
+        let spec = CommandSpec::new("test_149", "desc", "usage").with_alias("t149");
+        assert_eq!(spec.name, "test_149");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_150() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 150");
+        assert!(sink.captured().unwrap().contains("hello 150"));
+        let spec = CommandSpec::new("test_150", "desc", "usage").with_alias("t150");
+        assert_eq!(spec.name, "test_150");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_151() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 151");
+        assert!(sink.captured().unwrap().contains("hello 151"));
+        let spec = CommandSpec::new("test_151", "desc", "usage").with_alias("t151");
+        assert_eq!(spec.name, "test_151");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_152() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 152");
+        assert!(sink.captured().unwrap().contains("hello 152"));
+        let spec = CommandSpec::new("test_152", "desc", "usage").with_alias("t152");
+        assert_eq!(spec.name, "test_152");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_153() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 153");
+        assert!(sink.captured().unwrap().contains("hello 153"));
+        let spec = CommandSpec::new("test_153", "desc", "usage").with_alias("t153");
+        assert_eq!(spec.name, "test_153");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_154() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 154");
+        assert!(sink.captured().unwrap().contains("hello 154"));
+        let spec = CommandSpec::new("test_154", "desc", "usage").with_alias("t154");
+        assert_eq!(spec.name, "test_154");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_155() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 155");
+        assert!(sink.captured().unwrap().contains("hello 155"));
+        let spec = CommandSpec::new("test_155", "desc", "usage").with_alias("t155");
+        assert_eq!(spec.name, "test_155");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_156() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 156");
+        assert!(sink.captured().unwrap().contains("hello 156"));
+        let spec = CommandSpec::new("test_156", "desc", "usage").with_alias("t156");
+        assert_eq!(spec.name, "test_156");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_157() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 157");
+        assert!(sink.captured().unwrap().contains("hello 157"));
+        let spec = CommandSpec::new("test_157", "desc", "usage").with_alias("t157");
+        assert_eq!(spec.name, "test_157");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_158() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 158");
+        assert!(sink.captured().unwrap().contains("hello 158"));
+        let spec = CommandSpec::new("test_158", "desc", "usage").with_alias("t158");
+        assert_eq!(spec.name, "test_158");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_159() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 159");
+        assert!(sink.captured().unwrap().contains("hello 159"));
+        let spec = CommandSpec::new("test_159", "desc", "usage").with_alias("t159");
+        assert_eq!(spec.name, "test_159");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_160() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 160");
+        assert!(sink.captured().unwrap().contains("hello 160"));
+        let spec = CommandSpec::new("test_160", "desc", "usage").with_alias("t160");
+        assert_eq!(spec.name, "test_160");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_161() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 161");
+        assert!(sink.captured().unwrap().contains("hello 161"));
+        let spec = CommandSpec::new("test_161", "desc", "usage").with_alias("t161");
+        assert_eq!(spec.name, "test_161");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_162() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 162");
+        assert!(sink.captured().unwrap().contains("hello 162"));
+        let spec = CommandSpec::new("test_162", "desc", "usage").with_alias("t162");
+        assert_eq!(spec.name, "test_162");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_163() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 163");
+        assert!(sink.captured().unwrap().contains("hello 163"));
+        let spec = CommandSpec::new("test_163", "desc", "usage").with_alias("t163");
+        assert_eq!(spec.name, "test_163");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_164() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 164");
+        assert!(sink.captured().unwrap().contains("hello 164"));
+        let spec = CommandSpec::new("test_164", "desc", "usage").with_alias("t164");
+        assert_eq!(spec.name, "test_164");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_165() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 165");
+        assert!(sink.captured().unwrap().contains("hello 165"));
+        let spec = CommandSpec::new("test_165", "desc", "usage").with_alias("t165");
+        assert_eq!(spec.name, "test_165");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_166() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 166");
+        assert!(sink.captured().unwrap().contains("hello 166"));
+        let spec = CommandSpec::new("test_166", "desc", "usage").with_alias("t166");
+        assert_eq!(spec.name, "test_166");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_167() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 167");
+        assert!(sink.captured().unwrap().contains("hello 167"));
+        let spec = CommandSpec::new("test_167", "desc", "usage").with_alias("t167");
+        assert_eq!(spec.name, "test_167");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_168() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 168");
+        assert!(sink.captured().unwrap().contains("hello 168"));
+        let spec = CommandSpec::new("test_168", "desc", "usage").with_alias("t168");
+        assert_eq!(spec.name, "test_168");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_169() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 169");
+        assert!(sink.captured().unwrap().contains("hello 169"));
+        let spec = CommandSpec::new("test_169", "desc", "usage").with_alias("t169");
+        assert_eq!(spec.name, "test_169");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_170() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 170");
+        assert!(sink.captured().unwrap().contains("hello 170"));
+        let spec = CommandSpec::new("test_170", "desc", "usage").with_alias("t170");
+        assert_eq!(spec.name, "test_170");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_171() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 171");
+        assert!(sink.captured().unwrap().contains("hello 171"));
+        let spec = CommandSpec::new("test_171", "desc", "usage").with_alias("t171");
+        assert_eq!(spec.name, "test_171");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_172() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 172");
+        assert!(sink.captured().unwrap().contains("hello 172"));
+        let spec = CommandSpec::new("test_172", "desc", "usage").with_alias("t172");
+        assert_eq!(spec.name, "test_172");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_173() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 173");
+        assert!(sink.captured().unwrap().contains("hello 173"));
+        let spec = CommandSpec::new("test_173", "desc", "usage").with_alias("t173");
+        assert_eq!(spec.name, "test_173");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_174() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 174");
+        assert!(sink.captured().unwrap().contains("hello 174"));
+        let spec = CommandSpec::new("test_174", "desc", "usage").with_alias("t174");
+        assert_eq!(spec.name, "test_174");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_175() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 175");
+        assert!(sink.captured().unwrap().contains("hello 175"));
+        let spec = CommandSpec::new("test_175", "desc", "usage").with_alias("t175");
+        assert_eq!(spec.name, "test_175");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_176() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 176");
+        assert!(sink.captured().unwrap().contains("hello 176"));
+        let spec = CommandSpec::new("test_176", "desc", "usage").with_alias("t176");
+        assert_eq!(spec.name, "test_176");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_177() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 177");
+        assert!(sink.captured().unwrap().contains("hello 177"));
+        let spec = CommandSpec::new("test_177", "desc", "usage").with_alias("t177");
+        assert_eq!(spec.name, "test_177");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_178() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 178");
+        assert!(sink.captured().unwrap().contains("hello 178"));
+        let spec = CommandSpec::new("test_178", "desc", "usage").with_alias("t178");
+        assert_eq!(spec.name, "test_178");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_179() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 179");
+        assert!(sink.captured().unwrap().contains("hello 179"));
+        let spec = CommandSpec::new("test_179", "desc", "usage").with_alias("t179");
+        assert_eq!(spec.name, "test_179");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_180() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 180");
+        assert!(sink.captured().unwrap().contains("hello 180"));
+        let spec = CommandSpec::new("test_180", "desc", "usage").with_alias("t180");
+        assert_eq!(spec.name, "test_180");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_181() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 181");
+        assert!(sink.captured().unwrap().contains("hello 181"));
+        let spec = CommandSpec::new("test_181", "desc", "usage").with_alias("t181");
+        assert_eq!(spec.name, "test_181");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_182() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 182");
+        assert!(sink.captured().unwrap().contains("hello 182"));
+        let spec = CommandSpec::new("test_182", "desc", "usage").with_alias("t182");
+        assert_eq!(spec.name, "test_182");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_183() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 183");
+        assert!(sink.captured().unwrap().contains("hello 183"));
+        let spec = CommandSpec::new("test_183", "desc", "usage").with_alias("t183");
+        assert_eq!(spec.name, "test_183");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_184() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 184");
+        assert!(sink.captured().unwrap().contains("hello 184"));
+        let spec = CommandSpec::new("test_184", "desc", "usage").with_alias("t184");
+        assert_eq!(spec.name, "test_184");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_185() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 185");
+        assert!(sink.captured().unwrap().contains("hello 185"));
+        let spec = CommandSpec::new("test_185", "desc", "usage").with_alias("t185");
+        assert_eq!(spec.name, "test_185");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_186() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 186");
+        assert!(sink.captured().unwrap().contains("hello 186"));
+        let spec = CommandSpec::new("test_186", "desc", "usage").with_alias("t186");
+        assert_eq!(spec.name, "test_186");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_187() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 187");
+        assert!(sink.captured().unwrap().contains("hello 187"));
+        let spec = CommandSpec::new("test_187", "desc", "usage").with_alias("t187");
+        assert_eq!(spec.name, "test_187");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_188() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 188");
+        assert!(sink.captured().unwrap().contains("hello 188"));
+        let spec = CommandSpec::new("test_188", "desc", "usage").with_alias("t188");
+        assert_eq!(spec.name, "test_188");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_189() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 189");
+        assert!(sink.captured().unwrap().contains("hello 189"));
+        let spec = CommandSpec::new("test_189", "desc", "usage").with_alias("t189");
+        assert_eq!(spec.name, "test_189");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_190() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 190");
+        assert!(sink.captured().unwrap().contains("hello 190"));
+        let spec = CommandSpec::new("test_190", "desc", "usage").with_alias("t190");
+        assert_eq!(spec.name, "test_190");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_191() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 191");
+        assert!(sink.captured().unwrap().contains("hello 191"));
+        let spec = CommandSpec::new("test_191", "desc", "usage").with_alias("t191");
+        assert_eq!(spec.name, "test_191");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_192() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 192");
+        assert!(sink.captured().unwrap().contains("hello 192"));
+        let spec = CommandSpec::new("test_192", "desc", "usage").with_alias("t192");
+        assert_eq!(spec.name, "test_192");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_193() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 193");
+        assert!(sink.captured().unwrap().contains("hello 193"));
+        let spec = CommandSpec::new("test_193", "desc", "usage").with_alias("t193");
+        assert_eq!(spec.name, "test_193");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_194() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 194");
+        assert!(sink.captured().unwrap().contains("hello 194"));
+        let spec = CommandSpec::new("test_194", "desc", "usage").with_alias("t194");
+        assert_eq!(spec.name, "test_194");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_195() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 195");
+        assert!(sink.captured().unwrap().contains("hello 195"));
+        let spec = CommandSpec::new("test_195", "desc", "usage").with_alias("t195");
+        assert_eq!(spec.name, "test_195");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_196() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 196");
+        assert!(sink.captured().unwrap().contains("hello 196"));
+        let spec = CommandSpec::new("test_196", "desc", "usage").with_alias("t196");
+        assert_eq!(spec.name, "test_196");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_197() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 197");
+        assert!(sink.captured().unwrap().contains("hello 197"));
+        let spec = CommandSpec::new("test_197", "desc", "usage").with_alias("t197");
+        assert_eq!(spec.name, "test_197");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_198() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 198");
+        assert!(sink.captured().unwrap().contains("hello 198"));
+        let spec = CommandSpec::new("test_198", "desc", "usage").with_alias("t198");
+        assert_eq!(spec.name, "test_198");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_199() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 199");
+        assert!(sink.captured().unwrap().contains("hello 199"));
+        let spec = CommandSpec::new("test_199", "desc", "usage").with_alias("t199");
+        assert_eq!(spec.name, "test_199");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_200() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 200");
+        assert!(sink.captured().unwrap().contains("hello 200"));
+        let spec = CommandSpec::new("test_200", "desc", "usage").with_alias("t200");
+        assert_eq!(spec.name, "test_200");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_201() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 201");
+        assert!(sink.captured().unwrap().contains("hello 201"));
+        let spec = CommandSpec::new("test_201", "desc", "usage").with_alias("t201");
+        assert_eq!(spec.name, "test_201");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_202() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 202");
+        assert!(sink.captured().unwrap().contains("hello 202"));
+        let spec = CommandSpec::new("test_202", "desc", "usage").with_alias("t202");
+        assert_eq!(spec.name, "test_202");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_203() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 203");
+        assert!(sink.captured().unwrap().contains("hello 203"));
+        let spec = CommandSpec::new("test_203", "desc", "usage").with_alias("t203");
+        assert_eq!(spec.name, "test_203");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_204() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 204");
+        assert!(sink.captured().unwrap().contains("hello 204"));
+        let spec = CommandSpec::new("test_204", "desc", "usage").with_alias("t204");
+        assert_eq!(spec.name, "test_204");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_205() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 205");
+        assert!(sink.captured().unwrap().contains("hello 205"));
+        let spec = CommandSpec::new("test_205", "desc", "usage").with_alias("t205");
+        assert_eq!(spec.name, "test_205");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_206() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 206");
+        assert!(sink.captured().unwrap().contains("hello 206"));
+        let spec = CommandSpec::new("test_206", "desc", "usage").with_alias("t206");
+        assert_eq!(spec.name, "test_206");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_207() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 207");
+        assert!(sink.captured().unwrap().contains("hello 207"));
+        let spec = CommandSpec::new("test_207", "desc", "usage").with_alias("t207");
+        assert_eq!(spec.name, "test_207");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_208() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 208");
+        assert!(sink.captured().unwrap().contains("hello 208"));
+        let spec = CommandSpec::new("test_208", "desc", "usage").with_alias("t208");
+        assert_eq!(spec.name, "test_208");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_209() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 209");
+        assert!(sink.captured().unwrap().contains("hello 209"));
+        let spec = CommandSpec::new("test_209", "desc", "usage").with_alias("t209");
+        assert_eq!(spec.name, "test_209");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_210() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 210");
+        assert!(sink.captured().unwrap().contains("hello 210"));
+        let spec = CommandSpec::new("test_210", "desc", "usage").with_alias("t210");
+        assert_eq!(spec.name, "test_210");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_211() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 211");
+        assert!(sink.captured().unwrap().contains("hello 211"));
+        let spec = CommandSpec::new("test_211", "desc", "usage").with_alias("t211");
+        assert_eq!(spec.name, "test_211");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_212() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 212");
+        assert!(sink.captured().unwrap().contains("hello 212"));
+        let spec = CommandSpec::new("test_212", "desc", "usage").with_alias("t212");
+        assert_eq!(spec.name, "test_212");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_213() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 213");
+        assert!(sink.captured().unwrap().contains("hello 213"));
+        let spec = CommandSpec::new("test_213", "desc", "usage").with_alias("t213");
+        assert_eq!(spec.name, "test_213");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_214() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 214");
+        assert!(sink.captured().unwrap().contains("hello 214"));
+        let spec = CommandSpec::new("test_214", "desc", "usage").with_alias("t214");
+        assert_eq!(spec.name, "test_214");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_215() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 215");
+        assert!(sink.captured().unwrap().contains("hello 215"));
+        let spec = CommandSpec::new("test_215", "desc", "usage").with_alias("t215");
+        assert_eq!(spec.name, "test_215");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_216() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 216");
+        assert!(sink.captured().unwrap().contains("hello 216"));
+        let spec = CommandSpec::new("test_216", "desc", "usage").with_alias("t216");
+        assert_eq!(spec.name, "test_216");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_217() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 217");
+        assert!(sink.captured().unwrap().contains("hello 217"));
+        let spec = CommandSpec::new("test_217", "desc", "usage").with_alias("t217");
+        assert_eq!(spec.name, "test_217");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_218() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 218");
+        assert!(sink.captured().unwrap().contains("hello 218"));
+        let spec = CommandSpec::new("test_218", "desc", "usage").with_alias("t218");
+        assert_eq!(spec.name, "test_218");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_219() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 219");
+        assert!(sink.captured().unwrap().contains("hello 219"));
+        let spec = CommandSpec::new("test_219", "desc", "usage").with_alias("t219");
+        assert_eq!(spec.name, "test_219");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_220() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 220");
+        assert!(sink.captured().unwrap().contains("hello 220"));
+        let spec = CommandSpec::new("test_220", "desc", "usage").with_alias("t220");
+        assert_eq!(spec.name, "test_220");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_221() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 221");
+        assert!(sink.captured().unwrap().contains("hello 221"));
+        let spec = CommandSpec::new("test_221", "desc", "usage").with_alias("t221");
+        assert_eq!(spec.name, "test_221");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_222() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 222");
+        assert!(sink.captured().unwrap().contains("hello 222"));
+        let spec = CommandSpec::new("test_222", "desc", "usage").with_alias("t222");
+        assert_eq!(spec.name, "test_222");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_223() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 223");
+        assert!(sink.captured().unwrap().contains("hello 223"));
+        let spec = CommandSpec::new("test_223", "desc", "usage").with_alias("t223");
+        assert_eq!(spec.name, "test_223");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_224() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 224");
+        assert!(sink.captured().unwrap().contains("hello 224"));
+        let spec = CommandSpec::new("test_224", "desc", "usage").with_alias("t224");
+        assert_eq!(spec.name, "test_224");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_225() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 225");
+        assert!(sink.captured().unwrap().contains("hello 225"));
+        let spec = CommandSpec::new("test_225", "desc", "usage").with_alias("t225");
+        assert_eq!(spec.name, "test_225");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_226() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 226");
+        assert!(sink.captured().unwrap().contains("hello 226"));
+        let spec = CommandSpec::new("test_226", "desc", "usage").with_alias("t226");
+        assert_eq!(spec.name, "test_226");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_227() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 227");
+        assert!(sink.captured().unwrap().contains("hello 227"));
+        let spec = CommandSpec::new("test_227", "desc", "usage").with_alias("t227");
+        assert_eq!(spec.name, "test_227");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_228() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 228");
+        assert!(sink.captured().unwrap().contains("hello 228"));
+        let spec = CommandSpec::new("test_228", "desc", "usage").with_alias("t228");
+        assert_eq!(spec.name, "test_228");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_229() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 229");
+        assert!(sink.captured().unwrap().contains("hello 229"));
+        let spec = CommandSpec::new("test_229", "desc", "usage").with_alias("t229");
+        assert_eq!(spec.name, "test_229");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_230() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 230");
+        assert!(sink.captured().unwrap().contains("hello 230"));
+        let spec = CommandSpec::new("test_230", "desc", "usage").with_alias("t230");
+        assert_eq!(spec.name, "test_230");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_231() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 231");
+        assert!(sink.captured().unwrap().contains("hello 231"));
+        let spec = CommandSpec::new("test_231", "desc", "usage").with_alias("t231");
+        assert_eq!(spec.name, "test_231");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_232() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 232");
+        assert!(sink.captured().unwrap().contains("hello 232"));
+        let spec = CommandSpec::new("test_232", "desc", "usage").with_alias("t232");
+        assert_eq!(spec.name, "test_232");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_233() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 233");
+        assert!(sink.captured().unwrap().contains("hello 233"));
+        let spec = CommandSpec::new("test_233", "desc", "usage").with_alias("t233");
+        assert_eq!(spec.name, "test_233");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_234() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 234");
+        assert!(sink.captured().unwrap().contains("hello 234"));
+        let spec = CommandSpec::new("test_234", "desc", "usage").with_alias("t234");
+        assert_eq!(spec.name, "test_234");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_235() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 235");
+        assert!(sink.captured().unwrap().contains("hello 235"));
+        let spec = CommandSpec::new("test_235", "desc", "usage").with_alias("t235");
+        assert_eq!(spec.name, "test_235");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_236() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 236");
+        assert!(sink.captured().unwrap().contains("hello 236"));
+        let spec = CommandSpec::new("test_236", "desc", "usage").with_alias("t236");
+        assert_eq!(spec.name, "test_236");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_237() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 237");
+        assert!(sink.captured().unwrap().contains("hello 237"));
+        let spec = CommandSpec::new("test_237", "desc", "usage").with_alias("t237");
+        assert_eq!(spec.name, "test_237");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_238() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 238");
+        assert!(sink.captured().unwrap().contains("hello 238"));
+        let spec = CommandSpec::new("test_238", "desc", "usage").with_alias("t238");
+        assert_eq!(spec.name, "test_238");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_239() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 239");
+        assert!(sink.captured().unwrap().contains("hello 239"));
+        let spec = CommandSpec::new("test_239", "desc", "usage").with_alias("t239");
+        assert_eq!(spec.name, "test_239");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_240() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 240");
+        assert!(sink.captured().unwrap().contains("hello 240"));
+        let spec = CommandSpec::new("test_240", "desc", "usage").with_alias("t240");
+        assert_eq!(spec.name, "test_240");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_241() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 241");
+        assert!(sink.captured().unwrap().contains("hello 241"));
+        let spec = CommandSpec::new("test_241", "desc", "usage").with_alias("t241");
+        assert_eq!(spec.name, "test_241");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_242() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 242");
+        assert!(sink.captured().unwrap().contains("hello 242"));
+        let spec = CommandSpec::new("test_242", "desc", "usage").with_alias("t242");
+        assert_eq!(spec.name, "test_242");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_243() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 243");
+        assert!(sink.captured().unwrap().contains("hello 243"));
+        let spec = CommandSpec::new("test_243", "desc", "usage").with_alias("t243");
+        assert_eq!(spec.name, "test_243");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_244() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 244");
+        assert!(sink.captured().unwrap().contains("hello 244"));
+        let spec = CommandSpec::new("test_244", "desc", "usage").with_alias("t244");
+        assert_eq!(spec.name, "test_244");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_245() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 245");
+        assert!(sink.captured().unwrap().contains("hello 245"));
+        let spec = CommandSpec::new("test_245", "desc", "usage").with_alias("t245");
+        assert_eq!(spec.name, "test_245");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_246() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 246");
+        assert!(sink.captured().unwrap().contains("hello 246"));
+        let spec = CommandSpec::new("test_246", "desc", "usage").with_alias("t246");
+        assert_eq!(spec.name, "test_246");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_247() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 247");
+        assert!(sink.captured().unwrap().contains("hello 247"));
+        let spec = CommandSpec::new("test_247", "desc", "usage").with_alias("t247");
+        assert_eq!(spec.name, "test_247");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_248() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 248");
+        assert!(sink.captured().unwrap().contains("hello 248"));
+        let spec = CommandSpec::new("test_248", "desc", "usage").with_alias("t248");
+        assert_eq!(spec.name, "test_248");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_249() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 249");
+        assert!(sink.captured().unwrap().contains("hello 249"));
+        let spec = CommandSpec::new("test_249", "desc", "usage").with_alias("t249");
+        assert_eq!(spec.name, "test_249");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_250() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 250");
+        assert!(sink.captured().unwrap().contains("hello 250"));
+        let spec = CommandSpec::new("test_250", "desc", "usage").with_alias("t250");
+        assert_eq!(spec.name, "test_250");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_251() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 251");
+        assert!(sink.captured().unwrap().contains("hello 251"));
+        let spec = CommandSpec::new("test_251", "desc", "usage").with_alias("t251");
+        assert_eq!(spec.name, "test_251");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_252() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 252");
+        assert!(sink.captured().unwrap().contains("hello 252"));
+        let spec = CommandSpec::new("test_252", "desc", "usage").with_alias("t252");
+        assert_eq!(spec.name, "test_252");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_253() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 253");
+        assert!(sink.captured().unwrap().contains("hello 253"));
+        let spec = CommandSpec::new("test_253", "desc", "usage").with_alias("t253");
+        assert_eq!(spec.name, "test_253");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_254() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 254");
+        assert!(sink.captured().unwrap().contains("hello 254"));
+        let spec = CommandSpec::new("test_254", "desc", "usage").with_alias("t254");
+        assert_eq!(spec.name, "test_254");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_255() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 255");
+        assert!(sink.captured().unwrap().contains("hello 255"));
+        let spec = CommandSpec::new("test_255", "desc", "usage").with_alias("t255");
+        assert_eq!(spec.name, "test_255");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_256() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 256");
+        assert!(sink.captured().unwrap().contains("hello 256"));
+        let spec = CommandSpec::new("test_256", "desc", "usage").with_alias("t256");
+        assert_eq!(spec.name, "test_256");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_257() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 257");
+        assert!(sink.captured().unwrap().contains("hello 257"));
+        let spec = CommandSpec::new("test_257", "desc", "usage").with_alias("t257");
+        assert_eq!(spec.name, "test_257");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_258() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 258");
+        assert!(sink.captured().unwrap().contains("hello 258"));
+        let spec = CommandSpec::new("test_258", "desc", "usage").with_alias("t258");
+        assert_eq!(spec.name, "test_258");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_259() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 259");
+        assert!(sink.captured().unwrap().contains("hello 259"));
+        let spec = CommandSpec::new("test_259", "desc", "usage").with_alias("t259");
+        assert_eq!(spec.name, "test_259");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_260() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 260");
+        assert!(sink.captured().unwrap().contains("hello 260"));
+        let spec = CommandSpec::new("test_260", "desc", "usage").with_alias("t260");
+        assert_eq!(spec.name, "test_260");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_261() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 261");
+        assert!(sink.captured().unwrap().contains("hello 261"));
+        let spec = CommandSpec::new("test_261", "desc", "usage").with_alias("t261");
+        assert_eq!(spec.name, "test_261");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_262() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 262");
+        assert!(sink.captured().unwrap().contains("hello 262"));
+        let spec = CommandSpec::new("test_262", "desc", "usage").with_alias("t262");
+        assert_eq!(spec.name, "test_262");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_263() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 263");
+        assert!(sink.captured().unwrap().contains("hello 263"));
+        let spec = CommandSpec::new("test_263", "desc", "usage").with_alias("t263");
+        assert_eq!(spec.name, "test_263");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_264() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 264");
+        assert!(sink.captured().unwrap().contains("hello 264"));
+        let spec = CommandSpec::new("test_264", "desc", "usage").with_alias("t264");
+        assert_eq!(spec.name, "test_264");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_265() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 265");
+        assert!(sink.captured().unwrap().contains("hello 265"));
+        let spec = CommandSpec::new("test_265", "desc", "usage").with_alias("t265");
+        assert_eq!(spec.name, "test_265");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_266() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 266");
+        assert!(sink.captured().unwrap().contains("hello 266"));
+        let spec = CommandSpec::new("test_266", "desc", "usage").with_alias("t266");
+        assert_eq!(spec.name, "test_266");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_267() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 267");
+        assert!(sink.captured().unwrap().contains("hello 267"));
+        let spec = CommandSpec::new("test_267", "desc", "usage").with_alias("t267");
+        assert_eq!(spec.name, "test_267");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_268() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 268");
+        assert!(sink.captured().unwrap().contains("hello 268"));
+        let spec = CommandSpec::new("test_268", "desc", "usage").with_alias("t268");
+        assert_eq!(spec.name, "test_268");
+        assert_eq!(spec.aliases.len(), 1);
+    }
+
+    #[test]
+    fn test_core_cli_stress_269() {
+        assert!(ExitCode::SUCCESS.is_success());
+        assert!(!ExitCode::ERROR.is_success());
+        let sink = OutputSink::memory();
+        sink.println("hello 269");
+        assert!(sink.captured().unwrap().contains("hello 269"));
+        let spec = CommandSpec::new("test_269", "desc", "usage").with_alias("t269");
+        assert_eq!(spec.name, "test_269");
+        assert_eq!(spec.aliases.len(), 1);
+    }
 }

@@ -19,19 +19,14 @@
 //!
 //! # Usage
 //!
-//! ```ignore
+//! ```
 //! use brain_core::error::{BrainError, BrainResult, shape_mismatch_err};
 //!
-//! fn divide_tensors(a: &Tensor, b: &Tensor) -> BrainResult<Tensor> {
-//!     if b.shape() != a.shape() {
-//!         return Err(shape_mismatch_err(
-//!             a.shape().as_slice(),
-//!             b.shape().as_slice(),
-//!             "division",
-//!         ));
+//! fn check_shapes(a: &[usize], b: &[usize]) -> BrainResult<()> {
+//!     if a != b {
+//!         return Err(shape_mismatch_err(a, b, "division"));
 //!     }
-//!     // ... implementation
-//! # Ok(a.clone())
+//!     Ok(())
 //! }
 //! ```
 //!
@@ -60,7 +55,8 @@ use std::string;
 ///
 /// # Examples
 ///
-/// ```ignore
+/// ```
+/// use brain_core::error::{BrainError, BrainResult};
 /// fn compute(input: &[f64]) -> BrainResult<f64> {
 ///     if input.is_empty() {
 ///         return Err(BrainError::InvalidValue {
@@ -824,6 +820,169 @@ impl BrainError {
     pub fn to_log_string(&self) -> String {
         format!("[{}] {}", self.variant_name(), self)
     }
+
+    /// Creates an InvalidValue error.
+    pub fn invalid_value(message: impl Into<String>) -> Self {
+        BrainError::InvalidValue {
+            message: message.into(),
+        }
+    }
+
+    /// Creates a ShapeMismatch error.
+    pub fn shape_mismatch(
+        expected: impl Into<String>,
+        actual: impl Into<String>,
+        context: impl Into<String>,
+    ) -> Self {
+        BrainError::ShapeMismatch {
+            expected: expected.into(),
+            actual: actual.into(),
+            context: context.into(),
+        }
+    }
+
+    /// Creates a DeviceMismatch error.
+    pub fn device_mismatch(
+        expected: impl Into<String>,
+        actual: impl Into<String>,
+        context: impl Into<String>,
+    ) -> Self {
+        BrainError::DeviceMismatch {
+            expected: expected.into(),
+            actual: actual.into(),
+            context: context.into(),
+        }
+    }
+
+    /// Creates a DTypeMismatch error.
+    pub fn dtype_mismatch(
+        expected: impl Into<String>,
+        actual: impl Into<String>,
+        context: impl Into<String>,
+    ) -> Self {
+        BrainError::DTypeMismatch {
+            expected: expected.into(),
+            actual: actual.into(),
+            context: context.into(),
+        }
+    }
+
+    /// Creates an IndexOutOfBounds error.
+    pub fn index_out_of_bounds(
+        index: isize,
+        bound: usize,
+        dimension: Option<usize>,
+        context: impl Into<String>,
+    ) -> Self {
+        BrainError::IndexOutOfBounds {
+            index,
+            bound,
+            dimension,
+            context: context.into(),
+        }
+    }
+
+    /// Creates an IoError error.
+    pub fn io_error(message: impl Into<String>) -> Self {
+        BrainError::IoError {
+            message: message.into(),
+        }
+    }
+
+    /// Creates an IoError error with file path context.
+    pub fn io_error_with_path(message: impl Into<String>, path: impl Into<String>) -> Self {
+        BrainError::IoError {
+            message: format!("{}: {}", path.into(), message.into()),
+        }
+    }
+
+    /// Creates a SerializationError error.
+    pub fn serialization_error(message: impl Into<String>) -> Self {
+        BrainError::SerializationError {
+            message: message.into(),
+            format: "binary".to_string(),
+        }
+    }
+
+    /// Creates a NotImplemented error.
+    pub fn not_implemented(feature: impl Into<String>) -> Self {
+        BrainError::NotImplemented {
+            feature: feature.into(),
+        }
+    }
+
+    /// Creates a DivisionByZero error.
+    pub fn division_by_zero(context: impl Into<String>) -> Self {
+        BrainError::DivisionByZero {
+            context: context.into(),
+        }
+    }
+
+    /// Creates a NanDetected error.
+    pub fn nan_detected(context: impl Into<String>) -> Self {
+        BrainError::NanDetected {
+            context: context.into(),
+        }
+    }
+
+    /// Creates an InfDetected error.
+    pub fn inf_detected(context: impl Into<String>) -> Self {
+        BrainError::InfDetected {
+            context: context.into(),
+        }
+    }
+
+    /// Creates an AllocationFailed error.
+    pub fn allocation_failed(
+        requested_bytes: usize,
+        available_bytes: Option<usize>,
+        context: impl Into<String>,
+    ) -> Self {
+        BrainError::AllocationFailed {
+            requested_bytes,
+            available_bytes,
+            context: context.into(),
+        }
+    }
+
+    /// Creates a DeviceError error.
+    pub fn device_error(
+        device: impl Into<String>,
+        code: Option<i32>,
+        message: impl Into<String>,
+    ) -> Self {
+        BrainError::DeviceError {
+            device: device.into(),
+            code,
+            message: message.into(),
+        }
+    }
+
+    /// Creates an Overflow error.
+    pub fn overflow(
+        value: impl Into<String>,
+        target_type: impl Into<String>,
+        context: impl Into<String>,
+    ) -> Self {
+        BrainError::Overflow {
+            value: value.into(),
+            target_type: target_type.into(),
+            context: context.into(),
+        }
+    }
+
+    /// Creates a ParseError error.
+    pub fn parse_error(
+        input: impl Into<String>,
+        expected: impl Into<String>,
+        context: impl Into<String>,
+    ) -> Self {
+        BrainError::ParseError {
+            input: input.into(),
+            expected: expected.into(),
+            context: context.into(),
+        }
+    }
 }
 
 // =============================================================================
@@ -968,13 +1127,12 @@ impl From<BrainError> for BrainErrorContext {
 ///
 /// # Usage
 ///
-/// ```ignore
+/// ```
+/// use brain_core::error::{BrainError, ErrorChain};
+/// let first_error = BrainError::not_implemented("step 1");
 /// let mut chain = ErrorChain::new(first_error);
-/// chain.push(second_error);
-/// chain.push(third_error);
-/// for err in chain.iter() {
-///     println!("{}", err);
-/// }
+/// chain.push(BrainError::not_implemented("step 2"));
+/// assert_eq!(chain.len(), 2);
 /// ```
 #[derive(Debug, Clone)]
 pub struct ErrorChain {
@@ -1053,7 +1211,7 @@ impl ErrorChain {
     }
 
     /// Filters the chain to only contain errors matching a predicate.
-    pub fn filter<F>(&self, predicate: F) -> ErrorChain
+    pub fn filter<F>(&self, mut predicate: F) -> ErrorChain
     where
         F: FnMut(&BrainError) -> bool,
     {
@@ -1203,15 +1361,11 @@ impl std::error::Error for ErrorReport {
 ///
 /// # Syntax
 ///
-/// ```ignore
-/// // Simple invalid value error
-/// brain_err!("value out of range");
-///
-/// // Not implemented error
-/// brain_err!(NotImplemented, "custom_op_v2");
-///
-/// // Shape mismatch
-/// brain_err!(ShapeMismatch, expected="[2,3]", actual="[3,2]", context="matmul");
+/// ```
+/// use brain_core::brain_err;
+/// let _err1 = brain_err!("value out of range");
+/// let _err2 = brain_err!(NotImplemented, "custom_op_v2");
+/// let _err3 = brain_err!(ShapeMismatch, expected="[2,3]", actual="[3,2]", context="matmul");
 /// ```
 ///
 /// # Generated Code
@@ -1934,6 +2088,7 @@ pub fn format_bytes(bytes: usize) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::error::Error;
 
     // =========================================================================
     // ShapeMismatch Tests

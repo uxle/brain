@@ -1,6 +1,9 @@
 [package]
 name = "brain-core"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
+authors = ["Brain Contributors"]
+description = "High-performance pure-Rust foundation for the Brain deep learning framework"
+license = "MIT"
 
 [dependencies]

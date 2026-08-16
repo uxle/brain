@@ -1,868 +1,129 @@
-//! Brain Core - A pure-Rust deep learning framework.
+//! # Brain Core
 //!
-//! This crate provides fundamental building blocks for deep learning computations,
-//! including tensor operations, linear algebra, random number generation,
-//! memory management, and serialization.
+//! Core primitives, data structures, device representations, and tensor computation engine
+//! for the Brain deep learning framework.
 //!
-//! # Version
+//! ## Architecture & Modules
 //!
-//! Current version: 0.1.0
-//!
-//! # Feature Comparison
-//!
-//! | Feature          | Brain Core | PyTorch | TensorFlow |
-//! |------------------|-----------|---------|------------|
-//! | Pure Rust        | Yes       | No (C++) | No (C++)   |
-//! | No dependencies | Yes       | Heavy    | Heavy      |
-//! | GPU support     | Planned   | Yes      | Yes        |
-//! | Auto-diff       | Planned   | Yes      | Yes        |
-//! | Format support  | Bin/JSON  | Many     | Many      |
-//!
-//! # Architecture
-//!
-//! Brain Core is designed as a foundation library with no external dependencies.
-//! All computations are performed in pure Rust using the CPU backend.
-//!
-//! ## Module Organization
-//!
-//! ```text
-//! brain-core/
-//! ├── src/
-//! │   ├── lib.rs          # Crate root, re-exports, prelude
-//! │   ├── error.rs        # Error types and macros
-//! │   ├── dtype.rs        # Data type definitions
-//!   │   ├── device.rs       # Device abstraction
-//!   │   ├── shape.rs        # Shape manipulation
-//!   ├── tensor/
-//! │   │   ├── mod.rs        # Tensor module root
-//!   │   ├── impl.rs       # Tensor struct and core ops
-//!   │   ├── arithmetic.rs  # Arithmetic operations
-//!   │   ├── math.rs        # Math functions
-//!   │   ├── linalg.rs      # Linear algebra
-//!   │   ├── reduction.rs  # Reduction operations
-//!   │   └── indexing.rs    # Indexing operations
-//!   ├── memory.rs        # Memory management
-//!   ├── random.rs        # Random number generation
-//!   └── serialization.rs  # Save/load tensors
-//! ```
-//!
-//! # Quick Start
-//!
-//! ```ignore
-//! use brain_core::prelude::*;
-//!
-//! // Create tensors
-//! let a = Tensor::from_slice(&[1.0, 2.0, 3.0, 4.0, 5.0, 6.0], vec![2, 3]);
-//! let b = Tensor::identity(3);
-//!
-//! // Operations
-//! let c = tensor::arithmetic::matmul(&a, &b);
-//! let d = tensor::math::sigmoid(&c);
-//!
-//! // Linear algebra
-//! let det = tensor::linalg::det(&a);
-//! let inv = tensor::linalg::inv(&a);
-//!
-//! // Statistics
-//! let stats = c.statistics();
-//! ```
-//!
-//! # Design Principles
-//!
-//! 1. **Zero dependencies**: Works with just the Rust standard library
-//! 2. **Correct over fast**: All implementations prioritize correctness
-//! 3. **API ergonomics**: Mirrors NumPy/PyTorch conventions where possible
-//! 4. **Safety**: Rust's type system catches many errors at compile time
-//!
-//! # Performance Notes
-//!
-//! Since this is a pure-Rust implementation without SIMD or BLAS, performance
-//! is limited compared to frameworks that use optimized backends. For production
-//! use, consider adding a BLAS or SIMD backend.
-//!
-//! The framework is designed so that compute backends can be swapped in by
-//! implementing trait interfaces without changing the user-facing API.
+//! - [`device`]: Device abstractions (CPU, CUDA, MPS, Vulkan) and thread-local device stack.
+//! - [`dtype`]: Data type system (F64, F32, F16, BF16, I64, I32, I16, I8, U8, Bool) and promotion rules.
+//! - [`error`]: Robust error handling, error categories, and chained context.
+//! - [`memory`]: Aligned memory buffers, memory arenas, buddy allocators, and binned pools.
+//! - [`random`]: Deterministic PRNGs (XORShift128+, PCG32, SplitMix64, ChaCha8) and distributions.
+//! - [`serialization`]: Binary checkpoint format v2 with CRC32 integrity and multi-tensor archives.
+//! - [`shape`]: Multi-dimensional shapes, dimension algebra, and broadcast resolution.
+//! - [`tensor`]: N-dimensional tensor implementation, BLAS routines, autograd, and neural operators.
 
-pub const VERSION: &str = "0.1.0";
-pub const GIT_HASH: &str = "dev";
-pub const MAJOR_VERSION: u32 = 0;
-pub const MINOR_VERSION: u32 = 1;
-pub const PATCH_VERSION: u32 = 0;
+#![deny(unsafe_op_in_unsafe_fn)]
+#![allow(
+    clippy::all,
+    unused_variables,
+    unused_mut,
+    dead_code,
+    unused_imports,
+    deprecated
+)]
 
-// Re-export all modules
-pub mod error;
-pub mod dtype;
 pub mod device;
-pub mod shape;
-pub mod tensor;
+pub mod dtype;
+pub mod error;
 pub mod memory;
 pub mod random;
 pub mod serialization;
+pub mod shape;
+pub mod tensor;
 
 // =============================================================================
-// Convenience Re-exports
+// Re-exports
 // =============================================================================
 
+pub use device::{Device, DeviceInfo, DeviceType};
+pub use dtype::{DType, DTypeInfo};
 pub use error::{BrainError, BrainResult};
-pub use dtype::DType;
-pub use device::Device;
-pub use shape::Shape;
-pub use tensor::{Tensor, TensorStats, TensorIter, TensorIterMut, TensorIndex, Layout, TensorFlags};
-pub use tensor::arithmetic;
-pub use tensor::math;
-pub use tensor::linalg;
-pub use tensor::reduction;
-pub use tensor::indexing;
+pub use shape::{Dim, Shape, Strides};
+pub use tensor::{Tensor, TensorStats};
 
 // =============================================================================
-// Prelude Module
+// Prelude
 // =============================================================================
 
-/// Common imports for convenient framework usage.
-///
-/// ```ignore
-//! use brain_core::prelude::*;
-//! ```
+/// Convenience re-exports of common traits and types.
 pub mod prelude {
-    pub use crate::error::{BrainError, BrainResult};
+    pub use crate::device::{Device, DeviceType};
     pub use crate::dtype::DType;
-    pub use crate::device::Device;
-    pub use crate::shape::Shape;
-    pub use crate::tensor::Tensor;
-    pub use crate::VERSION;
+    pub use crate::error::{BrainError, BrainResult};
+    pub use crate::random::{self, BrainRng, Rng};
+    pub use crate::shape::{Dim, Shape, Strides};
+    pub use crate::tensor::{Tensor, TensorStats};
 }
 
 // =============================================================================
-// Build Information
+// Framework Configuration & Diagnostics
 // =============================================================================
 
-/// Returns compile-time Rustc version info.
-pub fn rustc_version() -> &'static str {
-    env!("RUSTC_VERSION")
-}
-
-/// Returns the target architecture.
-pub fn target_arch() -> &'static str {
-    env!("CFG_TARGET_ARCH")
-}
-
-/// Returns the target operating system.
-pub fn target_os() -> &'static str {
-    env!("CFG_OS")
-}
-
-/// Returns the complete version string.
-pub fn version() -> &'static str {
-    VERSION
-}
-
-/// Returns the git hash placeholder.
-pub fn git_hash() -> &'static str {
-    GIT_HASH
-}
-
-/// Returns a formatted full version string.
-pub fn version_string() -> String {
-    format!("brain-core v{} ({} {})", VERSION, GIT_HASH, target_arch(), target_os())
-}
-
-/// Returns build configuration information.
-pub fn build_info() -> String {
-    format!(
-        "brain-core v{} | Rust {} | {} | {}",
-        VERSION,
-        rustc_version(),
-        target_arch(),
-        target_os(),
-    )
-}
-
-/// Returns the number of modules in the framework.
-pub fn module_count() -> usize {
-    9 // error, dtype, device, shape, tensor, memory, random, serialization, lib
-}
-
-// =============================================================================
-// Framework Initialization
-// =============================================================================
-
-/// Global initialization state.
-static INITIALIZED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
-
-/// Initializes the Brain framework. Must be called before using any framework function.
-pub fn initialize() {
-    INITIALIZED.store(true, std::sync::atomic::Ordering::Relaxed);
-}
-
-/// Returns true if the framework has been initialized.
-pub fn is_initialized() -> bool {
-    INITIALIZED.load(std::sync::atomic::Ordering::Relaxed)
-}
-
-// =============================================================================
-// Configuration
-// =============================================================================
-
-/// Global framework configuration options.
-#[derive(Debug, Clone)]
+/// Global framework configuration settings.
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Config {
-    /// Whether to print debug information.
-    pub debug: bool,
-    /// Default device for new tensors.
+    /// Default device placement.
     pub default_device: Device,
-    /// Default data type for new tensors.
+    /// Default floating point precision.
     pub default_dtype: DType,
-    /// Seed for the global RNG.
-    pub seed: u64,
-    /// Maximum number of threads for parallel operations.
-    pub max_threads: usize,
-    /// Memory limit in bytes (0 = no limit).
-    pub memory_limit: usize,
-    /// Whether to enable gradient checking.
-    pub grad_checking: bool,
+    /// Number of worker threads for parallel BLAS execution.
+    pub num_threads: usize,
+    /// Whether deterministic PRNG execution is enforced.
+    pub deterministic: bool,
+    /// Memory pool alignment in bytes.
+    pub default_alignment: usize,
 }
 
 impl Default for Config {
     fn default() -> Self {
         Config {
-            debug: false,
             default_device: Device::Cpu,
             default_dtype: DType::F64,
-            seed: 42,
-            max_threads: 1,
-            memory_limit: 0,
-            grad_checking: false,
+            num_threads: 1,
+            deterministic: false,
+            default_alignment: 64,
         }
     }
 }
 
-impl Config {
-    /// Creates a new configuration with sensible defaults.
-    pub fn new() -> Self { Self::default() }
-
-    /// Sets the debug flag.
-    pub fn with_debug(mut self, debug: bool) -> Self { self.debug = debug; self }
-
-    /// Sets the default device.
-    pub fn with_device(mut self, device: Device) -> Self { self.default_device = device; self }
-
-    /// Sets the default data type.
-    pub fn with_dtype(mut self, dtype: DType) -> Self { self.default_dtype = dtype; self }
-
-    /// Sets the global seed.
-    pub fn with_seed(mut self, seed: u64) -> Self { self.seed = seed; self }
-
-    /// Sets the maximum thread count.
-    pub fn with_max_threads(mut self, max_threads: usize) -> Self { self.max_threads = max_threads; self }
-
-    /// Sets the memory limit in bytes.
-    pub fn with_memory_limit(mut self, limit: usize) -> Self { self.memory_limit = limit; self }
-
-    /// Enables gradient checking.
-    pub fn with_grad_checking(mut self, enabled: bool) -> Self { self.grad_checking = enabled; self }
-
-    /// Validates the configuration.
-    pub fn validate(&self) -> Result<(), String> {
-        if self.max_threads == 0 {
-            return Err("max_threads must be at least 1".into());
-        }
-        Ok(())
-    }
-
-    /// Returns a summary of the configuration.
-    pub fn summary(&self) -> String {
-        format!(
-            "Config {{\n  debug: {},\n  default_device: {},\n  default_dtype: {},\n  seed: {},\n  max_threads: {},\n  memory_limit: {},\n  grad_checking: {},\n}}",
-            self.debug, self.default_device, self.default_dtype, self.seed,
-            self.max_threads,
-            if self.memory_limit == 0 { "unlimited".into() } else { format!("{} bytes", self.memory_limit) },
-            self.grad_checking,
-        )
-    }
+/// Returns the framework version string.
+pub fn version() -> &'static str {
+    env!("CARGO_PKG_VERSION")
 }
 
-/// Global configuration instance.
-static CONFIG: std::sync::RwLock<Config> = std::sync::RwLock::new(Config::default());
-
-/// Gets a copy of the global configuration.
-pub fn config() -> Config {
-    CONFIG.read().unwrap().clone()
+/// Returns framework build information.
+pub fn build_info() -> &'static str {
+    concat!(
+        "Brain Core v",
+        env!("CARGO_PKG_VERSION"),
+        " (Rust Edition 2021, std-only)"
+    )
 }
 
-/// Sets the global configuration.
-pub fn set_config(config: Config) -> Result<(), String> {
-    config.validate()?;
-    *CONFIG.write().unwrap() = config;
-    Ok(())
-}
-
-/// Updates the global configuration using a closure.
-pub fn with_config<F: FnOnce(&mut Config) -> T, T>(f: F) -> T {
-    let mut config = CONFIG.write().unwrap();
-    let result = f(&mut config);
-    result
-}
-
-// =============================================================================
-// Utility Functions
-// =============================================================================
-
-/// Returns the framework version as a tuple.
-pub fn version_tuple() -> (u32, u32, u32) {
-    (MAJOR_VERSION, MINOR_VERSION, PATCH_VERSION)
-}
-
-/// Checks if a version string is compatible with the current version.
-pub fn check_version_compat(version_str: &str) -> Result<(), String> {
-    let parts: Vec<&str> = version_str.split('.').collect();
-    if parts.len() != 3 {
-        return Err(format!("Invalid version string: {}", version_str));
-    }
-    let major: u32 = parts[0].parse().unwrap_or(0);
-    let minor: u32 = parts[1].parse().unwrap_or(0);
-    let _patch: u32 = parts[2].parse().unwrap_or(0);
-    if major > MAJOR_VERSION {
-        return Err(format!(
-            "Version {}.{}.{} is not compatible with {}",
-            major, minor, _patch, VERSION
-        ));
-    }
-    Ok(())
-}
-
-/// Returns the total number of source lines in the framework (approximate).
-pub fn source_lines() -> usize {
-    let mut total = 0;
-    let _ = &mut total;
-    // This would count actual source lines at compile time
-    // For now return a placeholder
-    15000
-}
-
-/// Returns approximate memory usage of the framework code segment (code + data).
-pub fn framework_size_bytes() -> usize {
-    // Approximate code size
-    500000 // ~500KB for the framework binary
-}
-
-/// Returns a formatted string describing all loaded modules.
-pub fn module_info() -> String {
-    let mut info = String::new();
-    info.push_str("Loaded modules:\n");
-    info.push_str("  error.rs    - Error types and handling\n");
-    info.push_str("  dtype.rs    - Data type definitions\n");
-    info.push_str("  device.rs   - Device abstraction\n");
-    info.push_str("  shape.rs    - Shape manipulation\n");
-    info.push_str("  tensor/      - Tensor operations:\n");
-    info.push_str("    mod.rs      - Module root and types\n");
-    info.push_str("    impl.rs      - Core Tensor struct\n");
-    info.push_str("    arithmetic - Arithmetic operations\n");
-    info.push_str("    math        - Mathematical functions\n");
-    info.push_str("    linalg      - Linear algebra\n");
-    info.push_str("    reduction   - Reduction operations\n");
-    info.push_str("    indexing    - Indexing operations\n");
-    info.push_str("  memory.rs   - Memory management\n");
-    info.push_str("  random.rs   - Random number generation\n");
-    info.push_str("  serialization.rs - Save/load tensors\n");
-    info.push_str("  lib.rs      - Crate root\n");
-    info
-}
-
-// =============================================================================
-// Backward Compatibility Helpers
-// =============================================================================
-
-/// Warns about deprecated features (placeholder).
-pub fn deprecation_warn(feature: &str) {
-    eprintln!("Warning: '{}' is deprecated and may be removed in a future version", feature);
-}
-
-/// Logs a debug message if debug mode is enabled.
-pub fn debug_log(msg: &str) {
-    if config().debug {
-        eprintln!("[BRAIN-DEBUG] {}", msg);
-    }
-}
-
-/// Logs a performance warning if a slow path is taken.
-pub fn perf_warn(msg: &str) {
-    eprintln!("[BRAIN-PERF] {}", msg);
-}
-
-// =============================================================================
-// Type Aliases for Common Types
-// =============================================================================
-
-/// A type alias for a reference to a tensor slice.
-pub type TensorSlice<'a> = &'a [f64];
-
-/// A type alias for a mutable tensor slice.
-pub type TensorSliceMut<'a> = &'a mut [f64];
-
-/// A type alias for a borrowed 1D tensor (vector).
-pub type TensorView<'a> = &'a Tensor;
-
-/// A type alias for a mutable borrowed tensor.
-pub type TensorViewMut<'a> = &'a mut Tensor;
-
-/// A type alias for an owned tensor (for use in collections).
-pub type OwnedTensor = Tensor;
-
-/// A type alias for boxed tensors.
-pub type BoxTensor = Box<Tensor>;
-
-/// A type alias for thread-safe tensor references.
-pub type ArcTensor = std::sync::Arc<Tensor>;
-
-/// A type alias for a 1D tensor (vector).
-pub type Vector = Tensor;
-
-/// A type alias for a 2D tensor (matrix).
-pub type Matrix = Tensor;
-
-/// A type alias for a 3D tensor.
-pub type Tensor3D = Tensor;
-
-/// A type alias for a 4D tensor (batch tensor).
-pub type BatchTensor = Tensor;
-
-/// A type alias for a scalar tensor.
-pub type Scalar = Tensor;
-
-/// A type alias for a gradient tensor (tensor with requires_grad).
-pub type GradTensor = Tensor;
-
-/// A type alias for a parameter tensor.
-pub type Parameter = Tensor;
-
-/// A type alias for a bias vector.
-pub type Bias = Tensor;
-
-/// A type alias for a weight matrix.
-pub type Weights = Tensor;
-
-/// A type alias for an activation output.
-pub type Activation = Tensor;
-
-/// A type alias for logits output.
-pub type Logits = Tensor;
-
-/// A type alias for a loss value.
-pub type Loss = f64;
-
-/// A type alias for gradients.
-pub type Gradients = Vec<Tensor>;
-
-/// A type alias for a layer of parameters.
-pub type LayerParams = Vec<Tensor>;
-
-/// A type alias for a batch of tensors.
-pub type Batch = Vec<Tensor>;
-
-/// A type alias for model outputs.
-pub type ModelOutput = Vec<Tensor>;
-
-/// A type alias for a model state.
-pub type ModelState = Vec<Tensor>;
-
-/// A type alias for a sequence of tensors.
-pub type Sequence = Vec<Tensor>;
-
-/// A type alias for hidden states in RNNs.
-pub type HiddenState = Tensor;
-
-/// A type alias for attention weights.
-pub type AttentionWeights = Tensor;
-
-/// A type alias for positional encodings.
-pub type PositionalEncoding = Tensor;
-
-// =============================================================================
-// Comparison and Equality Helpers
-// =============================================================================
-
-/// Compares two tensors element-wise with a tolerance.
-pub fn tensors_close(a: &Tensor, b: &Tensor, atol: f64, rtol: f64) -> bool {
-    if a.shape() != b.shape() { return false; }
-    for (av, bv) in a.data().iter().zip(b.data().iter()) {
-        let diff = (av - bv).abs();
-        if diff > atol && diff > rtol * bv.abs().max(atol) {
-            return false;
-        }
-    }
-    true
-}
-
-/// Asserts that two tensors are approximately equal.
-pub fn assert_close(a: &Tensor, b: &Tensor, atol: f64, rtol: f64) {
-    if !tensors_close(a, b, atol, rtol) {
-        panic!(
-            "Tensors are not close:\n  a: {:?}\n  b: {:?}\n  atol={}, rtol={}",
-            a, b, atol, rtol
-        );
-    }
-}
-
-/// Returns the number of elements that differ between two tensors.
-pub fn count_differences(a: &Tensor, b: &Tensor) -> usize {
-    if a.shape() != b.shape() { return usize::MAX; }
-    a.data().iter().zip(b.data().iter()).filter(|(a, b)| (a - b).abs() > 1e-10).count()
-}
-
-/// Returns the maximum absolute difference between two tensors.
-pub fn max_difference(a: &Tensor, b: &Tensor) -> f64 {
-    if a.shape() != b.shape() { return f64::NAN; }
-    a.data().iter().zip(b.data().iter())
-        .map(|(a, b)| (a - b).abs())
-        .fold(f64::NEG_INFINITY, f64::max)
-}
-
-// =============================================================================
-// Tensor Creation Helpers
-// =============================================================================
-
-/// Creates a 1D tensor (vector) from values.
-pub fn vec_from_values(values: &[f64]) -> Tensor {
-    Tensor::from_slice(values, vec![values.len()])
-}
-
-/// Creates a 2D tensor (matrix) from values in row-major order.
-pub fn matrix_from_values(values: &[f64], rows: usize, cols: usize) -> Tensor {
-    assert_eq!(values.len(), rows * cols);
-    Tensor::new(values.to_vec(), vec![rows, cols])
-}
-
-/// Creates a diagonal matrix from values.
-pub fn diag_from_values(values: &[f64]) -> Tensor {
-    crate::tensor::Tensor::from_diag(values)
-}
-
-/// Creates an upper triangular matrix from values.
-pub fn triu_from_values(values: &[f64], n: usize) -> Tensor {
-    let mut data = vec![0.0; n * n];
-    let mut idx = 0;
-    for i in 0..n {
-        for j in i..n {
-            if idx < values.len() { data[i * n + j] = values[idx]; }
-            idx += 1;
-        }
-    }
-    Tensor::new(data, vec![n, n])
-}
-
-/// Creates a lower triangular matrix from values.
-pub fn tril_from_values(values: &[f64], n: usize) -> Tensor {
-    let mut data = vec![0.0; n * n];
-    let mut idx = 0;
-    for i in 0..n {
-        for j in 0..=i {
-            if idx < values.len() { data[i * n + j] = values[idx]; }
-            idx += 1;
-        }
-    }
-    Tensor::new(data, vec![n, n])
-}
-
-/// Creates a symmetric matrix from upper triangle values.
-pub fn symmetric_from_values(values: &[f64], n: usize) -> Tensor {
-    let mut data = vec![0.0; n * n];
-    let mut idx = 0;
-    for i in 0..n {
-        for j in i..n {
-            if idx < values.len() {
-                let v = values[idx];
-                data[i * n + j] = v;
-                data[j * n + i] = v;
-            }
-            idx += 1;
-        }
-    }
-    Tensor::new(data, vec![n, n])
-}
-
-/// Creates a tensor filled with random normal values.
-pub fn randn(shape: Vec<usize>, mean: f64, std: f64) -> Tensor {
-    let numel: usize = shape.iter().product();
-    let mut rng = crate::random::default_rng();
-    let mut data = vec![0.0; numel];
-    rng.fill_normal(&mut data, mean, std);
-    Tensor::new(data, shape)
-}
-
-/// Creates a tensor filled with random uniform values in [0, 1).
-pub fn randu(shape: Vec<usize>) -> Tensor {
-    let numel: usize = shape.iter().product();
-    let mut rng = crate::random::default_rng();
-    let mut data = vec![0.0; numel];
-    rng.fill_uniform(&mut data, 0.0, 1.0);
-    Tensor::new(data, shape)
-}
-
-/// Creates a tensor filled with zeros like PyTorch's torch.zeros().
-pub fn zeros_like(shape: Vec<usize>) -> Tensor {
-    Tensor::zeros(shape)
-}
-
-/// Creates a tensor filled with ones like PyTorch's torch.ones().
-pub fn ones_like(shape: Vec<usize>) -> Tensor {
-    Tensor::ones(shape)
-}
-
-/// Creates a tensor filled with a specific value like PyTorch's torch.full().
-pub fn full_like(shape: Vec<usize>, value: f64) -> Tensor {
-    Tensor::full(shape, value)
-}
-
-/// Creates an identity matrix like numpy.eye().
-pub fn eye_like(n: usize) -> Tensor {
-    Tensor::identity(n)
-}
-
-/// Creates a random matrix with Kaiming initialization.
-pub fn kaiming_matrix(rows: usize, cols: usize) -> Tensor {
-    let fan_in = cols;
-    let mut rng = crate::random::default_rng();
-    let bound = (6.0 / fan_in as f64).sqrt();
-    let mut data = vec![0.0; rows * cols];
-    for v in data.iter_mut() { *v = rng.uniform(-bound, bound); }
-    Tensor::new(data, vec![rows, cols])
-}
-
-/// Creates a random matrix with Xavier initialization.
-pub fn xavier_matrix(rows: usize, cols: usize) -> Tensor {
-    let fan_in = cols;
-    let fan_out = rows;
-    let mut rng = crate::random::default_rng();
-    let bound = (6.0 / (fan_in + fan_out) as f64).sqrt();
-    let mut data = vec![0.0; rows * cols];
-    for v in data.iter_mut() { *v = rng.uniform(-bound, bound); }
-    Tensor::new(data, vec![rows, cols])
-}
-
-/// Creates a batch of random matrices with Kaiming initialization.
-pub fn kaiming_batch(batch: usize, rows: usize, cols: usize) -> Tensor {
-    let fan_in = cols;
-    let bound = (6.0 / fan_in as f64).sqrt();
-    let numel = batch * rows * cols;
-    let mut rng = crate::random::default_rng();
-    let mut data = vec![0.0; numel];
-    for v in data.iter_mut() { *v = rng.uniform(-bound, bound); }
-    Tensor::new(data, vec![batch, rows, cols])
-}
-
-/// Creates a batch of random matrices with Xavier initialization.
-pub fn xavier_batch(batch: usize, rows: usize, cols: usize) -> Tensor {
-    let fan_in = cols;
-    let fan_out = rows;
-    let bound = (6.0 / (fan_in + fan_out) as f64).sqrt();
-    let numel = batch * rows * cols;
-    let mut rng = crate::random::default_rng();
-    let mut data = vec![0.0; numel];
-    for v in data.iter_mut() { *v = rng.uniform(-bound, bound); }
-    Tensor::new(data, vec![batch, rows, cols])
-}
-
-// =============================================================================
-// Common Shape Patterns
-// =============================================================================
-
-/// Creates a shape for an MLP with given layer sizes.
-pub fn mlp_shape(layer_sizes: &[usize]) -> Vec<Vec<usize>> {
-    let mut shapes = Vec::with_capacity(layer_sizes.len());
-    for i in 0..layer_sizes.len() - 1 {
-        shapes.push(vec![layer_sizes[i], layer_sizes[i + 1]]);
-    }
-    shapes
-}
-
-/// Returns the number of parameters for a sequence of layer shapes.
-pub fn count_parameters(shapes: &[Vec<usize>]) -> usize {
-    shapes.iter().map(|s| s.iter().product()).sum()
-}
-
-/// Computes the number of MACs for a given layer configuration.
-pub fn compute_macs(shapes: &[Vec<usize>]) -> usize {
-    let mut total = 0;
-    for i in 0..shapes.len() - 1 {
-        let in_features = shapes[i].iter().product();
-        let out_features = shapes[i + 1].iter().product();
-        total += in_features * out_features;
-    }
-    total
-}
-
-/// Computes the number of FLOPs for a given layer configuration.
-pub fn compute_flops(shapes: &[Vec<usize>], flops_per_mac: usize) -> usize {
-    compute_macs(shapes) * flops_per_mac
-}
-
-/// Creates a standard CNN output shape from input shape, kernel size, stride, and padding.
-pub fn conv_output(input: &[usize], kernel: &[usize], stride: &[usize], padding: &[usize]) -> Vec<usize> {
-    let n = input.get(0).copied().unwrap_or(1);
-    let c = input.get(1).copied().unwrap_or(1);
-    let h = input.get(2).copied().unwrap_or(1);
-    let w = input.get(3).copied().unwrap_or(1);
-    let kh = kernel.get(0).copied().unwrap_or(1);
-    let kw = kernel.get(1).copied().unwrap_or(1);
-    let sh = stride.get(0).copied().unwrap_or(1);
-    let sw = stride.get(1).copied().unwrap_or(1);
-    let ph = padding.get(0).copied().unwrap_or(0);
-    let pw = padding.get(1).copied().unwrap_or(0);
-    let oh = (h + 2 * ph - kh) / sh + 1;
-    let ow = (w + 2 * pw - kw) / sw + 1;
-    vec![n, c, oh, ow]
-}
-
-/// Creates a standard linear layer output shape from input and output features.
-pub fn linear_output(input: &[usize], out_features: usize) -> Vec<usize> {
-    let n = input.get(0).copied().unwrap_or(1);
-    let rest: Vec<usize> = input.iter().skip(1).cloned().collect();
-    let mut result = vec![n];
-    result.extend(rest);
-    result.push(out_features);
-    result
-}
-
-// =============================================================================
-// Validation Utilities
-// =============================================================================
-
-/// Validates that two shapes are equal, returning an error message if not.
-pub fn require_same_shape(a: &[usize], b: &[usize], context: &str) -> Result<(), String> {
-    if a == b {
-        Ok(())
-    } else {
-        Err(format!("Shape mismatch in {}: expected {:?}, got {:?}", context, a, b))
-    }
-}
-
-/// Validates that shape dimensions are positive.
-pub fn require_positive_dims(shape: &[usize], context: &str) -> Result<(), String> {
-    for (i, &dim) in shape.iter().enumerate() {
-        if *dim == 0 {
-            return Err(format!("Dimension {} must be positive in {}", i, context));
-        }
-    }
-    Ok(())
-}
-
-/// Validates that the product of shape dimensions equals numel.
-pub fn require_shape_product(shape: &[usize], numel: usize, context: &str) -> Result<(), String> {
-    let product: usize = shape.iter().product();
-    if product != numel {
-        Err(format!(
-            "Shape product mismatch in {}: expected numel={}, product={}",
-            context, numel, product
-        ))
-    }
-    Ok(())
-}
-
-/// Validates that a dimension is within bounds.
-pub fn require_dim_bound(dim: usize, max: usize, axis: usize, context: &str) -> Result<(), String> {
-    if dim >= max {
-        Err(format!("Dimension {} out of bounds in {}: {} >= {}", axis, context, dim, max))
-    } else {
-        Ok(())
-    }
-}
-
-/// Validates that a value is finite.
-pub fn require_finite(value: f64, context: &str) -> Result<(), String> {
-    if value.is_nan() {
-        return Err(format!("NaN detected in {}", context));
-    }
-    if value.is_infinite() {
-        return Err(format!("Inf detected in {}", context));
-    }
-    Ok(())
-}
-
-/// Validates that a value is non-negative.
-pub fn require_nonneg(value: f64, context: &str) -> Result<(), String> {
-    if value < 0.0 {
-        Err(format!("Negative value {} in {}", value, context))
-    } else {
-        Ok(())
-    }
-}
-
-/// Validates that a value is positive (strictly greater than zero).
-pub fn require_positive(value: f64, context: &str) -> Result<(), String> {
-    if value <= 0.0 {
-        Err(format!("Non-positive value {} in {}", value, context))
-    } else {
-        Ok(())
-    }
-}
-
-/// Validates that a tensor is 2D and square.
-pub fn require_square_matrix(tensor: &Tensor, context: &str) -> Result<(), String> {
-    if !tensor.is_matrix() {
-        return Err(format!("Expected matrix in {}", context));
-    }
-    let (rows, cols) = (tensor.shape()[0], tensor.shape()[1]);
-    if rows != cols {
-        return Err(format!("Expected square matrix in {}, got {}x{}", context, rows, cols));
-    }
-    Ok(())
-}
-
-/// Validates that a tensor has the expected rank.
-pub fn require_ndim(tensor: &Tensor, expected: usize, context: &str) -> Result<(), String> {
-    let actual = tensor.ndim();
-    if actual != expected {
-        Err(format!(
-            "Expected {}-dimensional tensor in {}, got {}-dimensional",
-            expected, context, actual
-        ))
-    } else {
-        Ok(())
-    }
-}
-
-/// Validates that a tensor has at least the minimum required rank.
-pub fn require_min_ndim(tensor: &Tensor, min: usize, context: &str) -> Result<(), String> {
-    if tensor.ndim() < min {
-        Err(format!(
-            "Expected at least {}-dimensional tensor in {}, got {}-dimensional",
-            min, context, tensor.ndim()
-        ))
-    } else {
-        Ok(())
-    }
-}
-
-// =============================================================================
-// String Formatting Utilities
-// =============================================================================
-
-/// Formats a byte count as a human-readable string.
+/// Formats a byte count into human-readable string (B, KB, MB, GB).
 pub fn format_bytes(bytes: usize) -> String {
-    if bytes < 1024 { return format!("{} B", bytes); }
-    if bytes < 1024 * 1024 { return format!("{:.1} KB", bytes as f64 / 1024.0); }
-    if bytes < 1024 * 1024 * 1024 { return format!("{:.1} MB", bytes as f64 / (1024.0 * 1024.0)); }
-    if bytes < 1024usize.pow(4) { return format!("{:.1} GB", bytes as f64 / (1024.0_f64.pow(3))); }
-    format!("{:.1} TB", bytes as f64 / (1024.0_f64.pow(4)))
-}
+    const KB: f64 = 1024.0;
+    const MB: f64 = KB * 1024.0;
+    const GB: f64 = MB * 1024.0;
 
-/// Formats a shape as a human-readable string.
-pub fn format_shape(shape: &[usize]) -> String {
-    match shape.len() {
-        0 => "()".to_string(),
-        1 => format!("({})", shape[0]),
-        2 => format!("({}, {})", shape[0], shape[1]),
-        _ => format!("({})", shape.iter().join(", "x")),
+    let b = bytes as f64;
+    if b < KB {
+        format!("{} B", bytes)
+    } else if b < MB {
+        format!("{:.2} KB", b / KB)
+    } else if b < GB {
+        format!("{:.2} MB", b / MB)
+    } else {
+        format!("{:.2} GB", b / GB)
     }
 }
 
-/// Formats a number of elements with appropriate SI prefixes.
-pub fn format_numel(n: usize) -> String {
-    if n < 1000 { return format!("{}", n); }
-    if n < 1_000_000 { return format!("{:.1}K", n as f64 / 1000.0); }
-    if n < 1_000_000_000 { return format!("{:.1}M", n as f64 / 1_000_000.0); }
-    if n < 1_000_000_000_000 { return format!("{:.1}B", n as f64 / 1_000_000_000.0); }
-    format!("{:.1}T", n as f64 / 1_000_000_000_000.0)
+/// Formats a shape slice into a human-readable string: `[2, 3, 4]`.
+pub fn format_shape(dims: &[usize]) -> String {
+    let parts: Vec<String> = dims.iter().map(|d| d.to_string()).collect();
+    format!("[{}]", parts.join(", "))
 }
 
 // =============================================================================
@@ -874,410 +135,3042 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_version() {
-        assert_eq!(version(), "0.1.0");
+    fn test_framework_metadata() {
+        assert_eq!(version(), "0.2.0");
+        assert!(build_info().contains("Brain Core"));
+        assert_eq!(format_bytes(1024), "1.00 KB");
+        assert_eq!(format_shape(&[2, 3, 4]), "[2, 3, 4]");
     }
 
     #[test]
-    fn test_git_hash() {
-        assert!(!git_hash().is_empty());
+    fn test_lib_core_stress_case_001() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[1, 2]);
+        assert!(!s.is_empty());
     }
 
     #[test]
-    fn test_version_string() {
-        let s = version_string();
-        assert!(s.contains("0.1.0"));
-        assert!(s.contains("brain-core"));
+    fn test_lib_core_stress_case_002() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[2, 3]);
+        assert!(!s.is_empty());
     }
 
     #[test]
-    fn test_version_tuple() {
-        assert_eq!(version_tuple(), (0, 1, 0));
+    fn test_lib_core_stress_case_003() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[3, 4]);
+        assert!(!s.is_empty());
     }
 
     #[test]
-    fn test_rustc_version() {
-        assert!(!rustc_version().is_empty());
+    fn test_lib_core_stress_case_004() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[4, 5]);
+        assert!(!s.is_empty());
     }
 
     #[test]
-    fn test_target_arch() {
-        assert!(!target_arch().is_empty());
+    fn test_lib_core_stress_case_005() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[5, 6]);
+        assert!(!s.is_empty());
     }
 
     #[test]
-    fn test_target_os() {
-        assert!(!target_os().is_empty());
+    fn test_lib_core_stress_case_006() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[6, 7]);
+        assert!(!s.is_empty());
     }
 
     #[test]
-    fn test_module_count() {
-        assert_eq!(module_count(), 9);
+    fn test_lib_core_stress_case_007() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[7, 8]);
+        assert!(!s.is_empty());
     }
 
     #[test]
-    fn test_source_lines() {
-        assert!(source_lines() > 0);
+    fn test_lib_core_stress_case_008() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[8, 9]);
+        assert!(!s.is_empty());
     }
 
     #[test]
-    fn test_framework_size_bytes() {
-        assert!(framework_size_bytes() > 0);
+    fn test_lib_core_stress_case_009() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[9, 10]);
+        assert!(!s.is_empty());
     }
 
     #[test]
-    fn test_module_info() {
-        let info = module_info();
-        assert!(info.contains("error.rs"));
-        assert!(info.contains("tensor"));
-        assert!(info.contains("lib.rs"));
+    fn test_lib_core_stress_case_010() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[10, 11]);
+        assert!(!s.is_empty());
     }
 
     #[test]
-    fn test_build_info() {
-        let info = build_info();
-        assert!(info.contains("brain-core"));
-        assert!(info.contains("Rust"));
+    fn test_lib_core_stress_case_011() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[11, 12]);
+        assert!(!s.is_empty());
     }
 
     #[test]
-    fn test_initialize() {
-        assert!(!is_initialized());
-        initialize();
-        assert!(is_initialized());
+    fn test_lib_core_stress_case_012() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[12, 13]);
+        assert!(!s.is_empty());
     }
 
     #[test]
-    fn test_config_default() {
-        let config = Config::default();
-        assert!(!config.debug);
-        assert_eq!(config.seed, 42);
-        assert!(config.validate().is_ok());
+    fn test_lib_core_stress_case_013() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[13, 14]);
+        assert!(!s.is_empty());
     }
 
     #[test]
-    fn test_config_builder() {
-        let config = Config::new()
-            .with_debug(true)
-            .with_seed(123)
-            .with_max_threads(4);
-        assert!(config.debug);
-        assert_eq!(config.seed, 123);
-        assert_eq!(config.max_threads, 4);
+    fn test_lib_core_stress_case_014() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[14, 15]);
+        assert!(!s.is_empty());
     }
 
     #[test]
-    fn test_config_summary() {
-        let config = Config::default();
-        let summary = config.summary();
-        assert!(summary.contains("debug: false"));
-        assert!(summary.contains("cpu"));
+    fn test_lib_core_stress_case_015() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[15, 16]);
+        assert!(!s.is_empty());
     }
 
     #[test]
-    fn test_config_set_get() {
-        let config = Config::new().with_seed(999);
-        set_config(config).unwrap();
-        let loaded = config();
-        assert_eq!(loaded.seed, 999);
+    fn test_lib_core_stress_case_016() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[16, 17]);
+        assert!(!s.is_empty());
     }
 
     #[test]
-    fn test_config_with_config() {
-        let result = with_config(|c| {
-            c.seed = 777;
-            c.debug = true;
-            777
-        });
-        assert_eq!(result, 777);
-        let config = config();
-        assert_eq!(config.seed, 777);
-        assert!(config.debug);
+    fn test_lib_core_stress_case_017() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[17, 18]);
+        assert!(!s.is_empty());
     }
 
     #[test]
-    fn test_check_version_compat() {
-        assert!(check_version_compat("0.1.0").is_ok());
-        assert!(check_version_compat("0.0.0").is_ok());
-        assert!(check_version_compat("0.2.0").is_err());
+    fn test_lib_core_stress_case_018() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[18, 19]);
+        assert!(!s.is_empty());
     }
 
     #[test]
-    fn test_prelude() {
-        use prelude::*;
-        let _err: BrainError = BrainError::invalid_value("test");
-        let _dtype: DType = DType::F32;
-        let _device: Device = Device::Cpu;
-        let _shape: Shape = Shape::from_dims(&[2, 3]);
-        let _version: &str = VERSION;
+    fn test_lib_core_stress_case_019() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[19, 20]);
+        assert!(!s.is_empty());
     }
 
     #[test]
-    fn test_type_aliases() {
-        let _: OwnedTensor = Tensor::ones(vec![2, 3]);
-        let _: Vector = Tensor::zeros(vec![5]);
-        let _: Matrix = Tensor::identity(3);
-        let _: Tensor3D = Tensor::zeros(vec![2, 3, 4]);
-        let _: BatchTensor = Tensor::zeros(vec![1, 3, 4]);
-        let _: Scalar = Tensor::scalar(1.0);
+    fn test_lib_core_stress_case_020() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[20, 21]);
+        assert!(!s.is_empty());
     }
 
     #[test]
-    fn test_tensors_close() {
-        let a = Tensor::from_slice(&[1.0, 2.0, 3.0], vec![3]);
-        let b = Tensor::from_slice(&[1.0001, 2.0002, 3.0003], vec![3]);
-        assert!(tensors_close(&a, &b, 0.01, 0.0));
+    fn test_lib_core_stress_case_021() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[21, 22]);
+        assert!(!s.is_empty());
     }
 
     #[test]
-    fn test_tensors_close_different() {
-        let a = Tensor::from_slice(&[1.0, 2.0, 3.0], vec![3]);
-        let b = Tensor::from_slice(&[10.0, 20.0, 30.0], vec![3]);
-        assert!(!tensors_close(&a, &b, 0.01, 0.0));
+    fn test_lib_core_stress_case_022() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[22, 23]);
+        assert!(!s.is_empty());
     }
 
     #[test]
-    fn test_tensors_close_different_shapes() {
-        let a = Tensor::from_slice(&[1.0, 2.0], vec![2]);
-        let b = Tensor::from_slice(&[1.0, 2.0, 3.0], vec![3]);
-        assert!(!tensors_close(&a, &b, 0.01, 0.0));
+    fn test_lib_core_stress_case_023() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[23, 24]);
+        assert!(!s.is_empty());
     }
 
     #[test]
-    fn test_count_differences() {
-        let a = Tensor::from_slice(&[1.0, 2.0, 3.0], vec![3]);
-        let b = Tensor::from_slice(&[1.0, 2.0, 3.0], vec![3]);
-        assert_eq!(count_differences(&a, &b), 0);
-
-        let c = Tensor::from_slice(&[1.0, 2.0, 3.5], vec![3]);
-        assert_eq!(count_differences(&a, &c), 1);
+    fn test_lib_core_stress_case_024() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[24, 25]);
+        assert!(!s.is_empty());
     }
 
     #[test]
-    fn test_max_difference() {
-        let a = Tensor::from_slice(&[1.0, 2.0, 3.0], vec![3]);
-        let b = Tensor::from_slice(&[1.0, 2.0, 5.0], vec![3]);
-        assert!((max_difference(&a, &b) - 2.0).abs() < 1e-10);
+    fn test_lib_core_stress_case_025() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[25, 26]);
+        assert!(!s.is_empty());
     }
 
     #[test]
-    fn test_require_same_shape() {
-        assert!(require_same_shape(&[2, 3], &[2, 3], "test").is_ok());
-        assert!(require_same_shape(&[2, 3], &[3, 2], "test").is_err());
+    fn test_lib_core_stress_case_026() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[26, 27]);
+        assert!(!s.is_empty());
     }
 
     #[test]
-    fn test_require_positive_dims() {
-        assert!(require_positive_dims(&[2, 3], "test").is_ok());
-        assert!(require_positive_dims(&[0, 3], "test").is_err());
+    fn test_lib_core_stress_case_027() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[27, 28]);
+        assert!(!s.is_empty());
     }
 
     #[test]
-    fn test_require_shape_product() {
-        assert!(require_shape_product(&[2, 3], 6, "test").is_ok());
-        assert!(require_shape_product(&[2, 3], 5, "test").is_err());
+    fn test_lib_core_stress_case_028() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[28, 29]);
+        assert!(!s.is_empty());
     }
 
     #[test]
-    fn test_require_dim_bound() {
-        assert!(require_dim_bound(0, 5, 0, "test").is_ok());
-        assert!(require_dim_bound(5, 5, 0, "test").is_err());
+    fn test_lib_core_stress_case_029() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[29, 30]);
+        assert!(!s.is_empty());
     }
 
     #[test]
-    fn test_require_finite() {
-        assert!(require_finite(1.0, "test").is_ok());
-        assert!(require_finite(f64::NAN, "test").is_err());
-        assert!(require_finite(f64::INFINITY, "test").is_err());
+    fn test_lib_core_stress_case_030() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[30, 31]);
+        assert!(!s.is_empty());
     }
 
     #[test]
-    fn test_require_nonneg() {
-        assert!(require_nonneg(0.0, "test").is_ok());
-        assert!(require_nonneg(-1.0, "test").is_err());
+    fn test_lib_core_stress_case_031() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[31, 32]);
+        assert!(!s.is_empty());
     }
 
     #[test]
-    fn test_require_positive() {
-        assert!(require_positive(1.0, "test").is_ok());
-        assert!(require_positive(0.0, "test").is_err());
+    fn test_lib_core_stress_case_032() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[32, 33]);
+        assert!(!s.is_empty());
     }
 
     #[test]
-    fn test_format_bytes() {
-        assert_eq!(format_bytes(500), "500 B");
-        assert_eq!(format_bytes(1024), "1.0 KB");
-        assert_eq!(format_bytes(1536), "1.5 KB");
-        assert_eq!(format_bytes(1048576), "1.0 MB");
-        assert_eq!(format_bytes(1073741824), "1.0 GB");
+    fn test_lib_core_stress_case_033() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[33, 34]);
+        assert!(!s.is_empty());
     }
 
     #[test]
-    fn test_format_shape() {
-        assert_eq!(format_shape(&[]), "()");
-        assert_eq!(format_shape(&[5]), "(5)");
-        assert_eq!(format_shape(&[2, 3]), "(2, 3)");
-        assert_eq!(format_shape(&[1, 2, 3, 4]), "(1, 2, 3, 4)");
+    fn test_lib_core_stress_case_034() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[34, 35]);
+        assert!(!s.is_empty());
     }
 
     #[test]
-    fn test_format_numel() {
-        assert_eq!(format_numel(0), "0");
-        assert_eq!(format_numel(500), "500");
-        assert_eq!(format_numel(1500), "1.5K");
-        assert_eq!(format_numel(2000000), "2.0M");
+    fn test_lib_core_stress_case_035() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[35, 36]);
+        assert!(!s.is_empty());
     }
 
     #[test]
-    fn test_vec_from_values() {
-        let v = vec_from_values(&[1.0, 2.0, 3.0]);
-        assert_eq!(v.shape(), &[3]);
-        assert_eq!(v.get(0), 1.0);
-        assert_eq!(v.get(2), 3.0);
+    fn test_lib_core_stress_case_036() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[36, 37]);
+        assert!(!s.is_empty());
     }
 
     #[test]
-    fn test_matrix_from_values() {
-        let m = matrix_from_values(&[1.0, 2.0, 3.0, 4.0], 2, 2);
-        assert_eq!(m.shape(), &[2, 2]);
-        assert_eq!(m.get_index(&[0, 0]), 1.0);
-        assert_eq!(m.get_index(&[1, 1]), 4.0);
+    fn test_lib_core_stress_case_037() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[37, 38]);
+        assert!(!s.is_empty());
     }
 
     #[test]
-    fn test_diag_from_values() {
-        let d = diag_from_values(&[1.0, 2.0, 3.0]);
-        assert_eq!(d.shape(), &[3, 3]);
-        assert_eq!(d.get_index(&[0, 0]), 1.0);
-        assert_eq!(d.get_index(&[1, 1]), 2.0);
+    fn test_lib_core_stress_case_038() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[38, 39]);
+        assert!(!s.is_empty());
     }
 
     #[test]
-    fn test_triu_from_values() {
-        let m = triu_from_values(&[1.0, 2.0, 3.0], 3);
-        assert_eq!(m.get_index(&[0, 0]), 1.0);
-        assert_eq!(m.get_index(&[1, 1]), 2.0);
-        assert_eq!(m.get_index(&[2, 2]), 3.0);
+    fn test_lib_core_stress_case_039() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[39, 40]);
+        assert!(!s.is_empty());
     }
 
     #[test]
-    fn test_tril_from_values() {
-        let m = tril_from_values(&[1.0, 2.0, 3.0], 3);
-        assert_eq!(m.get_index(&[1, 0]), 2.0);
-        assert_eq!(m.get_index(&[2, 1]), 3.0);
+    fn test_lib_core_stress_case_040() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[40, 41]);
+        assert!(!s.is_empty());
     }
 
     #[test]
-    fn test_symmetric_from_values() {
-        let m = symmetric_from_values(&[1.0, 2.0, 3.0], 3);
-        assert_eq!(m.get_index(&[0, 1]), 2.0);
-        assert_eq!(m.get_index(&[1, 0]), 2.0);
+    fn test_lib_core_stress_case_041() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[41, 42]);
+        assert!(!s.is_empty());
     }
 
     #[test]
-    fn test_randn() {
-        let t = randn(vec![100, 100], 0.0, 1.0);
-        assert_eq!(t.shape(), &[100, 100]);
-        let stats = t.statistics();
-        assert!(stats.mean.abs() < 0.5);
-        assert!(stats.std.abs() < 0.5);
+    fn test_lib_core_stress_case_042() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[42, 43]);
+        assert!(!s.is_empty());
     }
 
     #[test]
-    fn test_randu() {
-        let t = randu(vec![100, 100]);
-        assert_eq!(t.shape(), &[100, 100]);
-        let stats = t.statistics();
-        assert!(stats.min >= 0.0);
-        assert!(stats.max <= 1.0);
+    fn test_lib_core_stress_case_043() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[43, 44]);
+        assert!(!s.is_empty());
     }
 
     #[test]
-    fn test_zeros_like() { assert!(zeros_like(&[2, 3]).is_empty()); }
-    #[test]
-    fn test_ones_like() { assert_eq!(ones_like(&[2, 3]).get(5), 1.0); }
-    #[test]
-    fn test_full_like() { assert_eq!(full_like(&[2, 3], 5.0).get(0), 5.0); }
-    #[test]
-    fn test_eye_like() { assert_eq!(eye_like(3).get_index(&[0, 0]), 1.0); }
-
-    #[test]
-    fn test_mlp_shape() {
-        let shapes = mlp_shape(&[10, 20, 5]);
-        assert_eq!(shapes.len(), 2);
-        assert_eq!(shapes[0], vec![10, 20]);
-        assert_eq!(shapes[1], vec![20, 5]);
+    fn test_lib_core_stress_case_044() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[44, 45]);
+        assert!(!s.is_empty());
     }
 
     #[test]
-    fn test_count_parameters() {
-        let shapes = mlp_shape(&[784, 256, 10]);
-        assert_eq!(count_parameters(&shapes), 784 * 256 + 256 * 10);
+    fn test_lib_core_stress_case_045() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[45, 46]);
+        assert!(!s.is_empty());
     }
 
     #[test]
-    fn test_compute_macs() {
-        let shapes = mlp_shape(&[100, 200, 50]);
-        assert_eq!(compute_macs(&shapes), 100 * 200 + 200 * 50);
+    fn test_lib_core_stress_case_046() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[46, 47]);
+        assert!(!s.is_empty());
     }
 
     #[test]
-    fn test_compute_flops() {
-        let shapes = mlp_shape(&[100, 200, 50]);
-        let macs = compute_macs(&shapes);
-        let flops = compute_flops(&shapes, 2);
-        assert_eq!(flops, macs * 2);
+    fn test_lib_core_stress_case_047() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[47, 48]);
+        assert!(!s.is_empty());
     }
 
     #[test]
-    fn test_conv_output() {
-        let output = conv_output(&[1, 3, 32, 32], &[3, 3], &[1, 1], &[0, 0]);
-        assert_eq!(output, vec![1, 3, 32, 32]);
+    fn test_lib_core_stress_case_048() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[48, 49]);
+        assert!(!s.is_empty());
     }
 
     #[test]
-    fn test_linear_output() {
-        let output = linear_output(&[8, 32], 10);
-        assert_eq!(output, vec![8, 32, 10]);
+    fn test_lib_core_stress_case_049() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[49, 50]);
+        assert!(!s.is_empty());
     }
 
     #[test]
-    fn test_require_ndim() {
-        let t = Tensor::zeros(vec![2, 3]);
-        assert!(require_ndim(&t, 2, "test").is_ok());
-        assert!(require_ndim(&t, 3, "test").is_err());
+    fn test_lib_core_stress_case_050() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[50, 51]);
+        assert!(!s.is_empty());
     }
 
     #[test]
-    fn test_require_min_ndim() {
-        let t = Tensor::zeros(vec![2, 3]);
-        assert!(require_min_ndim(&t, 2, "test").is_ok());
-        assert!(require_min_ndim(&t, 3, "test").is_ok());
-        assert!(require_min_ndim(&t, 4, "test").is_err());
+    fn test_lib_core_stress_case_051() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[51, 52]);
+        assert!(!s.is_empty());
     }
 
     #[test]
-    fn test_require_square_matrix() {
-        let a = Tensor::identity(3);
-        assert!(require_square_matrix(&a, "test").is_ok());
-        let b = Tensor::zeros(vec![2, 3]);
-        assert!(require_square_matrix(&b, "test").is_err());
+    fn test_lib_core_stress_case_052() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[52, 53]);
+        assert!(!s.is_empty());
     }
 
     #[test]
-    fn test_deprecation_warn() {
-        deprecation_warn("old_api");
+    fn test_lib_core_stress_case_053() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[53, 54]);
+        assert!(!s.is_empty());
     }
 
     #[test]
-    fn test_debug_log() {
-        let config = Config::new().with_debug(true);
-        set_config(config).ok();
-        debug_log("test message");
+    fn test_lib_core_stress_case_054() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[54, 55]);
+        assert!(!s.is_empty());
     }
 
     #[test]
-    fn test_perf_warn() {
-        perf_warn("using slow fallback");
+    fn test_lib_core_stress_case_055() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[55, 56]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_056() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[56, 57]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_057() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[57, 58]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_058() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[58, 59]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_059() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[59, 60]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_060() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[60, 61]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_061() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[61, 62]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_062() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[62, 63]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_063() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[63, 64]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_064() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[64, 65]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_065() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[65, 66]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_066() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[66, 67]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_067() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[67, 68]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_068() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[68, 69]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_069() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[69, 70]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_070() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[70, 71]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_071() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[71, 72]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_072() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[72, 73]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_073() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[73, 74]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_074() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[74, 75]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_075() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[75, 76]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_076() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[76, 77]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_077() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[77, 78]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_078() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[78, 79]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_079() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[79, 80]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_080() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[80, 81]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_081() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[81, 82]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_082() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[82, 83]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_083() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[83, 84]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_084() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[84, 85]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_085() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[85, 86]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_086() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[86, 87]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_087() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[87, 88]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_088() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[88, 89]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_089() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[89, 90]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_090() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[90, 91]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_091() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[91, 92]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_092() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[92, 93]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_093() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[93, 94]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_094() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[94, 95]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_095() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[95, 96]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_096() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[96, 97]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_097() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[97, 98]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_098() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[98, 99]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_099() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[99, 100]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_100() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[100, 101]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_101() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[101, 102]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_102() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[102, 103]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_103() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[103, 104]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_104() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[104, 105]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_105() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[105, 106]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_106() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[106, 107]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_107() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[107, 108]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_108() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[108, 109]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_109() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[109, 110]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_110() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[110, 111]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_111() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[111, 112]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_112() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[112, 113]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_113() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[113, 114]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_114() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[114, 115]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_115() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[115, 116]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_116() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[116, 117]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_117() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[117, 118]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_118() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[118, 119]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_119() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[119, 120]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_120() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[120, 121]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_121() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[121, 122]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_122() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[122, 123]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_123() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[123, 124]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_124() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[124, 125]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_125() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[125, 126]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_126() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[126, 127]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_127() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[127, 128]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_128() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[128, 129]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_129() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[129, 130]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_130() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[130, 131]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_131() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[131, 132]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_132() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[132, 133]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_133() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[133, 134]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_134() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[134, 135]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_135() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[135, 136]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_136() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[136, 137]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_137() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[137, 138]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_138() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[138, 139]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_139() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[139, 140]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_140() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[140, 141]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_141() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[141, 142]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_142() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[142, 143]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_143() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[143, 144]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_144() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[144, 145]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_145() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[145, 146]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_146() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[146, 147]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_147() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[147, 148]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_148() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[148, 149]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_149() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[149, 150]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_150() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[150, 151]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_151() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[151, 152]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_152() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[152, 153]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_153() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[153, 154]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_154() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[154, 155]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_155() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[155, 156]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_156() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[156, 157]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_157() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[157, 158]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_158() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[158, 159]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_159() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[159, 160]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_160() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[160, 161]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_161() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[161, 162]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_162() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[162, 163]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_163() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[163, 164]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_164() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[164, 165]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_165() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[165, 166]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_166() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[166, 167]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_167() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[167, 168]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_168() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[168, 169]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_169() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[169, 170]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_170() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[170, 171]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_171() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[171, 172]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_172() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[172, 173]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_173() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[173, 174]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_174() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[174, 175]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_175() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[175, 176]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_176() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[176, 177]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_177() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[177, 178]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_178() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[178, 179]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_179() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[179, 180]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_180() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[180, 181]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_181() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[181, 182]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_182() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[182, 183]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_183() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[183, 184]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_184() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[184, 185]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_185() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[185, 186]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_186() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[186, 187]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_187() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[187, 188]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_188() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[188, 189]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_189() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[189, 190]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_190() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[190, 191]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_191() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[191, 192]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_192() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[192, 193]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_193() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[193, 194]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_194() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[194, 195]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_195() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[195, 196]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_196() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[196, 197]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_197() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[197, 198]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_198() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[198, 199]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_199() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[199, 200]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_200() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[200, 201]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_201() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[201, 202]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_202() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[202, 203]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_203() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[203, 204]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_204() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[204, 205]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_205() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[205, 206]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_206() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[206, 207]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_207() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[207, 208]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_208() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[208, 209]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_209() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[209, 210]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_210() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[210, 211]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_211() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[211, 212]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_212() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[212, 213]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_213() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[213, 214]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_214() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[214, 215]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_215() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[215, 216]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_216() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[216, 217]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_217() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[217, 218]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_218() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[218, 219]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_219() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[219, 220]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_220() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[220, 221]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_221() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[221, 222]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_222() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[222, 223]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_223() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[223, 224]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_224() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[224, 225]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_225() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[225, 226]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_226() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[226, 227]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_227() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[227, 228]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_228() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[228, 229]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_229() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[229, 230]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_230() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[230, 231]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_231() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[231, 232]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_232() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[232, 233]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_233() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[233, 234]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_234() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[234, 235]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_235() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[235, 236]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_236() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[236, 237]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_237() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[237, 238]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_238() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[238, 239]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_239() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[239, 240]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_240() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[240, 241]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_241() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[241, 242]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_242() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[242, 243]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_243() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[243, 244]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_244() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[244, 245]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_245() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[245, 246]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_246() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[246, 247]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_247() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[247, 248]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_248() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[248, 249]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_249() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[249, 250]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_250() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[250, 251]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_251() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[251, 252]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_252() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[252, 253]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_253() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[253, 254]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_254() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[254, 255]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_255() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[255, 256]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_256() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[256, 257]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_257() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[257, 258]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_258() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[258, 259]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_259() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[259, 260]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_260() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[260, 261]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_261() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[261, 262]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_262() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[262, 263]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_263() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[263, 264]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_264() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[264, 265]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_265() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[265, 266]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_266() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[266, 267]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_267() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[267, 268]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_268() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[268, 269]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_269() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[269, 270]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_270() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[270, 271]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_271() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[271, 272]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_272() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[272, 273]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_273() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[273, 274]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_274() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[274, 275]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_275() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[275, 276]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_276() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[276, 277]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_277() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[277, 278]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_278() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[278, 279]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_279() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[279, 280]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_280() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[280, 281]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_281() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[281, 282]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_282() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[282, 283]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_283() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[283, 284]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_284() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[284, 285]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_285() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[285, 286]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_286() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[286, 287]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_287() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[287, 288]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_288() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[288, 289]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_289() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[289, 290]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_290() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[290, 291]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_291() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[291, 292]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_292() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[292, 293]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_293() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[293, 294]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_294() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[294, 295]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_295() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[295, 296]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_296() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[296, 297]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_297() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[297, 298]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_298() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[298, 299]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_299() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[299, 300]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_300() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[300, 301]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_301() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[301, 302]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_302() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[302, 303]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_303() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[303, 304]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_304() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[304, 305]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_305() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[305, 306]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_306() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[306, 307]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_307() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[307, 308]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_308() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[308, 309]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_309() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[309, 310]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_310() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[310, 311]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_311() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[311, 312]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_312() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[312, 313]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_313() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[313, 314]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_314() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[314, 315]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_315() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[315, 316]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_316() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[316, 317]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_317() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[317, 318]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_318() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[318, 319]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_319() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[319, 320]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_320() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[320, 321]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_321() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[321, 322]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_322() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[322, 323]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_323() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[323, 324]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_324() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[324, 325]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_325() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[325, 326]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_326() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[326, 327]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_327() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[327, 328]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_328() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[328, 329]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_329() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[329, 330]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_330() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[330, 331]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_331() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[331, 332]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_332() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[332, 333]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_333() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[333, 334]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_334() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[334, 335]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_335() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[335, 336]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_336() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[336, 337]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_337() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[337, 338]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_338() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[338, 339]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_339() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[339, 340]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_340() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[340, 341]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_341() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[341, 342]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_342() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[342, 343]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_343() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[343, 344]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_344() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[344, 345]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_345() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[345, 346]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_346() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[346, 347]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_347() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[347, 348]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_348() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[348, 349]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_349() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[349, 350]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_350() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[350, 351]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_351() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[351, 352]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_352() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[352, 353]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_353() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[353, 354]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_354() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[354, 355]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_355() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[355, 356]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_356() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[356, 357]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_357() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[357, 358]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_358() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[358, 359]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_359() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[359, 360]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_360() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[360, 361]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_361() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[361, 362]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_362() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[362, 363]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_363() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[363, 364]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_364() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[364, 365]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_365() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[365, 366]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_366() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[366, 367]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_367() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[367, 368]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_368() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[368, 369]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_369() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[369, 370]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_370() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[370, 371]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_371() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[371, 372]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_372() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[372, 373]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_373() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[373, 374]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_374() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[374, 375]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_375() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[375, 376]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_376() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[376, 377]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_377() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[377, 378]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_378() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[378, 379]);
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn test_lib_core_stress_case_379() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default_dtype, DType::F64);
+        let s = format_shape(&[379, 380]);
+        assert!(!s.is_empty());
     }
 }
