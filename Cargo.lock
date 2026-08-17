@@ -3,6 +3,26 @@
 version = 4
 
 [[package]]
+name = "brain"
+version = "0.2.0"
+dependencies = [
+ "brain-autograd",
+ "brain-cli",
+ "brain-core",
+ "brain-data",
+ "brain-dataset",
+ "brain-export",
+ "brain-graph",
+ "brain-loss",
+ "brain-metric",
+ "brain-nn",
+ "brain-onnx",
+ "brain-optim",
+ "brain-quantization",
+ "brain-train",
+]
+
+[[package]]
 name = "brain-audio"
 version = "0.2.0"
 dependencies = [
@@ -28,6 +48,7 @@ name = "brain-cli"
 version = "0.2.0"
 dependencies = [
  "brain-core",
+ "brain-train",
 ]
 
 [[package]]
@@ -106,98 +127,117 @@ dependencies = [
 
 [[package]]
 name = "brain-graph"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "brain-core",
 ]
 
 [[package]]
 name = "brain-loss"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "brain-core",
 ]
 
 [[package]]
 name = "brain-metric"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "brain-core",
 ]
 
 [[package]]
 name = "brain-neuroevolution"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "brain-core",
 ]
 
 [[package]]
 name = "brain-nn"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "brain-core",
 ]
 
 [[package]]
 name = "brain-onnx"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "brain-core",
+ "brain-graph",
 ]
 
 [[package]]
 name = "brain-optim"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "brain-core",
 ]
 
 [[package]]
 name = "brain-quantization"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "brain-core",
+ "brain-graph",
 ]
 
 [[package]]
 name = "brain-regularization"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "brain-core",
 ]
 
 [[package]]
 name = "brain-rl"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
+ "brain-autograd",
  "brain-core",
+ "brain-nn",
+ "brain-optim",
 ]
 
 [[package]]
 name = "brain-rnn"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
+ "brain-autograd",
  "brain-core",
 ]
 
 [[package]]
 name = "brain-text"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
+ "brain-autograd",
  "brain-core",
 ]
 
 [[package]]
+name = "brain-train"
+version = "0.2.0"
+dependencies = [
+ "brain-autograd",
+ "brain-core",
+ "brain-loss",
+ "brain-metric",
+ "brain-nn",
+ "brain-optim",
+]
+
+[[package]]
 name = "brain-transformer"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "brain-core",
 ]
 
 [[package]]
 name = "brain-utils"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "brain-core",
 ]

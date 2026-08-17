@@ -1,0 +1,44 @@
+[package]
+name = "brain"
+version = "0.2.0"
+edition = "2021"
+description = "Facade crate for the Brain deep learning framework"
+license = "MIT OR Apache-2.0"
+
+[features]
+default = ["train", "cli"]
+train = ["dep:brain-train", "loss", "metric", "optim", "nn", "autograd"]
+autograd = ["dep:brain-autograd"]
+cli = ["dep:brain-cli"]
+data = ["dep:brain-data", "dep:brain-dataset"]
+export = ["dep:brain-export", "dep:brain-graph", "dep:brain-onnx", "dep:brain-quantization"]
+loss = ["dep:brain-loss"]
+metric = ["dep:brain-metric"]
+nn = ["dep:brain-nn"]
+optim = ["dep:brain-optim"]
+
+[dependencies]
+brain-autograd = { path = "../brain-autograd", optional = true }
+brain-cli = { path = "../brain-cli", optional = true }
+brain-core = { path = "../brain-core" }
+brain-data = { path = "../brain-data", optional = true }
+brain-dataset = { path = "../brain-dataset", optional = true }
+brain-export = { path = "../brain-export", optional = true }
+brain-graph = { path = "../brain-graph", optional = true }
+brain-loss = { path = "../brain-loss", optional = true }
+brain-metric = { path = "../brain-metric", optional = true }
+brain-nn = { path = "../brain-nn", optional = true }
+brain-onnx = { path = "../brain-onnx", optional = true }
+brain-optim = { path = "../brain-optim", optional = true }
+brain-quantization = { path = "../brain-quantization", optional = true }
+brain-train = { path = "../brain-train", optional = true }
+
+[[bin]]
+name = "brain"
+path = "src/main.rs"
+required-features = ["cli"]
+
+[dev-dependencies]
+brain-graph = { path = "../brain-graph" }
+brain-onnx = { path = "../brain-onnx" }
+brain-quantization = { path = "../brain-quantization" }

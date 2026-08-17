@@ -5,3 +5,8 @@ edition = "2021"
 
 [dependencies]
 brain-core = { path = "../brain-core" }
+brain-train = { path = "../brain-train" }
+
+[[bin]]
+name = "brain"
+path = "src/bin/brain.rs"

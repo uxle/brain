@@ -40,6 +40,7 @@ pub mod completion;
 pub mod config;
 pub mod config_file;
 pub mod core;
+pub mod datafile;
 pub mod diagnostics;
 pub mod errors;
 pub mod r#impl;

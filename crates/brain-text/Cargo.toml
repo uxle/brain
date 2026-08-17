@@ -1,7 +1,10 @@
 [package]
 name = "brain-text"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
+description = "Production-grade NLP: tokenizers (BPE, SentencePiece Unigram, WordPiece, Char, Word), embeddings (learned, sinusoidal, GloVe, Word2Vec, FastText), text processing, n-grams, TF-IDF, similarity metrics, and LM utilities for the Brain framework"
+license = "MIT OR Apache-2.0"
 
 [dependencies]
 brain-core = { path = "../brain-core" }
+brain-autograd = { path = "../brain-autograd" }

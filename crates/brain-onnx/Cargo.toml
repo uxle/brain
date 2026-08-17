@@ -1,7 +1,8 @@
 [package]
 name = "brain-onnx"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 
 [dependencies]
 brain-core = { path = "../brain-core" }
+brain-graph = { path = "../brain-graph" }

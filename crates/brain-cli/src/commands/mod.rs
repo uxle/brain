@@ -5,7 +5,9 @@
 pub mod bench_cmd;
 pub mod convert_cmd;
 pub mod dataset_cmd;
+pub mod make_cmd;
 pub mod model_cmd;
+pub mod run_cmd;
 pub mod tensor_cmd;
 pub mod train_cmd;
 

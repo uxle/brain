@@ -1,0 +1,14 @@
+[package]
+name = "brain-train"
+version = "0.2.0"
+edition = "2021"
+description = "Integrated training loop and mutable model state for the Brain framework"
+license = "MIT OR Apache-2.0"
+
+[dependencies]
+brain-autograd = { path = "../brain-autograd" }
+brain-core = { path = "../brain-core" }
+brain-loss = { path = "../brain-loss" }
+brain-metric = { path = "../brain-metric" }
+brain-nn = { path = "../brain-nn" }
+brain-optim = { path = "../brain-optim" }

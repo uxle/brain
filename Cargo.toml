@@ -1,10 +1,12 @@
 [workspace]
 resolver = "2"
 members = [
+    "crates/brain",
     "crates/brain-core",
     "crates/brain-autograd",
     "crates/brain-nn",
     "crates/brain-optim",
+    "crates/brain-train",
     "crates/brain-transformer",
     "crates/brain-cv",
     "crates/brain-rl",
@@ -32,9 +34,10 @@ members = [
     "crates/brain-benchmark",
     "crates/brain-cli",
 ]
+default-members = ["crates/brain"]
 
 [workspace.package]
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 license = "MIT"
 authors = ["Brain Contributors"]

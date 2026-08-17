@@ -1,7 +1,12 @@
 [package]
 name = "brain-rl"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
+description = "Production-grade reinforcement learning toolkit: DQN family, PPO, A2C, SAC, actor-critic, environments, and replay buffers for the Brain framework"
+license = "MIT OR Apache-2.0"
 
 [dependencies]
 brain-core = { path = "../brain-core" }
+brain-nn = { path = "../brain-nn" }
+brain-optim = { path = "../brain-optim" }
+brain-autograd = { path = "../brain-autograd" }

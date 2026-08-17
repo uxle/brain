@@ -857,9 +857,9 @@ impl DType {
             (DType::I64, DType::U16) => true,
             (DType::I64, DType::U32) => true,
 
-            // Float widening
+            // Float widening. NOTE: BF16 has fewer mantissa bits (7) than F16 (10),
+            // so casting F16 -> BF16 is lossy and must NOT be lossless.
             (DType::F32, DType::F16) => true,
-            (DType::BF16, DType::F16) => true,
             (DType::F64, DType::F16) => true,
             (DType::F32, DType::BF16) => true,
             (DType::F64, DType::BF16) => true,

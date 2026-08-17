@@ -143,7 +143,7 @@ pub fn matmul(a: &Tensor, b: &Tensor) -> Tensor {
         }
         out
     } else {
-        // Batched GEMM
+        // Batched GEMM with proper batch-dimension broadcasting.
         let batch_a = &a.shape()[..a.ndim() - 2];
         let batch_b = &b.shape()[..b.ndim() - 2];
         let batch_shape = crate::shape::Shape::broadcast_shapes(&[
@@ -151,21 +151,67 @@ pub fn matmul(a: &Tensor, b: &Tensor) -> Tensor {
             &crate::shape::Shape::from_dims(batch_b),
         ]).expect("Batch shapes must be broadcastable");
 
+        let max_ndim = batch_shape.ndim();
+
+        // Right-align each tensor's batch dims to the broadcasted rank,
+        // padding with size-1 (broadcast) dimensions on the left.
+        let a_batch: Vec<usize> = {
+            let mut v = vec![1usize; max_ndim];
+            for (i, &d) in batch_a.iter().enumerate() {
+                v[max_ndim - batch_a.len() + i] = d;
+            }
+            v
+        };
+        let b_batch: Vec<usize> = {
+            let mut v = vec![1usize; max_ndim];
+            for (i, &d) in batch_b.iter().enumerate() {
+                v[max_ndim - batch_b.len() + i] = d;
+            }
+            v
+        };
+
         let mut out_shape = batch_shape.to_vec();
         out_shape.push(m);
         out_shape.push(n);
 
-        let out_numel: usize = out_shape.iter().product();
+        let batch_count: usize = batch_shape.numel();
         let mut out = Tensor::zeros(out_shape);
 
-        let batch_count: usize = batch_shape.numel();
         for b_idx in 0..batch_count {
+            // Unravel the broadcasted batch index into per-dimension indices.
+            let mut rem = b_idx;
+            let mut idxs = vec![0usize; max_ndim];
+            for d in (0..max_ndim).rev() {
+                idxs[d] = rem % batch_shape[d];
+                rem /= batch_shape[d];
+            }
+            // Map to each operand's own flat batch index, collapsing
+            // broadcast (size-1) dims to index 0.
+            let a_flat = {
+                let mut flat = 0usize;
+                for d in 0..max_ndim {
+                    let ai = if a_batch[d] == 1 { 0 } else { idxs[d] };
+                    flat = flat * a_batch[d] + ai;
+                }
+                flat
+            };
+            let b_flat = {
+                let mut flat = 0usize;
+                for d in 0..max_ndim {
+                    let bi = if b_batch[d] == 1 { 0 } else { idxs[d] };
+                    flat = flat * b_batch[d] + bi;
+                }
+                flat
+            };
+            let a_base = a_flat * (m * k_a);
+            let b_base = b_flat * (k_a * n);
+
             for i in 0..m {
                 for k in 0..k_a {
+                    let a_val = a.data()[a_base + i * k_a + k];
                     for j in 0..n {
+                        let b_val = b.data()[b_base + k * n + j];
                         let offset = b_idx * (m * n) + i * n + j;
-                        let a_val = a.data()[b_idx * (m * k_a) + i * k_a + k];
-                        let b_val = b.data()[b_idx * (k_a * n) + k * n + j];
                         let cur = out.get(offset);
                         out.set(offset, cur + a_val * b_val);
                     }

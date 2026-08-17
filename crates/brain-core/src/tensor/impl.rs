@@ -148,13 +148,25 @@ impl Tensor {
     }
 
     /// Creates a 1D tensor with values linearly spaced in `[start, end)`.
+    ///
+    /// Supports both positive and negative steps. With `step > 0` the sequence
+    /// runs from `start` upward while `< end`; with `step < 0` it runs downward
+    /// while `> end`. A zero step panics.
     pub fn arange(start: f64, end: f64, step: f64) -> Self {
-        assert!(step > 0.0, "arange step must be positive");
+        assert!(step != 0.0, "arange step must be non-zero");
         let mut data = Vec::new();
-        let mut current = start;
-        while current < end {
-            data.push(current);
-            current += step;
+        if step > 0.0 {
+            let mut current = start;
+            while current < end {
+                data.push(current);
+                current += step;
+            }
+        } else {
+            let mut current = start;
+            while current > end {
+                data.push(current);
+                current += step;
+            }
         }
         let len = data.len();
         Self::new(data, vec![len])

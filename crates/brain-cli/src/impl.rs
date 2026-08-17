@@ -33,6 +33,12 @@ pub fn run_cli(args: &[String], sink: &OutputSink) -> ExitCode {
         "train" => {
             crate::commands::train_cmd::run_train_command(&args[1..], sink)
         }
+        "make" => {
+            crate::commands::make_cmd::run_make_command(&args[1..], sink)
+        }
+        "run" => {
+            crate::commands::run_cmd::run_run_command(&args[1..], sink)
+        }
         "dataset" => {
             crate::commands::dataset_cmd::run_dataset_command(&args[1..], sink)
         }
@@ -63,6 +69,8 @@ pub fn print_help(sink: &OutputSink) {
     sink.println("  tensor     Inspect, create, transform, and evaluate tensors");
     sink.println("  model      Build, inspect, and evaluate deep neural models");
     sink.println("  train      Train models with progress bars and metric tracking");
+    sink.println("  make       Build, train, and checkpoint a model from a dataset");
+    sink.println("  run        Load a model checkpoint and run inference (\"talk to brain\")");
     sink.println("  bench      Run high-resolution operator & model benchmarks");
     sink.println("  dataset    Inspect, split, and cache datasets");
     sink.println("  convert    Convert and export tensor and model formats");

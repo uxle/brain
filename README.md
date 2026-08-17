@@ -26,7 +26,21 @@ Brain is a comprehensive deep learning framework built in 100% safe, pure, depen
 | [`brain-federated`](crates/brain-federated) | 22 | 73,700 | **8,234** | ✅ Complete | [README](crates/brain-federated/README.md) |
 | [`brain-gan`](crates/brain-gan) | 26 | 83,786 | **5,603** | ✅ Complete | [README](crates/brain-gan/README.md) |
 | [`brain-gnn`](crates/brain-gnn) | 27 | 87,141 | **7,179** | ✅ Complete | [README](crates/brain-gnn/README.md) |
-| **TOTAL (Upgraded)** | **439** | **~1,463,397** | **167,394** | ✅ **100% Green · 0 Failed · Clippy Clean** | |
+| [`brain-graph`](crates/brain-graph) | 32 | 103,913 | **7,688** | ✅ Complete | [README](crates/brain-graph/README.md) |
+| [`brain-loss`](crates/brain-loss) | 27 | 87,119 | **8,366** | ✅ Complete | [README](crates/brain-loss/README.md) |
+| [`brain-metric`](crates/brain-metric) | 26 | 83,805 | **8,662** | ✅ Complete | [README](crates/brain-metric/README.md) |
+| [`brain-neuroevolution`](crates/brain-neuroevolution) | 26 | 83,791 | **7,198** | ✅ Complete | [README](crates/brain-neuroevolution/README.md) |
+| [`brain-nn`](crates/brain-nn) | 40 | 130,704 | **14,296** | ✅ Complete | [README](crates/brain-nn/README.md) |
+| [`brain-onnx`](crates/brain-onnx) | 26 | 83,794 | **9,685** | ✅ Complete | [README](crates/brain-onnx/README.md) |
+| [`brain-optim`](crates/brain-optim) | 33 | 110,515 | **8,739** | ✅ Complete | [README](crates/brain-optim/README.md) |
+| [`brain-quantization`](crates/brain-quantization) | 28 | 93,768 | **7,842** | ✅ Complete | [README](crates/brain-quantization/README.md) |
+| [`brain-regularization`](crates/brain-regularization) | 27 | 90,419 | **7,976** | ✅ Complete | [README](crates/brain-regularization/README.md) |
+| [`brain-rl`](crates/brain-rl) | 31 | 103,817 | **9,014** | ✅ Complete | [README](crates/brain-rl/README.md) |
+| [`brain-rnn`](crates/brain-rnn) | 29 | 97,116 | **9,911** | ✅ Complete | [README](crates/brain-rnn/README.md) |
+| [`brain-text`](crates/brain-text) | 31 | 103,818 | **4,330** | ✅ Complete | [README](crates/brain-text/README.md) |
+| [`brain-transformer`](crates/brain-transformer) | 34 | 113,898 | **5,774** | ✅ Complete | [README](crates/brain-transformer/README.md) |
+| [`brain-utils`](crates/brain-utils) | 30 | 100,500 | **5,717** | ✅ Complete | [README](crates/brain-utils/README.md) |
+| **TOTAL (Upgraded)** | **859** | **~2,850,374** | **282,592** | ✅ **100% Green · 0 Failed · Clippy Clean** | |
 
 ---
 

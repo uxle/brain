@@ -1,7 +1,10 @@
 [package]
 name = "brain-rnn"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
+description = "Production-grade recurrent neural network architectures: LSTM, GRU, RNN, Attention, Bidirectional, Packed Sequences, and Beam Search for the Brain framework"
+license = "MIT OR Apache-2.0"
 
 [dependencies]
 brain-core = { path = "../brain-core" }
+brain-autograd = { path = "../brain-autograd" }
