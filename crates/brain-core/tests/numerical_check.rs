@@ -197,6 +197,49 @@ fn check_arange() {
 }
 
 #[test]
+fn check_conv2d_kernel_larger_than_input_does_not_crash() {
+    // 5x5 kernel on a 3x3 input with no padding => degenerate. Must produce an
+    // empty output (not underflow usize -> OOM/panic).
+    let input = Tensor::zeros(vec![1, 1, 3, 3]);
+    let weight = Tensor::ones(vec![1, 1, 5, 5]);
+    let out = conv::conv2d(&input, &weight, None, (1, 1), (0, 0));
+    assert_eq!(out.shape(), &[1, 1, 0, 0]);
+    assert_eq!(out.data().len(), 0);
+    println!("OK [conv2d] degenerate kernel => empty, no crash");
+}
+
+#[test]
+fn check_pool_kernel_larger_than_input_does_not_crash() {
+    let input = Tensor::zeros(vec![1, 1, 3, 3]);
+    let out = pool::max_pool2d(&input, (5, 5), (1, 1), (0, 0));
+    assert_eq!(out.shape(), &[1, 1, 0, 0]);
+    assert_eq!(out.data().len(), 0);
+    let avg = pool::avg_pool2d(&input, (5, 5), (1, 1), (0, 0));
+    assert_eq!(avg.shape(), &[1, 1, 0, 0]);
+    println!("OK [pool] degenerate kernel => empty, no crash");
+}
+
+#[test]
+fn check_broadcast_map2() {
+    // [3,1] * [1,4] -> [3,4]; column vector * row vector
+    let a = Tensor::from_slice(&[1.0, 2.0, 3.0], vec![3, 1]); // [[1],[2],[3]]
+    let b = Tensor::from_slice(&[10.0, 20.0, 30.0, 40.0], vec![1, 4]); // [10,20,30,40]
+    let c = arith::mul(&a, &b);
+    assert_eq!(c.shape(), &[3, 4]);
+    // c[i,j] = a[i]*b[j]
+    assert_eq!(c.to_vec(), vec![
+        10.0, 20.0, 30.0, 40.0,
+        20.0, 40.0, 60.0, 80.0,
+        30.0, 60.0, 90.0, 120.0,
+    ]);
+    // scalar broadcast: [2,2] + 100 -> all +100
+    let m = Tensor::from_slice(&[1.0, 2.0, 3.0, 4.0], vec![2, 2]);
+    let n = arith::add_scalar(&m, 100.0);
+    assert_eq!(n.to_vec(), vec![101.0, 102.0, 103.0, 104.0]);
+    println!("OK [broadcast map2] outer-product and scalar broadcast");
+}
+
+#[test]
 fn check_conv2d_output_size() {
     // standard case: input 5x5, kernel 3x3, stride 1, pad 0 => out 3x3
     let input = Tensor::zeros(vec![1, 1, 5, 5]);
@@ -247,4 +290,13 @@ fn check_dtype_is_lossless_cast() {
     // I32 -> F32: NOT lossless (i32 up to 2^31 needs 32 bits, f32 has 24 mantissa bits)
     let i32_to_f32 = DType::F32.is_lossless_cast(DType::I32);
     println!("is_lossless_cast(F32 <- I32) = {} (expected false: I32 can exceed f32 precision)", i32_to_f32);
+}
+
+#[test]
+fn check_dilated_conv_output() {
+    let input = Tensor::ones(vec![1, 1, 5, 5]);
+    let weight = Tensor::ones(vec![1, 1, 3, 3]);
+    let out = conv::conv2d_ext(&input, &weight, None, (1, 1), (0, 0), (2, 2));
+    assert_eq!(out.shape(), &[1, 1, 1, 1]);
+    assert_eq!(out.to_vec(), vec![9.0]);
 }

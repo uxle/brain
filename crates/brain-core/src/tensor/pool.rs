@@ -26,8 +26,10 @@ pub fn max_pool2d(
     let (sh, sw) = stride;
     let (ph, pw) = padding;
 
-    let out_h = (in_h + 2 * ph - kh) / sh + 1;
-    let out_w = (in_w + 2 * pw - kw) / sw + 1;
+    // Checked i128 dim computation: a kernel larger than the padded input
+    // yields an empty output instead of an usize underflow -> OOM/panic.
+    let out_h = crate::shape::Shape::output_dim(in_h, ph, kh, sh, 1);
+    let out_w = crate::shape::Shape::output_dim(in_w, pw, kw, sw, 1);
     let mut out = Tensor::zeros(vec![n, c, out_h, out_w]);
 
     for b in 0..n {
@@ -78,8 +80,8 @@ pub fn avg_pool2d(
     let (sh, sw) = stride;
     let (ph, pw) = padding;
 
-    let out_h = (in_h + 2 * ph - kh) / sh + 1;
-    let out_w = (in_w + 2 * pw - kw) / sw + 1;
+    let out_h = crate::shape::Shape::output_dim(in_h, ph, kh, sh, 1);
+    let out_w = crate::shape::Shape::output_dim(in_w, pw, kw, sw, 1);
     let mut out = Tensor::zeros(vec![n, c, out_h, out_w]);
     let window_area = (kh * kw) as f64;
 

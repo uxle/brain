@@ -49,6 +49,18 @@ impl std::fmt::Debug for Value {
     }
 }
 
+impl Drop for Value {
+    fn drop(&mut self) {
+        let mut work_list = self.grad_fn.take_parents();
+        while let Some(parent_arc) = work_list.pop() {
+            if let Some(mut parent_val) = Arc::into_inner(parent_arc) {
+                let next_parents = parent_val.grad_fn.take_parents();
+                work_list.extend(next_parents);
+            }
+        }
+    }
+}
+
 impl Value {
     /// Creates a leaf `Value` node from a `Tensor`.
     pub fn new(tensor: Tensor, requires_grad: bool) -> Self {
@@ -267,9 +279,120 @@ impl Value {
         crate::ops::unary::sum(self)
     }
 
+    /// Transposes two dimensions.
+    pub fn transpose(&self, dim0: usize, dim1: usize) -> Value {
+        let out_tensor = self.data().transpose(dim0, dim1);
+        let grad_fn = if self.requires_grad {
+            GradFn::Transpose(Arc::new(self.clone()), dim0, dim1)
+        } else {
+            GradFn::None
+        };
+        Value::from_op(out_tensor, grad_fn, self.requires_grad)
+    }
+
+    /// Reshapes value tensor.
+    pub fn reshape(&self, shape: Vec<usize>) -> Value {
+        let out_tensor = self.data().reshape(shape.clone());
+        let grad_fn = if self.requires_grad {
+            GradFn::Reshape(Arc::new(self.clone()), shape)
+        } else {
+            GradFn::None
+        };
+        Value::from_op(out_tensor, grad_fn, self.requires_grad)
+    }
+
     /// Mean reduction.
     pub fn mean(&self) -> Value {
         crate::ops::unary::mean(self)
+    }
+
+    /// 2D spatial convolution.
+    pub fn conv2d(
+        &self,
+        weight: &Value,
+        bias: Option<&Value>,
+        stride: (usize, usize),
+        padding: (usize, usize),
+    ) -> Value {
+        crate::ops::conv_grad::conv2d(self, weight, bias, stride, padding)
+    }
+
+    /// 2D transposed convolution.
+    pub fn conv_transpose2d(
+        &self,
+        weight: &Value,
+        bias: Option<&Value>,
+        stride: (usize, usize),
+        padding: (usize, usize),
+    ) -> Value {
+        crate::ops::conv_grad::conv_transpose2d(self, weight, bias, stride, padding)
+    }
+
+    /// 2D Max Pooling.
+    pub fn max_pool2d(
+        &self,
+        kernel_size: (usize, usize),
+        stride: (usize, usize),
+        padding: (usize, usize),
+    ) -> Value {
+        crate::ops::pool_grad::max_pool2d(self, kernel_size, stride, padding)
+    }
+
+    /// 2D Average Pooling.
+    pub fn avg_pool2d(
+        &self,
+        kernel_size: (usize, usize),
+        stride: (usize, usize),
+        padding: (usize, usize),
+    ) -> Value {
+        crate::ops::pool_grad::avg_pool2d(self, kernel_size, stride, padding)
+    }
+
+    /// Linear transformation `input * weight^T + bias` or `input * weight + bias`.
+    pub fn linear(&self, weight: &Value, bias: Option<&Value>) -> Value {
+        let out = if weight.ndim() == 2 && self.ndim() == 2 && self.shape()[1] == weight.shape()[1] {
+            let w_t = weight.transpose(0, 1);
+            self.matmul(&w_t)
+        } else {
+            self.matmul(weight)
+        };
+        if let Some(b) = bias {
+            &out + b
+        } else {
+            out
+        }
+    }
+
+    /// Embedding lookup table: weights matrix [V, D] indexed by token indices.
+    pub fn embedding(&self, indices: &[usize], output_shape: Vec<usize>) -> Value {
+        let w_shape = self.shape();
+        let num_embeddings = if !w_shape.is_empty() { w_shape[0] } else { 0 };
+        let embedding_dim = if w_shape.len() > 1 { w_shape[1] } else { 1 };
+
+        let w_data = self.data();
+        let mut out_data = Vec::with_capacity(indices.len() * embedding_dim);
+
+        for &idx in indices {
+            if idx < num_embeddings {
+                let start = idx * embedding_dim;
+                out_data.extend_from_slice(&w_data.data()[start..start + embedding_dim]);
+            } else {
+                out_data.resize(out_data.len() + embedding_dim, 0.0);
+            }
+        }
+
+        let out_tensor = Tensor::from_vec(out_data, output_shape.clone());
+        let grad_fn = if self.requires_grad {
+            GradFn::Embedding {
+                weight: Arc::new(self.clone()),
+                indices: indices.to_vec(),
+                output_shape,
+            }
+        } else {
+            GradFn::None
+        };
+
+        Value::from_op(out_tensor, grad_fn, self.requires_grad)
     }
 }
 

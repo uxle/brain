@@ -94,6 +94,7 @@ pub fn run_run_command(args: &[String], sink: &OutputSink) -> ExitCode {
     // Reconstruct the layer sequence from the architecture descriptor + param shapes.
     let mut seq = Sequential::new();
     let mut pi = 0usize;
+    let mut is_conv = false;
     for kind in &arch_types {
         match kind.trim() {
             "linear" => {
@@ -117,8 +118,40 @@ pub fn run_run_command(args: &[String], sink: &OutputSink) -> ExitCode {
                 seq = seq.add(Linear::new(in_features, out_features, has_bias));
                 pi += 1 + if has_bias { 1 } else { 0 };
             }
+            "conv2d" => {
+                is_conv = true;
+                if pi >= params.len() {
+                    sink.println("error: architecture expects a conv2d weight tensor but none remain");
+                    return ExitCode::ERROR;
+                }
+                let w = &params[pi];
+                if w.ndim() != 4 {
+                    sink.println(&format!(
+                        "error: expected 4D weight tensor for conv2d, got {}D",
+                        w.ndim()
+                    ));
+                    return ExitCode::ERROR;
+                }
+                let out_c = w.shape()[0];
+                let in_c = w.shape()[1];
+                let kh = w.shape()[2];
+                let has_bias = pi + 1 < params.len()
+                    && params[pi + 1].ndim() == 1
+                    && params[pi + 1].shape()[0] == out_c;
+                seq = seq.add(brain_train::Conv2d::new(in_c, out_c, kh, has_bias));
+                pi += 1 + if has_bias { 1 } else { 0 };
+            }
             "relu" => {
                 seq = seq.add(ReLU::new());
+            }
+            "maxpool2d" => {
+                seq = seq.add(brain_train::MaxPool2d::new(2, 2));
+            }
+            "avgpool2d" => {
+                seq = seq.add(brain_train::AvgPool2d::new(2, 2));
+            }
+            "flatten" => {
+                seq = seq.add(brain_train::Flatten::new());
             }
             _ => {
                 sink.println(&format!("error: unknown layer type '{}' in checkpoint arch", kind));
@@ -140,7 +173,7 @@ pub fn run_run_command(args: &[String], sink: &OutputSink) -> ExitCode {
     ));
 
     // Assemble the input tensor to run.
-    let (inputs, labels): (Tensor, Option<Vec<usize>>) = if let Some(sample) = input_sample {
+    let (raw_inputs, labels): (Tensor, Option<Vec<usize>>) = if let Some(sample) = input_sample {
         let row = match Dataset::parse_sample(&sample) {
             Ok(r) => r,
             Err(err) => {
@@ -162,6 +195,22 @@ pub fn run_run_command(args: &[String], sink: &OutputSink) -> ExitCode {
     } else {
         sink.println("error: provide --data <file> or --input \"a,b,c\"");
         return ExitCode::INVALID_USAGE;
+    };
+
+    let inputs = if is_conv && raw_inputs.ndim() == 2 {
+        let n_samples = raw_inputs.shape()[0];
+        let n_feats = raw_inputs.shape()[1];
+        let side = (n_feats as f64).sqrt().round() as usize;
+        let s = if side * side == n_feats && side >= 3 { side } else { 6 };
+        let mut d = raw_inputs.to_vec();
+        if d.len() == n_samples * s * s {
+            Tensor::from_vec(d, vec![n_samples, 1, s, s])
+        } else {
+            d.resize(n_samples * 36, 0.0);
+            Tensor::from_vec(d, vec![n_samples, 1, 6, 6])
+        }
+    } else {
+        raw_inputs
     };
 
     let logits = match seq.forward(&inputs) {

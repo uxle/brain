@@ -40,6 +40,37 @@ pub enum GradFn {
     Transpose(Arc<Value>, usize, usize),
     Permute(Arc<Value>, Vec<usize>),
     BroadcastTo(Arc<Value>, Vec<usize>),
+    Conv2d {
+        input: Arc<Value>,
+        weight: Arc<Value>,
+        bias: Option<Arc<Value>>,
+        stride: (usize, usize),
+        padding: (usize, usize),
+    },
+    ConvTranspose2d {
+        input: Arc<Value>,
+        weight: Arc<Value>,
+        bias: Option<Arc<Value>>,
+        stride: (usize, usize),
+        padding: (usize, usize),
+    },
+    MaxPool2d {
+        input: Arc<Value>,
+        kernel_size: (usize, usize),
+        stride: (usize, usize),
+        padding: (usize, usize),
+    },
+    AvgPool2d {
+        input: Arc<Value>,
+        kernel_size: (usize, usize),
+        stride: (usize, usize),
+        padding: (usize, usize),
+    },
+    Embedding {
+        weight: Arc<Value>,
+        indices: Vec<usize>,
+        output_shape: Vec<usize>,
+    },
 }
 
 impl Default for GradFn {
@@ -71,7 +102,55 @@ impl GradFn {
             | Reshape(a, _)
             | Transpose(a, _, _)
             | Permute(a, _)
-            | BroadcastTo(a, _) => vec![a],
+            | BroadcastTo(a, _)
+            | MaxPool2d { input: a, .. }
+            | AvgPool2d { input: a, .. } => vec![a],
+            Conv2d { input, weight, bias, .. }
+            | ConvTranspose2d { input, weight, bias, .. } => {
+                let mut p = vec![input, weight];
+                if let Some(ref b) = bias {
+                    p.push(b);
+                }
+                p
+            }
+            Embedding { weight, .. } => vec![weight],
+        }
+    }
+
+    /// Disconnects and returns all parent `Arc<Value>` references, resetting to `GradFn::None`.
+    pub fn take_parents(&mut self) -> Vec<Arc<Value>> {
+        use GradFn::*;
+        match std::mem::replace(self, GradFn::None) {
+            None => Vec::new(),
+            Add(a, b) | Sub(a, b) | Mul(a, b) | Div(a, b) | Pow(a, b) | MatMul(a, b) => {
+                vec![a, b]
+            }
+            Neg(a)
+            | Exp(a)
+            | Log(a)
+            | Sqrt(a)
+            | Relu(a)
+            | Sigmoid(a)
+            | Tanh(a)
+            | Sum(a)
+            | Mean(a)
+            | Softmax(a)
+            | LogSoftmax(a)
+            | Reshape(a, _)
+            | Transpose(a, _, _)
+            | Permute(a, _)
+            | BroadcastTo(a, _)
+            | MaxPool2d { input: a, .. }
+            | AvgPool2d { input: a, .. } => vec![a],
+            Conv2d { input, weight, bias, .. }
+            | ConvTranspose2d { input, weight, bias, .. } => {
+                let mut p = vec![input, weight];
+                if let Some(b) = bias {
+                    p.push(b);
+                }
+                p
+            }
+            Embedding { weight, .. } => vec![weight],
         }
     }
 
@@ -101,6 +180,11 @@ impl GradFn {
             Transpose(..) => "transpose",
             Permute(..) => "permute",
             BroadcastTo(..) => "broadcast_to",
+            Conv2d { .. } => "conv2d",
+            ConvTranspose2d { .. } => "conv_transpose2d",
+            MaxPool2d { .. } => "max_pool2d",
+            AvgPool2d { .. } => "avg_pool2d",
+            Embedding { .. } => "embedding",
         }
     }
 
@@ -260,6 +344,61 @@ impl GradFn {
             BroadcastTo(a, _) => {
                 let ga = util::sum_to_shape(out_grad, a.shape())?;
                 Ok(vec![ga])
+            }
+            Conv2d { input, weight, bias, stride, padding } => {
+                let (di, dw, db) = crate::ops::conv_grad::grad_conv2d(
+                    input.data(),
+                    weight.data(),
+                    out_grad,
+                    *stride,
+                    *padding,
+                )?;
+                let mut grads = vec![di, dw];
+                if bias.is_some() {
+                    grads.push(db.unwrap_or_else(|| Tensor::zeros(vec![weight.shape()[0]])));
+                }
+                Ok(grads)
+            }
+            ConvTranspose2d { input, weight, bias, stride, padding } => {
+                let (di, dw, db) = crate::ops::conv_grad::grad_conv_transpose2d(
+                    input.data(),
+                    weight.data(),
+                    out_grad,
+                    *stride,
+                    *padding,
+                )?;
+                let mut grads = vec![di, dw];
+                if bias.is_some() {
+                    grads.push(db.unwrap_or_else(|| Tensor::zeros(vec![weight.shape()[1]])));
+                }
+                Ok(grads)
+            }
+            MaxPool2d { input, kernel_size, stride, padding } => {
+                let di = crate::ops::pool_grad::grad_max_pool2d(
+                    input.data(),
+                    out_grad,
+                    *kernel_size,
+                    *stride,
+                    *padding,
+                )?;
+                Ok(vec![di])
+            }
+            AvgPool2d { input, kernel_size, stride, padding } => {
+                let di = crate::ops::pool_grad::grad_avg_pool2d_ext(
+                    input.shape(),
+                    out_grad,
+                    *kernel_size,
+                    *stride,
+                    *padding,
+                )?;
+                Ok(vec![di])
+            }
+            Embedding { weight, indices, .. } => {
+                let w_shape = weight.shape();
+                let num_embeddings = if !w_shape.is_empty() { w_shape[0] } else { 0 };
+                let embedding_dim = if w_shape.len() > 1 { w_shape[1] } else { 1 };
+                let dw = crate::ops::index_grad::grad_embedding(out_grad, num_embeddings, embedding_dim, indices)?;
+                Ok(vec![dw])
             }
         }
     }

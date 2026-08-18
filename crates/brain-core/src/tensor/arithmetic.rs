@@ -206,14 +206,31 @@ pub fn matmul(a: &Tensor, b: &Tensor) -> Tensor {
             let a_base = a_flat * (m * k_a);
             let b_base = b_flat * (k_a * n);
 
-            for i in 0..m {
-                for k in 0..k_a {
-                    let a_val = a.data()[a_base + i * k_a + k];
-                    for j in 0..n {
-                        let b_val = b.data()[b_base + k * n + j];
-                        let offset = b_idx * (m * n) + i * n + j;
-                        let cur = out.get(offset);
-                        out.set(offset, cur + a_val * b_val);
+            let out_base = b_idx * (m * n);
+            let a_slice = &a.data()[a_base..a_base + m * k_a];
+            let b_slice = &b.data()[b_base..b_base + k_a * n];
+            let out_data = out.data_mut();
+            let out_slice = &mut out_data[out_base..out_base + m * n];
+
+            // 64x64 cache-tiled i-k-j loops for optimal CPU L1/L2 cache locality
+            const BLOCK: usize = 64;
+            for i0 in (0..m).step_by(BLOCK) {
+                let i_max = (i0 + BLOCK).min(m);
+                for k0 in (0..k_a).step_by(BLOCK) {
+                    let k_max = (k0 + BLOCK).min(k_a);
+                    for j0 in (0..n).step_by(BLOCK) {
+                        let j_max = (j0 + BLOCK).min(n);
+                        for i in i0..i_max {
+                            let a_row = &a_slice[i * k_a..];
+                            let out_row = &mut out_slice[i * n..];
+                            for k in k0..k_max {
+                                let a_val = a_row[k];
+                                let b_row = &b_slice[k * n..];
+                                for j in j0..j_max {
+                                    out_row[j] += a_val * b_row[j];
+                                }
+                            }
+                        }
                     }
                 }
             }

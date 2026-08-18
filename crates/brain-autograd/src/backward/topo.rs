@@ -5,57 +5,91 @@
 
 use crate::value::Value;
 use brain_core::{BrainError, BrainResult};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
+enum Frame {
+    Visit(Arc<Value>),
+    Finalize(Arc<Value>),
+}
+
 /// Computes a reverse-topological order of nodes starting from a root value.
+///
+/// Implemented as an **iterative** post-order DFS using an explicit stack so
+/// that deeply unrolled computation graphs (e.g. thousands of chained ops)
+/// cannot overflow the program stack. Cycle detection is preserved: a node
+/// encountered while still "on the active path" (gray) reports a cycle.
 pub fn topological_sort(root: &Value) -> BrainResult<Vec<Arc<Value>>> {
-    let mut order = Vec::new();
-    let mut visited = HashSet::new();
-    let mut active = HashSet::new();
+    let mut order: Vec<Arc<Value>> = Vec::new();
+    let mut done: HashSet<usize> = HashSet::new(); // fully processed (black)
+    let mut active: HashSet<usize> = HashSet::new(); // on current path (gray)
 
     let root_arc = Arc::new(root.clone());
-    dfs_visit(&root_arc, &mut visited, &mut active, &mut order)?;
+    let mut stack = vec![Frame::Visit(root_arc)];
+
+    while let Some(frame) = stack.pop() {
+        match frame {
+            Frame::Finalize(node) => {
+                active.remove(&node.id());
+                done.insert(node.id());
+                order.push(node);
+            }
+            Frame::Visit(node) => {
+                let id = node.id();
+                if active.contains(&id) {
+                    return Err(BrainError::invalid_value(format!(
+                        "Cycle detected in computation graph at node ID {}",
+                        id
+                    )));
+                }
+                if done.contains(&id) {
+                    continue;
+                }
+                active.insert(id);
+                stack.push(Frame::Finalize(Arc::clone(&node)));
+                for parent in node.grad_fn().parents() {
+                    stack.push(Frame::Visit(Arc::clone(parent)));
+                }
+            }
+        }
+    }
+
     Ok(order)
 }
 
-fn dfs_visit(
-    node: &Arc<Value>,
-    visited: &mut HashSet<usize>,
-    active: &mut HashSet<usize>,
-    order: &mut Vec<Arc<Value>>,
-) -> BrainResult<()> {
-    let id = node.id();
-    if active.contains(&id) {
-        return Err(BrainError::invalid_value(format!(
-            "Cycle detected in computation graph at node ID {}",
-            id
-        )));
-    }
-    if visited.contains(&id) {
-        return Ok(());
-    }
-
-    active.insert(id);
-    visited.insert(id);
-
-    for parent in node.grad_fn().parents() {
-        dfs_visit(parent, visited, active, order)?;
-    }
-
-    active.remove(&id);
-    order.push(Arc::clone(node));
-    Ok(())
-}
-
-/// Computes execution levels for parallel topological backward evaluation.
+/// Computes execution levels for (optionally) parallel topological backward
+/// evaluation. Nodes are bucketed by their longest dependency chain from a
+/// leaf: level 0 = leaves, level k = 1 + max(level of parents). Within a
+/// level every node's parents live in strictly earlier levels, so levels may
+/// be processed concurrently.
 pub fn compute_dag_levels(ordered_nodes: &[Arc<Value>]) -> Vec<Vec<Arc<Value>>> {
-    let mut levels = Vec::new();
     if ordered_nodes.is_empty() {
-        return levels;
+        return Vec::new();
     }
-    levels.push(ordered_nodes.to_vec());
-    levels
+
+    let mut level_of: HashMap<usize, usize> = HashMap::new();
+    let mut buckets: Vec<Vec<Arc<Value>>> = Vec::new();
+
+    for node in ordered_nodes {
+        let parents = node.grad_fn().parents();
+        let lvl = if parents.is_empty() {
+            0
+        } else {
+            parents
+                .iter()
+                .map(|p| *level_of.get(&p.id()).unwrap_or(&0))
+                .max()
+                .map(|m| m + 1)
+                .unwrap_or(1)
+        };
+        level_of.insert(node.id(), lvl);
+        while buckets.len() <= lvl {
+            buckets.push(Vec::new());
+        }
+        buckets[lvl].push(Arc::clone(node));
+    }
+
+    buckets
 }
 
 #[cfg(test)]
@@ -3343,4 +3377,91 @@ mod tests {
     // Autograd verification and gradient check padding line 1
     // Autograd verification and gradient check padding line 2
     // Autograd verification and gradient check padding line 3
+}
+
+#[cfg(test)]
+mod topo_engine_tests {
+    use super::{compute_dag_levels, topological_sort};
+    use crate::value::Value;
+
+    #[test]
+    fn test_deep_chain_no_stack_overflow() {
+        // Build a deep linear chain x0 -> x1(=x0*x0) -> ... -> xN. The iterative
+        // topo sort must traverse N levels without using the call stack.
+        // Depth is bounded here by `Arc<Value>` recursive Drop when tearing the
+        // chain down (a residual Phase-2 item), so we pick a depth comfortably
+        // above where a *recursive* DFS would overflow but below the Drop ceiling.
+        let n = 8_000usize;
+        let mut base = Value::scalar(1.01);
+        base.set_requires_grad(true);
+        let mut cur = base.clone();
+        for _ in 0..n {
+            cur = cur.clone() * cur.clone();
+        }
+        assert!(cur.grad_fn().is_op(), "chain must build real graph nodes");
+        let order = topological_sort(&cur).unwrap();
+        assert!(order.len() >= n);
+        assert!(base.grad().is_none());
+    }
+
+    #[test]
+    fn test_topo_sort_order_is_valid_post_order() {
+        // z = (x*x) + (x*x); parents must all appear before their children.
+        let mut x = Value::scalar(2.0);
+        x.set_requires_grad(true);
+        let a = x.clone().mul(&x);
+        let b = x.clone() * x.clone();
+        let z = a.clone().add(&b);
+        let order = topological_sort(&z).unwrap();
+
+        let pos: std::collections::HashMap<usize, usize> = order
+            .iter()
+            .enumerate()
+            .map(|(i, v)| (v.id(), i))
+            .collect();
+        // every parent id must come before child id
+        for (i, node) in order.iter().enumerate() {
+            for p in node.grad_fn().parents() {
+                let ppos = pos.get(&p.id()).copied().unwrap();
+                assert!(ppos < i, "parent must precede child");
+            }
+        }
+        assert!(order.iter().any(|v| v.id() == x.id()));
+        assert!(order.iter().any(|v| v.id() == z.id()));
+    }
+
+    #[test]
+    fn test_compute_dag_levels_respects_dependencies() {
+        //       z
+        //      / \
+        //     y   w
+        //     |
+        //     x   (x is a leaf => level 0; y level 1; z level 2; w level 1)
+        let mut x = Value::scalar(1.0);
+        x.set_requires_grad(true);
+        let y = x.clone().mul(&x);
+        let w = y.clone().mul(&x);
+        let z = y.clone().add(&w);
+        let order = topological_sort(&z).unwrap();
+        let levels = compute_dag_levels(&order);
+
+        // level 0 must contain all leaves and no internal node
+        for node in &levels[0] {
+            assert!(node.grad_fn().parents().is_empty());
+        }
+        // every node at level k must have all parents at level < k
+        let lvl_of: std::collections::HashMap<usize, usize> = levels
+            .iter()
+            .enumerate()
+            .flat_map(|(k, bucket)| bucket.iter().map(move |v| (v.id(), k)))
+            .collect();
+        for (k, bucket) in levels.iter().enumerate() {
+            for node in bucket {
+                for p in node.grad_fn().parents() {
+                    let plvl = lvl_of[&p.id()];
+                    assert!(plvl < k, "parent level must be < child level");
+                }
+            }
+        }
+    }
 }

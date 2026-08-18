@@ -16,6 +16,36 @@ pub fn eval_expression(expr: &str, vars: &HashMap<String, Tensor>) -> Result<Ten
         let inner = &trimmed[5..trimmed.len() - 1];
         let dims = parse_dims(inner)?;
         Ok(Tensor::ones(dims))
+    } else if trimmed.starts_with("add(") && trimmed.ends_with(')') {
+        let inner = &trimmed[4..trimmed.len() - 1];
+        let parts: Vec<&str> = inner.split(',').map(|s| s.trim()).collect();
+        if parts.len() == 2 {
+            let a = eval_expression(parts[0], vars)?;
+            let b = eval_expression(parts[1], vars)?;
+            Ok(&a + &b)
+        } else {
+            Err("add requires 2 arguments".into())
+        }
+    } else if trimmed.starts_with("sub(") && trimmed.ends_with(')') {
+        let inner = &trimmed[4..trimmed.len() - 1];
+        let parts: Vec<&str> = inner.split(',').map(|s| s.trim()).collect();
+        if parts.len() == 2 {
+            let a = eval_expression(parts[0], vars)?;
+            let b = eval_expression(parts[1], vars)?;
+            Ok(&a - &b)
+        } else {
+            Err("sub requires 2 arguments".into())
+        }
+    } else if trimmed.starts_with("mul(") && trimmed.ends_with(')') {
+        let inner = &trimmed[4..trimmed.len() - 1];
+        let parts: Vec<&str> = inner.split(',').map(|s| s.trim()).collect();
+        if parts.len() == 2 {
+            let a = eval_expression(parts[0], vars)?;
+            let b = eval_expression(parts[1], vars)?;
+            Ok(&a * &b)
+        } else {
+            Err("mul requires 2 arguments".into())
+        }
     } else if let Some(t) = vars.get(trimmed) {
         Ok(t.clone())
     } else if let Ok(val) = trimmed.parse::<f64>() {

@@ -1,0 +1,26 @@
+name: Examples Check
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  examples:
+    name: Build & Run Examples
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Run ConvNet Training Example
+        run: cargo run --example convnet_train -j 2
+
+      - name: Run ONNX Export Example
+        run: cargo run --example onnx_export -j 2
+
+      - name: Run Quantization Example
+        run: cargo run --example quantize_linear -j 2

@@ -32,11 +32,110 @@ impl BatchNorm2d {
             training: true,
         }
     }
+
+    pub fn buffers(&self) -> Vec<Tensor> {
+        vec![self.running_mean.clone(), self.running_var.clone()]
+    }
+
+    pub fn forward_eval(&self, input: &Tensor) -> Tensor {
+        let shape = input.shape();
+        if shape.len() < 2 || shape[1] != self.num_features {
+            return input.clone();
+        }
+        let n = shape[0];
+        let c = shape[1];
+        let spatial_size: usize = shape[2..].iter().product();
+        let total = n * c * spatial_size;
+
+        let in_data = input.to_vec();
+        let mut out = vec![0.0f64; total];
+
+        let w_data = self.weight.to_vec();
+        let b_data = self.bias.to_vec();
+        let r_mean = self.running_mean.to_vec();
+        let r_var = self.running_var.to_vec();
+
+        for b in 0..n {
+            for ch in 0..c {
+                let mean = r_mean[ch];
+                let var = r_var[ch];
+                let inv_std = 1.0 / (var + self.eps).sqrt();
+                let gamma = w_data[ch];
+                let beta = b_data[ch];
+
+                for s in 0..spatial_size {
+                    let idx = (b * c + ch) * spatial_size + s;
+                    out[idx] = ((in_data[idx] - mean) * inv_std) * gamma + beta;
+                }
+            }
+        }
+
+        Tensor::from_vec(out, shape.to_vec())
+    }
+
+    pub fn forward_train(&mut self, input: &Tensor) -> Tensor {
+        let shape = input.shape();
+        if shape.len() < 2 || shape[1] != self.num_features {
+            return input.clone();
+        }
+        let n = shape[0];
+        let c = shape[1];
+        let spatial_size: usize = shape[2..].iter().product();
+        let m = (n * spatial_size) as f64;
+        let total = n * c * spatial_size;
+
+        let in_data = input.to_vec();
+        let mut out = vec![0.0f64; total];
+
+        let w_data = self.weight.to_vec();
+        let b_data = self.bias.to_vec();
+        let mut r_mean = self.running_mean.to_vec();
+        let mut r_var = self.running_var.to_vec();
+
+        for ch in 0..c {
+            let mut sum = 0.0;
+            for b in 0..n {
+                for s in 0..spatial_size {
+                    let idx = (b * c + ch) * spatial_size + s;
+                    sum += in_data[idx];
+                }
+            }
+            let mean = sum / m.max(1.0);
+
+            let mut var_sum = 0.0;
+            for b in 0..n {
+                for s in 0..spatial_size {
+                    let idx = (b * c + ch) * spatial_size + s;
+                    let diff = in_data[idx] - mean;
+                    var_sum += diff * diff;
+                }
+            }
+            let var = var_sum / m.max(1.0);
+            let inv_std = 1.0 / (var + self.eps).sqrt();
+            let gamma = w_data[ch];
+            let beta = b_data[ch];
+
+            for b in 0..n {
+                for s in 0..spatial_size {
+                    let idx = (b * c + ch) * spatial_size + s;
+                    out[idx] = ((in_data[idx] - mean) * inv_std) * gamma + beta;
+                }
+            }
+
+            r_mean[ch] = (1.0 - self.momentum) * r_mean[ch] + self.momentum * mean;
+            r_var[ch] = (1.0 - self.momentum) * r_var[ch] + self.momentum * var;
+        }
+
+        self.running_mean = Tensor::from_vec(r_mean, vec![c]);
+        self.running_var = Tensor::from_vec(r_var, vec![c]);
+
+        Tensor::from_vec(out, shape.to_vec())
+    }
 }
 
 impl Module for BatchNorm2d {
     fn forward(&self, input: &Tensor) -> ModuleResult<Tensor> {
-        Ok(input.clone())
+        Ok(self.forward_eval(input))
     }
 
     fn parameters(&self) -> Vec<Tensor> {

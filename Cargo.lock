@@ -4,7 +4,7 @@ version = 4
 
 [[package]]
 name = "brain"
-version = "0.2.0"
+version = "1.0.0"
 dependencies = [
  "brain-autograd",
  "brain-cli",
@@ -136,6 +136,7 @@ dependencies = [
 name = "brain-loss"
 version = "0.2.0"
 dependencies = [
+ "brain-autograd",
  "brain-core",
 ]
 

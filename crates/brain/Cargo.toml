@@ -1,6 +1,6 @@
 [package]
 name = "brain"
-version = "0.2.0"
+version = "1.0.0"
 edition = "2021"
 description = "Facade crate for the Brain deep learning framework"
 license = "MIT OR Apache-2.0"
@@ -37,6 +37,21 @@ brain-train = { path = "../brain-train", optional = true }
 name = "brain"
 path = "src/main.rs"
 required-features = ["cli"]
+
+[[example]]
+name = "convnet_train"
+path = "../../examples/convnet_train.rs"
+required-features = ["train"]
+
+[[example]]
+name = "onnx_export"
+path = "../../examples/onnx_export.rs"
+required-features = ["export"]
+
+[[example]]
+name = "quantize_linear"
+path = "../../examples/quantize_linear.rs"
+required-features = ["export"]
 
 [dev-dependencies]
 brain-graph = { path = "../brain-graph" }

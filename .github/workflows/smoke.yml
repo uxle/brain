@@ -1,0 +1,41 @@
+name: CLI Smoke Test
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  smoke:
+    name: Build & Smoke Test CLI
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Build CLI Binary
+        run: cargo build -p brain --release -j 2
+
+      - name: Create Sample Dataset
+        run: |
+          cat << 'DATA' > test_data.csv
+          1.0, 2.0, 0
+          1.5, 2.5, 0
+          -1.0, -2.0, 1
+          -1.5, -2.5, 1
+          DATA
+
+      - name: Run `brain make`
+        run: ./target/release/brain make model.brain --data test_data.csv --epochs 10 --lr 0.1
+
+      - name: Run `brain check`
+        run: ./target/release/brain check model.brain
+
+      - name: Run `brain run` (Dataset)
+        run: ./target/release/brain run model.brain --data test_data.csv
+
+      - name: Run `brain run` (Single Input)
+        run: ./target/release/brain run model.brain --input "1.2, 2.3"

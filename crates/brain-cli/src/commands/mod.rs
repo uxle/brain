@@ -3,6 +3,7 @@
 //! Provides the [`Command`] trait, execution context, and command registry.
 
 pub mod bench_cmd;
+pub mod check_cmd;
 pub mod convert_cmd;
 pub mod dataset_cmd;
 pub mod make_cmd;

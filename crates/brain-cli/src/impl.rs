@@ -39,6 +39,24 @@ pub fn run_cli(args: &[String], sink: &OutputSink) -> ExitCode {
         "run" => {
             crate::commands::run_cmd::run_run_command(&args[1..], sink)
         }
+        "check" => {
+            crate::commands::check_cmd::run_check_command(&args[1..], sink)
+        }
+        "script" => {
+            if args.len() < 2 {
+                sink.println("Usage: brain script <file.brain>");
+                ExitCode::INVALID_USAGE
+            } else {
+                let file_path = &args[1];
+                match std::fs::read_to_string(file_path) {
+                    Ok(content) => crate::script::run_script(&content, sink),
+                    Err(err) => {
+                        sink.println(&format!("error: could not read '{}': {}", file_path, err));
+                        ExitCode::IO_ERROR
+                    }
+                }
+            }
+        }
         "dataset" => {
             crate::commands::dataset_cmd::run_dataset_command(&args[1..], sink)
         }

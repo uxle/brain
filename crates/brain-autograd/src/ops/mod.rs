@@ -17,6 +17,8 @@ pub mod tensor_grad;
 pub mod unary;
 
 pub use binary::{add, div, matmul, mul, pow, sub};
+pub use conv_grad::{conv2d, conv_transpose2d};
+pub use pool_grad::{avg_pool2d, max_pool2d};
 pub use unary::{exp, log, log_softmax, mean, neg, relu, sigmoid, softmax, sqrt, sum, tanh};
 
 #[cfg(test)]

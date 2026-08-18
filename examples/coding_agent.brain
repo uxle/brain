@@ -1,0 +1,8 @@
+# Brain Coding Agent Script
+# Stage 1: Initialize tensors
+features = ones(4, 2)
+weights = ones(4, 2)
+
+# Stage 2: Linear transformation
+activations = mul(features, weights)
+output = add(activations, features)

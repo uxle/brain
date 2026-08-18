@@ -77,12 +77,19 @@ impl LossValue {
     }
 }
 
+use brain_autograd::Value;
+
 /// Unified trait for all loss functions.
 pub trait Loss: Send + Sync {
     /// Name of the loss function.
     fn name(&self) -> &'static str;
     /// Evaluates the loss given prediction and ground-truth target tensors.
     fn forward(&self, pred: &Tensor, target: &Tensor) -> LossResult<Tensor>;
+    /// Evaluates the differentiable loss given prediction `Value` and ground-truth target tensor.
+    fn forward_value(&self, pred: &Value, target: &Tensor) -> LossResult<Value> {
+        let t_loss = self.forward(pred.data(), target)?;
+        Ok(Value::new(t_loss, pred.requires_grad()))
+    }
 }
 
 #[cfg(test)]

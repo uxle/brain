@@ -22,8 +22,11 @@ pub fn run_make_command(args: &[String], sink: &OutputSink) -> ExitCode {
     if args.is_empty() {
         sink.println("Usage: brain make <output.brain> --data <data.txt> [options]");
         sink.println("Options:");
+        sink.println("  --arch STR    Model architecture: mlp (default) or convnet");
         sink.println("  --hidden N    Hidden units in the MLP (default 16)");
         sink.println("  --classes N   Number of output classes (default: inferred from labels)");
+        sink.println("  --optim STR   Optimizer: sgd (default) or adam");
+        sink.println("  --loss STR    Loss function: cross_entropy (default) or mse");
         sink.println("  --lr F        Learning rate (default 0.1)");
         sink.println("  --epochs N    Training epochs (default 20)");
         sink.println("  --batch N     Mini-batch size (default 8)");
@@ -33,8 +36,11 @@ pub fn run_make_command(args: &[String], sink: &OutputSink) -> ExitCode {
     let out_path = args[0].clone();
     let parser = ArgParser::new()
         .option("data")
+        .option("arch")
         .option("hidden")
         .option("classes")
+        .option("optim")
+        .option("loss")
         .option("lr")
         .option("epochs")
         .option("batch");
@@ -62,6 +68,11 @@ pub fn run_make_command(args: &[String], sink: &OutputSink) -> ExitCode {
             return ExitCode::ERROR;
         }
     };
+
+    let arch_name = matches
+        .get_option("arch")
+        .unwrap_or("mlp")
+        .to_lowercase();
 
     // Determine output classes.
     let n_classes = if let Some(c) = matches.get_option("classes") {
@@ -96,7 +107,8 @@ pub fn run_make_command(args: &[String], sink: &OutputSink) -> ExitCode {
         .max(1);
 
     sink.println(&format!(
-        "make: dataset={} samples={} features={} classes={} hidden={} lr={} epochs={} batch={}",
+        "make: arch={} dataset={} samples={} features={} classes={} hidden={} lr={} epochs={} batch={}",
+        arch_name,
         data_path,
         dataset.features.len(),
         dataset.n_features,
@@ -107,11 +119,28 @@ pub fn run_make_command(args: &[String], sink: &OutputSink) -> ExitCode {
         batch_size
     ));
 
-    // Build the MLP: Linear(features, hidden) -> ReLU -> Linear(hidden, classes).
-    let model = Sequential::new()
-        .add(Linear::new(dataset.n_features, hidden, true))
-        .add(ReLU::new())
-        .add(Linear::new(hidden, n_classes, true));
+    let (model, is_conv, arch_desc) = if arch_name == "convnet" {
+        // Try square image layout
+        let side = (dataset.n_features as f64).sqrt().round() as usize;
+        let s = if side * side == dataset.n_features && side >= 3 { side } else { 6 };
+        let conv_out_h = (s.saturating_sub(2)) / 2;
+        let conv_out_w = (s.saturating_sub(2)) / 2;
+        let flat_size = (4 * conv_out_h * conv_out_w).max(1);
+
+        let m = Sequential::new()
+            .add(brain_train::Conv2d::new(1, 4, 3, true))
+            .add(ReLU::new())
+            .add(brain_train::MaxPool2d::new(2, 2))
+            .add(brain_train::Flatten::new())
+            .add(Linear::new(flat_size, n_classes, true));
+        (m, true, "conv2d,relu,maxpool2d,flatten,linear".to_string())
+    } else {
+        let m = Sequential::new()
+            .add(Linear::new(dataset.n_features, hidden, true))
+            .add(ReLU::new())
+            .add(Linear::new(hidden, n_classes, true));
+        (m, false, "linear,relu,linear".to_string())
+    };
 
     let trainer = TrainerBuilder::default()
         .model(model)
@@ -131,11 +160,24 @@ pub fn run_make_command(args: &[String], sink: &OutputSink) -> ExitCode {
     let mut start = 0;
     while start < n {
         let end = (start + batch_size).min(n);
-        let mut batch_data = Vec::with_capacity((end - start) * dataset.n_features);
+        let count = end - start;
+        let mut batch_data = Vec::with_capacity(count * dataset.n_features);
         for row in start..end {
             batch_data.extend_from_slice(&dataset.features[row]);
         }
-        let inputs = Tensor::from_vec(batch_data, vec![end - start, dataset.n_features]);
+        let input_shape = if is_conv {
+            let side = (dataset.n_features as f64).sqrt().round() as usize;
+            let s = if side * side == dataset.n_features && side >= 3 { side } else { 6 };
+            if batch_data.len() == count * s * s {
+                vec![count, 1, s, s]
+            } else {
+                batch_data.resize(count * 36, 0.0);
+                vec![count, 1, 6, 6]
+            }
+        } else {
+            vec![count, dataset.n_features]
+        };
+        let inputs = Tensor::from_vec(batch_data, input_shape);
         let targets = dataset.labels[start..end].to_vec();
         match Batch::new(inputs, targets) {
             Ok(b) => batches.push(b),
@@ -163,7 +205,7 @@ pub fn run_make_command(args: &[String], sink: &OutputSink) -> ExitCode {
     let mut state: ModelState = trainer.state();
     state
         .metadata
-        .insert("arch".to_string(), "linear,relu,linear".to_string());
+        .insert("arch".to_string(), arch_desc);
     state
         .metadata
         .insert("n_features".to_string(), dataset.n_features.to_string());

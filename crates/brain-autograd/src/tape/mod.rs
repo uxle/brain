@@ -49,6 +49,17 @@ impl Tape {
     pub fn clear(&mut self) {
         self.records.clear();
     }
+
+    /// Drains all records from the tape.
+    pub fn drain(&mut self) -> std::vec::Drain<'_, OpRecord> {
+        self.records.drain(..)
+    }
+
+    /// Resets the tape and shrinks capacity to release memory.
+    pub fn reset(&mut self) {
+        self.records.clear();
+        self.records.shrink_to_fit();
+    }
 }
 
 /// Starts recording on the current thread.

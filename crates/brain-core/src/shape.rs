@@ -932,6 +932,21 @@ impl Shape {
         Ok(Shape(result_dims))
     }
 
+    /// Sliding-window output dimension: `(in + 2*pad - dilation*(kernel-1) - 1) / stride + 1`.
+    ///
+    /// Computed in `i128` so a kernel larger than the padded input cannot
+    /// underflow/overflow `usize` and trigger an OOM or an opaque panic. When
+    /// the configuration is degenerate (kernel larger than the padded input, or a
+    /// zero stride) this returns `0`, yielding an empty output tensor instead of
+    /// crashing.
+    pub fn output_dim(in_len: usize, padding: usize, kernel: usize, stride: usize, dilation: usize) -> usize {
+        let num = (in_len as i128) + 2 * (padding as i128) - (dilation as i128) * (kernel as i128 - 1) - 1;
+        if num < 0 || stride == 0 {
+            return 0;
+        }
+        (num / stride as i128 + 1) as usize
+    }
+
     /// Narrows a dimension to a sub-range `[start, start + length)`.
     pub fn narrow(&self, axis: usize, start: usize, length: usize) -> BrainResult<Shape> {
         if axis >= self.ndim() {

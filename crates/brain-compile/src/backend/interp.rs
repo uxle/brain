@@ -43,6 +43,26 @@ impl Interpreter {
                         registers.insert(node.output, a + b);
                     }
                 }
+                OpKind::Mul if node.inputs.len() == 2 => {
+                    if let (Some(a), Some(b)) = (registers.get(&node.inputs[0]), registers.get(&node.inputs[1])) {
+                        registers.insert(node.output, a * b);
+                    }
+                }
+                OpKind::Sub if node.inputs.len() == 2 => {
+                    if let (Some(a), Some(b)) = (registers.get(&node.inputs[0]), registers.get(&node.inputs[1])) {
+                        registers.insert(node.output, a - b);
+                    }
+                }
+                OpKind::Div if node.inputs.len() == 2 => {
+                    if let (Some(a), Some(b)) = (registers.get(&node.inputs[0]), registers.get(&node.inputs[1])) {
+                        registers.insert(node.output, a / b);
+                    }
+                }
+                OpKind::Relu if !node.inputs.is_empty() => {
+                    if let Some(a) = registers.get(&node.inputs[0]) {
+                        registers.insert(node.output, a.map(|v| v.max(0.0)));
+                    }
+                }
                 _ => {}
             }
         }

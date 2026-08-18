@@ -1,0 +1,5 @@
+# Hello Brain 2.0 Script
+x = ones(2, 2)
+y = ones(2, 2)
+z = add(x, y)
+w = mul(z, x)

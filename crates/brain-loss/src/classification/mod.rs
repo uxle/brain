@@ -38,6 +38,12 @@ impl Default for ClassLossConfig {
 pub trait ClassificationLoss: Send + Sync {
     /// Computes classification loss from logits [N, C] and targets [N].
     fn compute(&self, logits: &Tensor, targets: &[usize]) -> LossResult<Tensor>;
+
+    /// Computes differentiable classification loss from logits `Value` and targets [N].
+    fn forward_value(&self, logits: &brain_autograd::Value, targets: &[usize]) -> LossResult<brain_autograd::Value> {
+        let t_loss = self.compute(logits.data(), targets)?;
+        Ok(brain_autograd::Value::new(t_loss, logits.requires_grad()))
+    }
 }
 
 #[cfg(test)]

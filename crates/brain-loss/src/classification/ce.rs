@@ -60,11 +60,50 @@ impl CrossEntropyLoss {
 
         Ok(reduction_apply(&sample_losses, self.config.reduction))
     }
+
+    /// Differentiable forward pass for cross-entropy with integer class targets.
+    pub fn forward_value_logits(&self, logits: &brain_autograd::Value, targets: &[usize]) -> LossResult<brain_autograd::Value> {
+        let shape = logits.shape();
+        if shape.is_empty() {
+            return Err(crate::core::LossError::ShapeMismatch {
+                expected: vec![targets.len(), 1],
+                got: shape.to_vec(),
+            });
+        }
+        let rows = shape[0];
+        let cols = if shape.len() > 1 { shape[1] } else { 1 };
+
+        let lsm = brain_autograd::ops::log_softmax(logits);
+        let mut mask = vec![0.0f64; rows * cols];
+        for (r, &target) in targets.iter().enumerate().take(rows) {
+            if target < cols {
+                mask[r * cols + target] = 1.0;
+            }
+        }
+        let mask_val = brain_autograd::Value::from_slice(&mask, vec![rows, cols]);
+        let selected = &lsm * &mask_val;
+
+        let loss_sum = selected.sum().neg();
+        let final_loss = match self.config.reduction {
+            crate::core::Reduction::Mean => {
+                let n = rows.max(1) as f64;
+                &loss_sum / &brain_autograd::Value::scalar(n)
+            }
+            crate::core::Reduction::Sum => loss_sum,
+            crate::core::Reduction::None => selected.neg(),
+        };
+
+        Ok(final_loss)
+    }
 }
 
 impl ClassificationLoss for CrossEntropyLoss {
     fn compute(&self, logits: &Tensor, targets: &[usize]) -> LossResult<Tensor> {
         self.forward_logits(logits, targets)
+    }
+
+    fn forward_value(&self, logits: &brain_autograd::Value, targets: &[usize]) -> LossResult<brain_autograd::Value> {
+        self.forward_value_logits(logits, targets)
     }
 }
 
