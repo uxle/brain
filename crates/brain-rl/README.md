@@ -1,133 +1,53 @@
 # `brain-rl`
 
-Production-grade Reinforcement Learning toolkit for the Brain deep learning framework.
+Pure-Rust reinforcement learning toolkit: DQN family, PPO, A2C, SAC, actor-critic, environments, and replay buffers.
 
 ## Overview
 
-`brain-rl` provides a comprehensive, high-performance reinforcement learning ecosystem containing:
-- **DQN Family**: Standard Deep Q-Networks (DQN), Double DQN (preventing value overestimation), Dueling DQN (state value $V(s)$ and advantage $A(s, a)$ stream separation), and Rainbow-Lite.
-- **Policy Gradient & Actor-Critic**: Proximal Policy Optimization (PPO with clipped surrogate objective and value clipping), Synchronous Advantage Actor-Critic (A2C), and Soft Actor-Critic (SAC with maximum entropy objective).
-- **Advantage Estimation**: Generalized Advantage Estimation ($\text{GAE}(\gamma, \lambda)$) and recursive return discounting.
-- **Environment Suite**: Classic control physics (`CartPole`, `MountainCar`, `Pendulum`), Grid worlds (`GridWorld`, `CliffWalking`, `FrozenLake`), Atari-lite (`PongLite`, `BreakoutLite`), and continuous physics (`HalfCheetahLite`, `ReacherLite`).
-- **Vectorized Environments & Wrappers**: Synchronous parallel stepping (`VecEnv`, `DummyVecEnv`), `FrameStack`, `TimeLimit`, `RewardScale`.
-- **Replay Buffers**: Uniform cyclic ring buffer, Prioritized Experience Replay (`PrioritizedReplayBuffer` with binary `SumTree`), and `NStepBuffer` / `TrajectoryBuffer`.
-- **Exploration Policies**: Epsilon-Greedy policies with linear/exponential annealing schedules, Categorical distributions, and Continuous Diagonal Gaussian policies.
-- **Trainers, Evaluation & Checkpointing**: Integrated `DqnTrainer`, deterministic `evaluate_dqn`, and serialized `RlCheckpoint`.
+`brain-rl` provides a complete RL stack built on `brain-core` tensors, `brain-nn` layers, and `brain-autograd` — all in 100% safe Rust with zero external dependencies. It ships classic gym-style environments, tabular and neural value functions, exploration policies, and a suite of modern agents, plus a `DqnTrainer` for end-to-end training loops.
 
----
+## Features
 
-## Architecture & Modules
+- **DQN family**: `DqnAgent`, `DoubleDqnAgent`, `DuelingDqnAgent`, `RainbowAgent` with configurable `DqnConfig` (gamma, LR, target-update frequency, epsilon decay).
+- **Policy-gradient agents**: `PpoAgent` (with `PpoClippedObjective` clipped surrogate + value losses), `A2cAgent`, `SacAgent` (entropy-regularized), and a shared `ActorCriticNet` with `compute_gae`.
+- **Environments**: `CartPoleEnv`, `MountainCarEnv`, `PendulumEnv`, `GridWorldEnv`, `CliffWalkingEnv`, `FrozenLakeEnv`, lite Atari (`PongLiteEnv`, `BreakoutLiteEnv`) and MuJoCo-style (`HalfCheetahLiteEnv`, `ReacherLiteEnv`) envs, `DummyVecEnv` vectorization, and `FrameStackWrapper`.
+- **Buffers**: `ReplayBuffer`, `PrioritizedReplayBuffer` (with `SumTree`), `NStepBuffer`, and `TrajectoryBuffer`.
+- **Policies & value functions**: `EpsilonGreedyPolicy` with `EpsilonSchedule`, `GaussianPolicy`, `CategoricalDist`, `DiagonalGaussianDist`; `QNet`/`VNet` and tabular `QTable`/`VTable`.
+- **Tooling**: `DqnTrainer`/`TrainerConfig`, `evaluate_dqn`/`EvalReport`, `RlCheckpoint` (save/load DQN), `discount_returns`, `moving_average`, and a `prelude` module.
 
-```
-brain-rl/
-├── core.rs                 # Space, Transition, Trajectory, RlError, RlResult
-├── env/
-│   ├── mod.rs              # Env trait, EnvStep, EnvInfo
-│   ├── gym.rs              # CartPole-v1, MountainCar-v0, Pendulum-v1 hand-written physics
-│   ├── gridworld.rs        # GridWorld, CliffWalking, FrozenLake tabular benchmarks
-│   ├── atari_lite.rs       # PongLite, BreakoutLite environments
-│   ├── mujoco_lite.rs      # HalfCheetahLite, ReacherLite continuous planar physics
-│   ├── wrappers.rs         # FrameStack, TimeLimit, RewardScale wrappers
-│   └── vector.rs           # DummyVecEnv synchronous parallel execution
-├── policy/
-│   ├── mod.rs              # Policy trait, EpsilonGreedyPolicy, EpsilonSchedule
-│   ├── dist.rs             # CategoricalDist, DiagonalGaussianDist, entropy, log_prob
-│   └── gaussian.rs         # GaussianPolicy continuous action output
-├── value/
-│   ├── mod.rs              # ValueFn trait, VTable, VNet, target network soft update
-│   └── qvalue.rs           # QTable tabular Q-learning, QNet linear Q-network
-├── buffer/
-│   ├── mod.rs              # ReplayBuffer cyclic ring buffer, BufferStats
-│   ├── prioritized.rs      # SumTree binary tree, PrioritizedReplayBuffer (PER)
-│   └── sequence.rs         # NStepBuffer n-step discounting, TrajectoryBuffer
-├── dqn/
-│   ├── mod.rs              # DqnAgent, DqnConfig, Huber loss update
-│   ├── double.rs           # DoubleDqnAgent decoupled online/target action evaluation
-│   ├── dueling.rs          # DuelingQNet, DuelingDqnAgent V(s) + A(s, a)
-│   └── rainbow.rs          # RainbowAgent (Double + Dueling + PER)
-├── ppo/
-│   ├── mod.rs              # PpoAgent, PpoConfig, trajectory rollouts
-│   └── clipped.rs          # PpoClippedObjective surrogate ratio clipping
-├── a2c/
-│   └── mod.rs              # A2cAgent synchronous advantage actor-critic
-├── actor_critic/
-│   └── mod.rs              # ActorCriticNet, Generalized Advantage Estimation (GAE)
-├── sac/
-│   └── mod.rs              # SacAgent, SacConfig, maximum entropy temperature tuning
-├── agents/
-│   └── mod.rs              # Agent trait, AgentKind, make_agent factory
-├── trainer.rs              # DqnTrainer episode iterations & progress logging
-├── eval.rs                 # evaluate_dqn deterministic evaluation & EvalReport
-├── checkpoint.rs           # RlCheckpoint weight & replay serialization
-├── utils.rs                # discount_returns, moving_average
-└── lib.rs                  # Crate root, re-exports, prelude
-```
+## Modules
 
----
+| Module | Contents |
+|---|---|
+| `core` | `Space`, `Transition`, `Trajectory`, `RlError`/`RlResult` |
+| `env` | `Env` trait, `EnvStep`, 10+ environments, vector & wrapper helpers |
+| `policy` | `Policy`, exploration schedules, categorical/gaussian distributions |
+| `value` | `ValueFn`, `QNet`, `QTable`, `VNet`, `VTable` |
+| `buffer` | `ReplayBuffer`, `PrioritizedReplayBuffer`, `SumTree`, `NStepBuffer`, `TrajectoryBuffer` |
+| `dqn`, `ppo`, `a2c`, `sac`, `actor_critic` | Agents, configs, clipped objectives, GAE |
+| `agents` | `Agent` trait, `AgentKind`, `make_agent` factory |
+| `trainer`, `eval`, `checkpoint`, `utils` | Training loop, evaluation, checkpointing, helpers |
 
 ## Quick Start
 
-### 1. Training DQN on Classic CartPole
-
 ```rust
-use brain_rl::prelude::*;
-
-fn main() -> RlResult<()> {
-    let mut env = CartPoleEnv::new();
-    let config = DqnConfig {
-        gamma: 0.99,
-        lr: 1e-3,
-        batch_size: 32,
-        target_update_freq: 100,
-        buffer_capacity: 10_000,
-        epsilon_start: 1.0,
-        epsilon_end: 0.05,
-        epsilon_decay_steps: 1_000,
-    };
-    let mut agent = DqnAgent::new(4, 2, config);
-
-    let mut state = env.reset()?;
-    for step in 0..500 {
-        let action = agent.act(&state);
-        let step_res = env.step(action)?;
-
-        let transition = Transition::new(
-            state,
-            action,
-            step_res.reward,
-            step_res.observation.clone(),
-            step_res.done || step_res.truncated,
-        );
-
-        let _loss = agent.step(transition)?;
-        state = step_res.observation;
-
-        if step_res.done || step_res.truncated {
-            state = env.reset()?;
-        }
-    }
-
-    Ok(())
-}
-```
-
-### 2. Prioritized Experience Replay (PER)
-
-```rust
-use brain_rl::buffer::PrioritizedReplayBuffer;
-use brain_rl::core::Transition;
 use brain_core::Tensor;
+use brain_rl::{DqnAgent, DqnConfig, ReplayBuffer, Transition};
 
-let mut per = PrioritizedReplayBuffer::new(10_000, 0.6, 0.4);
-let s = Tensor::from_slice(&[1.0, 0.0], vec![2]);
-let ns = Tensor::from_slice(&[0.9, 0.1], vec![2]);
+let mut agent = DqnAgent::new(4, 2, DqnConfig::default());
+let mut buffer = ReplayBuffer::new(10_000);
 
-per.push(Transition::new(s, 1, 1.0, ns, false));
-let (tree_indices, batch, is_weights) = per.sample_batch(32)?;
+let state = Tensor::zeros(vec![4]);
+let action = agent.act(&state);
+buffer.push(Transition::new(state, action, 1.0, Tensor::zeros(vec![4]), false));
 ```
 
----
+## Testing
 
-## License
+```bash
+cargo test -p brain-rl -j 2
+```
 
-Licensed under either of Apache License, Version 2.0 or MIT license at your option.
+## Workspace Role
+
+Depends on `brain-core` (tensors), `brain-nn` (network layers), `brain-optim` (optimizers), and `brain-autograd` (differentiation) to provide ready-made RL agents and training loops for the Brain framework.

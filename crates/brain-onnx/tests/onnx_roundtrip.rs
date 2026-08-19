@@ -102,4 +102,58 @@ fn test_onnx_mlp_roundtrip_eval() {
     let y_vec = y.to_vec();
     assert!((y_vec[0] - 2.1).abs() < 1e-5, "Expected 2.1, got {}", y_vec[0]);
     assert!((y_vec[1] - 0.9).abs() < 1e-5, "Expected 0.9, got {}", y_vec[1]);
+
+    // Test real export -> import binary round-trip:
+    let bytes = brain_onnx::export::export_onnx_bytes(&model).unwrap();
+    assert!(!bytes.is_empty());
+    let imported = brain_onnx::import::import_model(&bytes, &brain_onnx::config::ImportConfig::default()).unwrap();
+    assert_eq!(imported.graph.nodes.len(), 3);
+    assert_eq!(imported.graph.inputs, vec!["X".to_string()]);
+    assert_eq!(imported.graph.outputs, vec!["Y".to_string()]);
+
+    let outputs_imported = evaluate_onnx_model(&imported, &inputs, &EvalConfig::default()).unwrap();
+    let y_imp = outputs_imported.get("Y").unwrap();
+    let y_imp_vec = y_imp.to_vec();
+    assert!((y_imp_vec[0] - 2.1).abs() < 1e-5);
+    assert!((y_imp_vec[1] - 0.9).abs() < 1e-5);
+}
+
+#[test]
+fn test_onnx_eval_matmul_non_identity() {
+    let mut model = OnnxModel {
+        ir_version: 8,
+        opset_version: 17,
+        producer_name: "brain-test".into(),
+        graph: OnnxGraph::default(),
+    };
+    model.graph.name = "matmul_test".into();
+    model.graph.inputs = vec!["X".into()];
+    model.graph.outputs = vec!["Y".into()];
+
+    let w_data = vec![3.0, 4.0, 5.0, 6.0]; // [2, 2]
+    model.graph.values.insert("W".into(), OnnxValue {
+        name: "W".into(),
+        shape: vec![2, 2],
+        is_initializer: true,
+        tensor_data: Some(Tensor::from_vec(w_data, vec![2, 2])),
+    });
+
+    model.graph.nodes.push(OnnxNode {
+        name: "mm".into(),
+        op_type: "MatMul".into(),
+        domain: "ai.onnx".into(),
+        inputs: vec!["X".into(), "W".into()],
+        outputs: vec!["Y".into()],
+        attributes: HashMap::new(),
+    });
+
+    // X = [[1.0, 2.0]]
+    // X @ W = [[1*3 + 2*5, 1*4 + 2*6]] = [[13.0, 16.0]]
+    let x = Tensor::from_vec(vec![1.0, 2.0], vec![1, 2]);
+    let mut inputs = HashMap::new();
+    inputs.insert("X".into(), x);
+
+    let outputs = evaluate_onnx_model(&model, &inputs, &EvalConfig::default()).unwrap();
+    let y = outputs.get("Y").unwrap();
+    assert_eq!(y.to_vec(), vec![13.0, 16.0]);
 }

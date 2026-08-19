@@ -13,6 +13,7 @@ use brain_train::{
     ModelState,
     ReLU,
     Sequential,
+    TrainableModule,
 };
 
 pub fn run_run_command(
@@ -77,33 +78,37 @@ pub fn run_run_command(
 
         match key {
             "data" => {
-                let v = value
-                    .map(str::to_string)
-                    .or_else(|| {
-                        args.get(i + 1)
-                            .map(|s| s.to_string())
-                    });
-
-                if value.is_none() {
-                    i += 1;
+                if let Some(v) = value {
+                    data_path = Some(v.to_string());
+                } else if let Some(next) = args.get(i + 1) {
+                    if !next.starts_with("--") {
+                        data_path = Some(next.to_string());
+                        i += 1;
+                    } else {
+                        sink.println("error: '--data' requires a path argument");
+                        return ExitCode::INVALID_USAGE;
+                    }
+                } else {
+                    sink.println("error: '--data' requires a path argument");
+                    return ExitCode::INVALID_USAGE;
                 }
-
-                data_path = v;
             }
 
             "input" => {
-                let v = value
-                    .map(str::to_string)
-                    .or_else(|| {
-                        args.get(i + 1)
-                            .map(|s| s.to_string())
-                    });
-
-                if value.is_none() {
-                    i += 1;
+                if let Some(v) = value {
+                    input_sample = Some(v.to_string());
+                } else if let Some(next) = args.get(i + 1) {
+                    if !next.starts_with("--") {
+                        input_sample = Some(next.to_string());
+                        i += 1;
+                    } else {
+                        sink.println("error: '--input' requires a sample argument");
+                        return ExitCode::INVALID_USAGE;
+                    }
+                } else {
+                    sink.println("error: '--input' requires a sample argument");
+                    return ExitCode::INVALID_USAGE;
                 }
-
-                input_sample = v;
             }
 
             "top" => {

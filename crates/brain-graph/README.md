@@ -1,62 +1,60 @@
-# `brain-graph` (v0.2.0)
+# `brain-graph`
 
-> Production-Grade Computation-Graph IR, Optimization Passes, Static Analysis, Interpretation, Execution Scheduling, and Graphviz/JSON Export.
+Pure-Rust computation-graph IR with verification, optimization passes, interpretation, scheduling, profiling, and DOT/JSON export.
 
 ## Overview
 
-`brain-graph` delivers a comprehensive intermediate representation (IR) and compiler optimization pipeline for deep learning computation graphs. Built with pure, safe Rust and zero external dependencies, it provides full structural and semantic verification, forward shape inference, a suite of graph optimization passes (constant folding, dead code elimination, common subexpression elimination, operator fusion, layout transforms, in-place buffer planning), multi-stage execution scheduling, graph diffing, memory profiling, reference interpretation against `brain-core` tensors, and Graphviz DOT / JSON serialization.
+`brain-graph` is a compiler-style front end for neural computation graphs built on `brain-core` tensors with zero external dependencies. It offers a typed IR (`GraphIr`) with shape inference and structural verification, a pass pipeline (constant folding, DCE, CSE, fusion, layout, in-place planning), a reference `GraphInterpreter`, topological scheduling, memory/FLOP profiling, graph diffing, and Graphviz/JSON serialization.
 
-## Architecture
+## Features
 
-| Module | Description |
+- **IR & verification**: `GraphIr`/`GraphNode`/`GraphEdge`/`GraphValue`, `OpKind`/`OpRegistry`, `verify_graph`, `infer_graph_shapes`, `process_with_verification`.
+- **Optimization passes**: `fold_constants`, `eliminate_dead_code`, `eliminate_cse`, `eliminate_layout_transforms`, `plan_fusion`, `plan_inplace_operations`, coordinated by `PassManager` and the top-level `optimize(graph, level)` with `OptimizeReport`.
+- **Execution**: `GraphInterpreter` and `run_graph` evaluate graphs against `brain-core` tensors.
+- **Analysis**: topological order (`compute_topological_order`), cycle/fusion/parallelism analysis (`analyze_*`), cost modeling (`compute_costs`), and memory profiling (`profile_graph`).
+- **Export & diffing**: `to_dot` (styled Graphviz), `to_json` (deterministic), `diff_graphs`/`GraphDiff`, `clone_subgraph`.
+- **Ready-made architectures**: `build_mlp_graph`, `build_cnn_graph`, `build_transformer_graph`.
+- **Fluent construction**: `GraphBuilder` incremental API with `GraphConfig`, `OptLevel`, and `VerificationLevel`.
+
+## Modules
+
+| Module | Contents |
 |---|---|
-| `ir` | `GraphIr`, `GraphNode`, `GraphEdge`, `GraphValue`, `OpKind`, verification, shape inference |
-| `passes` | Optimization passes: constant folding, dead code elimination, CSE, fusion, layout, in-place |
-| `topology` | Topological sorting (Kahn, DFS), node rank assignment, and critical path analysis |
-| `schedule` | Stage-based execution scheduling and parallel region extraction |
-| `dot` | Graphviz DOT format exporter with styled operators and memory annotations |
-| `json` | Deterministic JSON graph serialization and deserialization |
-| `clone` | Subgraph extraction and deep cloning with complete ID remapping |
-| `diff` | Structural and semantic graph diffing and equivalence checks |
-| `interp` | Pure Rust reference interpreter executing against `brain-core` tensors |
-| `profile` | Memory liveness tracking, peak memory estimation, and FLOP calculation |
-| `analyze` | Cycle detection, parallelism factor, and fusion opportunity mining |
-| `compute` | Arithmetic intensity and computational cost modeling |
-| `optimize` | High-level optimization coordinator (`optimize(graph, level)`) |
-| `transform` | Algebraic simplification rules ($x \cdot 1 \to x$, $x + 0 \to x$, $x - x \to 0$) |
-| `helper` | Ready-to-use demo architectures: MLP, CNN, Transformer block |
-| `builder` | Fluent `GraphBuilder` incremental construction API |
-| `config` | `GraphConfig`, `OptLevel` (O0–O3), `VerificationLevel` |
-| `core` | `NodeId`, `ValueId`, `EdgeId`, `Shape`, `DType`, `DeviceKind`, `GraphError` |
-| `ops` | Graph operator construction functions and direct tensor execution |
+| `ir` | `GraphIr`, `GraphNode`, `GraphEdge`, `GraphValue`, `OpKind`, `OpRegistry`, verification, shape inference |
+| `passes` | constant folding, DCE, CSE, fusion, layout, in-place; `GraphPass`, `PassManager`, plans |
+| `topology`/`schedule` | topo sort, node rank, stage-based scheduling |
+| `interp`/`impl_` | reference interpreter, `run_graph`, memory estimation |
+| `analyze`/`compute`/`profile` | cycle detection, parallelism, costs, memory/FLOP profiling |
+| `dot`/`json`/`clone`/`diff` | Graphviz export, JSON serialization, subgraph cloning, diffing |
+| `optimize`/`transform` | optimization coordinator, algebraic rewrites |
+| `helper`/`builder`/`config`/`core`/`ops` | demo graphs, `GraphBuilder`, configs, IDs/shapes/dtypes, op constructors |
 
 ## Quick Start
 
 ```rust
-use brain_graph::{GraphBuilder, OptLevel, optimize, to_dot, to_json, DType, OpKind};
+use brain_core::Tensor;
+use brain_graph::builder::GraphBuilder;
+use brain_graph::core::DType;
+use brain_graph::interp::GraphInterpreter;
+use brain_graph::ir::ops::OpKind;
 
-fn main() {
-    let mut builder = GraphBuilder::new("mlp_block");
-    let x = builder.add_input("x", vec![1, 128], DType::F32);
-    let w1 = builder.add_constant("w1", vec![128, 64], vec![0.01; 128 * 64]);
-    let h1 = builder.add_node("mm1", OpKind::MatMul, vec![x, w1], vec![1, 64]);
-    let act = builder.add_node("relu1", OpKind::Relu, vec![h1], vec![1, 64]);
-    builder.mark_output(act);
+let mut b = GraphBuilder::new("linear_relu");
+let x = b.add_input("x", vec![2, 2], DType::F32);
+let w = b.add_constant("w", vec![2, 2], vec![1.0, 0.0, 0.0, 1.0]);
+let mm = b.add_node("matmul", OpKind::MatMul, vec![x, w], vec![2, 2]);
+b.mark_output(mm);
+let graph = b.build().unwrap();
 
-    let mut graph = builder.build().unwrap();
-
-    // Optimize graph
-    let report = optimize(&mut graph, OptLevel::O2).unwrap();
-    println!("Passes applied: {}, Final nodes: {}", report.passes_applied, report.final_nodes);
-
-    // Export to Graphviz DOT
-    let dot_str = to_dot(&graph);
-    println!("{}", dot_str);
-}
+let mut interp = GraphInterpreter::new();
+let out = interp.run(&graph, &[Tensor::from_slice(&[1.0, 2.0, 3.0, 4.0], vec![2, 2])]).unwrap();
 ```
 
-## Quality & Verification
+## Testing
 
-- **Tests**: 7,688 passed · 0 failed · 0 ignored
-- **Clippy**: Clean (`cargo clippy -p brain-graph -- -D warnings`)
-- **Dependencies**: `std` + `brain-core`
+```bash
+cargo test -p brain-graph -j 2
+```
+
+## Workspace Role
+
+Depends solely on `brain-core`; `brain-graph` serves as the framework's graph compiler/optimizer layer, enabling graph-level optimization and interpretation for training and inference tooling.

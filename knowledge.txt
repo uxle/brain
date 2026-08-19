@@ -1,0 +1,1386 @@
+# =============================================================================
+# WORLD KNOWLEDGE BASE — HISTORY, GEOGRAPHY, PHILOSOPHY, LITERATURE, ECONOMICS,
+# COMPUTER SCIENCE, TECHNOLOGY, HEALTH, MUSIC, ART, GENERAL KNOWLEDGE
+# =============================================================================
+
+# ─── WORLD HISTORY ───────────────────────────────────────────────────────────
+
+TYPE: HISTORY
+NAME: history
+DEFINITION: the study of past events particularly human affairs and civilizations
+
+TYPE: HISTORY
+NAME: civilization
+DEFINITION: a complex human society with its own culture government and systems of writing and record keeping
+
+TYPE: HISTORY
+NAME: ancient_egypt
+DEFINITION: a civilization along the Nile River in northeastern Africa famous for pyramids pharaohs and hieroglyphics lasting from about 3100 BCE to 30 BCE
+
+TYPE: HISTORY
+NAME: pyramids
+DEFINITION: monumental stone structures built as tombs for Egyptian pharaohs the Great Pyramid of Giza is one of the Seven Wonders of the Ancient World
+
+TYPE: HISTORY
+NAME: mesopotamia
+DEFINITION: an ancient region between the Tigris and Euphrates rivers in modern Iraq considered the cradle of civilization where writing and agriculture began
+
+TYPE: HISTORY
+NAME: ancient_greece
+DEFINITION: a civilization in southeastern Europe from about 800 BCE to 146 BCE that pioneered democracy philosophy science theater and the Olympic Games
+
+TYPE: HISTORY
+NAME: democracy
+DEFINITION: a system of government in which power is held by the people who exercise it through elected representatives or direct participation
+
+TYPE: HISTORY
+NAME: ancient_rome
+DEFINITION: a civilization centered in Italy that grew from a small city-state to a vast empire lasting from 753 BCE to 476 CE and influencing law government and engineering
+
+TYPE: HISTORY
+NAME: roman_empire
+DEFINITION: the post-Republican period of ancient Rome spanning from 27 BCE to 476 CE that controlled much of Europe North Africa and the Middle East
+
+TYPE: HISTORY
+NAME: julius_caesar
+DEFINITION: a Roman military general and statesman who played a critical role in the fall of the Roman Republic assassinated in 44 BCE
+
+TYPE: HISTORY
+NAME: alexander_the_great
+DEFINITION: a king of Macedonia who created one of the largest empires in ancient history by age 30 spanning from Greece to northwestern India
+
+TYPE: HISTORY
+NAME: middle_ages
+DEFINITION: the period of European history from the 5th to the 15th century between the fall of Rome and the Renaissance
+
+TYPE: HISTORY
+NAME: feudalism
+DEFINITION: a medieval social and political system in which lords granted land to vassals in exchange for military service and loyalty
+
+TYPE: HISTORY
+NAME: renaissance
+DEFINITION: a cultural movement from the 14th to 17th century originating in Italy marked by renewed interest in art science and classical learning
+
+TYPE: HISTORY
+NAME: industrial_revolution
+DEFINITION: the transition from agricultural to industrial economies beginning in Britain in the late 18th century with the invention of steam power and factories
+
+TYPE: HISTORY
+NAME: french_revolution
+DEFINITION: a period of political and social upheaval in France from 1789 to 1799 that overthrew the monarchy and established republican ideals
+
+TYPE: HISTORY
+NAME: american_revolution
+DEFINITION: the colonial revolt from 1765 to 1783 in which thirteen American colonies won independence from Britain establishing the United States
+
+TYPE: HISTORY
+NAME: world_war_one
+DEFINITION: a global conflict from 1914 to 1918 involving the Allied Powers against the Central Powers resulting in over 17 million deaths
+
+TYPE: HISTORY
+NAME: world_war_two
+DEFINITION: a global conflict from 1939 to 1945 between the Allies and Axis powers the deadliest war in history with over 70 million casualties
+
+TYPE: HISTORY
+NAME: cold_war
+DEFINITION: a period of geopolitical tension between the United States and the Soviet Union from 1947 to 1991 without direct military conflict
+
+TYPE: HISTORY
+NAME: napoleon_bonaparte
+DEFINITION: a French military leader who rose to power during the French Revolution and became Emperor of France conquering much of Europe
+
+TYPE: HISTORY
+NAME: mahatma_gandhi
+DEFINITION: an Indian leader who led the movement for Indian independence from British rule through nonviolent civil disobedience
+
+TYPE: HISTORY
+NAME: abraham_lincoln
+DEFINITION: the 16th President of the United States who preserved the Union during the Civil War and abolished slavery with the Emancipation Proclamation
+
+TYPE: HISTORY
+NAME: nelson_mandela
+DEFINITION: a South African anti-apartheid leader who became the first Black president of South Africa after spending 27 years in prison
+
+TYPE: HISTORY
+NAME: martin_luther_king_jr
+DEFINITION: an American civil rights leader who advocated for racial equality through nonviolent protest famous for his I Have a Dream speech
+
+TYPE: HISTORY
+NAME: cleopatra
+DEFINITION: the last active ruler of the Ptolemaic Kingdom of Egypt known for her intelligence and alliances with Julius Caesar and Mark Antony
+
+TYPE: HISTORY
+NAME: genghis_khan
+DEFINITION: the founder and first ruler of the Mongol Empire the largest contiguous land empire in history
+
+TYPE: HISTORY
+NAME: silk_road
+DEFINITION: an ancient network of trade routes connecting China to the Mediterranean facilitating the exchange of goods ideas and cultures
+
+TYPE: HISTORY
+NAME: colonialism
+DEFINITION: the practice of a country establishing political and economic control over foreign territories and peoples
+
+TYPE: HISTORY
+NAME: slavery
+DEFINITION: the practice of owning human beings as property and forcing them to work without compensation abolished in most countries by the 19th century
+
+TYPE: HISTORY
+NAME: united_nations
+DEFINITION: an international organization founded in 1945 after World War II to promote peace security and cooperation among nations
+
+TYPE: HISTORY
+NAME: apollo_11
+DEFINITION: the NASA mission that first landed humans on the Moon on July 20 1969 with astronauts Neil Armstrong Buzz Aldrin and Michael Collins
+
+TYPE: HISTORY
+NAME: neil_armstrong
+DEFINITION: an American astronaut who became the first person to walk on the Moon in 1969 saying That is one small step for man one giant leap for mankind
+
+# ─── GEOGRAPHY ───────────────────────────────────────────────────────────────
+
+TYPE: GEOGRAPHY
+NAME: geography
+DEFINITION: the study of Earths physical features climate populations and how humans interact with the environment
+
+TYPE: GEOGRAPHY
+NAME: continent
+DEFINITION: one of the seven large continuous landmasses on Earth Africa Antarctica Asia Australia Europe North America and South America
+
+TYPE: GEOGRAPHY
+NAME: africa
+DEFINITION: the second largest continent home to 54 countries the Sahara Desert and the Nile River the longest river in the world
+
+TYPE: GEOGRAPHY
+NAME: asia
+DEFINITION: the largest continent by area and population home to China India Japan and diverse cultures and landscapes
+
+TYPE: GEOGRAPHY
+NAME: europe
+DEFINITION: a continent consisting of about 50 countries known for its cultural heritage and as the birthplace of democracy and the Industrial Revolution
+
+TYPE: GEOGRAPHY
+NAME: north_america
+DEFINITION: a continent including Canada the United States Mexico and Central America bordered by the Atlantic and Pacific Oceans
+
+TYPE: GEOGRAPHY
+NAME: south_america
+DEFINITION: a continent of 12 countries home to the Amazon Rainforest the Andes Mountains and the Amazon River
+
+TYPE: GEOGRAPHY
+NAME: australia
+DEFINITION: both a continent and a country in the Southern Hemisphere known for unique wildlife including kangaroos and koalas
+
+TYPE: GEOGRAPHY
+NAME: antarctica
+DEFINITION: the southernmost continent covered almost entirely by ice the coldest driest and windiest continent with no permanent population
+
+TYPE: GEOGRAPHY
+NAME: pacific_ocean
+DEFINITION: the largest and deepest ocean covering more than 30 percent of Earths surface
+
+TYPE: GEOGRAPHY
+NAME: atlantic_ocean
+DEFINITION: the second largest ocean separating the Americas from Europe and Africa
+
+TYPE: GEOGRAPHY
+NAME: indian_ocean
+DEFINITION: the third largest ocean bordered by Africa Asia and Australia
+
+TYPE: GEOGRAPHY
+NAME: arctic_ocean
+DEFINITION: the smallest and shallowest ocean located around the North Pole mostly covered by sea ice
+
+TYPE: GEOGRAPHY
+NAME: equator
+DEFINITION: an imaginary line around the middle of Earth at zero degrees latitude dividing it into Northern and Southern Hemispheres
+
+TYPE: GEOGRAPHY
+NAME: latitude
+DEFINITION: the angular distance north or south of the equator measured in degrees
+
+TYPE: GEOGRAPHY
+NAME: longitude
+DEFINITION: the angular distance east or west of the Prime Meridian measured in degrees
+
+TYPE: GEOGRAPHY
+NAME: prime_meridian
+DEFINITION: the line of zero degrees longitude passing through Greenwich England dividing Earth into Eastern and Western Hemispheres
+
+TYPE: GEOGRAPHY
+NAME: mount_everest
+DEFINITION: the tallest mountain on Earth at 8849 meters above sea level located in the Himalayas on the border of Nepal and Tibet
+
+TYPE: GEOGRAPHY
+NAME: amazon_river
+DEFINITION: the largest river by volume in South America flowing approximately 6400 kilometers through the Amazon Rainforest
+
+TYPE: GEOGRAPHY
+NAME: nile_river
+DEFINITION: the longest river in the world flowing approximately 6650 kilometers through northeastern Africa into the Mediterranean Sea
+
+TYPE: GEOGRAPHY
+NAME: sahara_desert
+DEFINITION: the largest hot desert in the world covering most of North Africa approximately 9.2 million square kilometers
+
+TYPE: GEOGRAPHY
+NAME: amazon_rainforest
+DEFINITION: the largest tropical rainforest on Earth covering much of the Amazon Basin in South America home to the greatest biodiversity
+
+TYPE: GEOGRAPHY
+NAME: great_wall_of_china
+DEFINITION: a series of fortifications built across northern China over many centuries stretching approximately 21000 kilometers
+
+TYPE: GEOGRAPHY
+NAME: united_states
+DEFINITION: a country in North America consisting of 50 states with Washington DC as capital and approximately 330 million people
+
+TYPE: GEOGRAPHY
+NAME: china
+DEFINITION: the most populous country in East Asia with over 1.4 billion people capital Beijing and the worlds second largest economy
+
+TYPE: GEOGRAPHY
+NAME: india
+DEFINITION: a country in South Asia with over 1.4 billion people capital New Delhi known for diverse cultures languages and as the worlds largest democracy
+
+TYPE: GEOGRAPHY
+NAME: japan
+DEFINITION: an island nation in East Asia capital Tokyo known for technology culture and consisting of four main islands
+
+TYPE: GEOGRAPHY
+NAME: russia
+DEFINITION: the largest country by area spanning Europe and Asia capital Moscow with a population of approximately 144 million
+
+TYPE: GEOGRAPHY
+NAME: brazil
+DEFINITION: the largest country in South America capital Brasilia with approximately 215 million people home to the Amazon Rainforest
+
+TYPE: GEOGRAPHY
+NAME: united_kingdom
+DEFINITION: a country in northwestern Europe consisting of England Scotland Wales and Northern Ireland capital London
+
+TYPE: GEOGRAPHY
+NAME: france
+DEFINITION: a country in western Europe capital Paris known for its culture cuisine art and the Eiffel Tower
+
+TYPE: GEOGRAPHY
+NAME: germany
+DEFINITION: a country in central Europe capital Berlin the largest economy in Europe
+
+TYPE: GEOGRAPHY
+NAME: canada
+DEFINITION: the second largest country by area in North America capital Ottawa known for its natural landscapes and bilingual English-French culture
+
+TYPE: GEOGRAPHY
+NAME: mexico
+DEFINITION: a country in southern North America capital Mexico City known for its rich history and ancient Mayan and Aztec civilizations
+
+TYPE: GEOGRAPHY
+NAME: egypt
+DEFINITION: a country in northeastern Africa capital Cairo home to the ancient pyramids the Sphinx and the Suez Canal
+
+TYPE: GEOGRAPHY
+NAME: south_africa
+DEFINITION: a country at the southern tip of Africa capital Pretoria with three branches of government and known for its diverse wildlife
+
+TYPE: GEOGRAPHY
+NAME: nigeria
+DEFINITION: the most populous country in Africa capital Abuja with over 220 million people and the largest economy in Africa
+
+# ─── PHILOSOPHY ──────────────────────────────────────────────────────────────
+
+TYPE: PHILOSOPHY
+NAME: philosophy
+DEFINITION: the study of fundamental questions about existence knowledge values reason and language
+
+TYPE: PHILOSOPHY
+NAME: socrates
+DEFINITION: an ancient Greek philosopher considered the founder of Western philosophy known for the Socratic method of questioning
+
+TYPE: PHILOSOPHY
+NAME: plato
+DEFINITION: an ancient Greek philosopher student of Socrates who founded the Academy and wrote The Republic proposing the theory of ideal forms
+
+TYPE: PHILOSOPHY
+NAME: aristotle
+DEFINITION: an ancient Greek philosopher student of Plato who made foundational contributions to logic biology ethics and politics
+
+TYPE: PHILOSOPHY
+NAME: confucius
+DEFINITION: a Chinese philosopher whose teachings on morality justice and social harmony became the foundation of Confucianism
+
+TYPE: PHILOSOPHY
+NAME: rene_descartes
+DEFINITION: a French philosopher and mathematician considered the father of modern philosophy famous for the statement I think therefore I am
+
+TYPE: PHILOSOPHY
+NAME: immanuel_kant
+DEFINITION: a German philosopher who argued that human knowledge is shaped by the structure of the mind and proposed the categorical imperative in ethics
+
+TYPE: PHILOSOPHY
+NAME: friedrich_nietzsche
+DEFINITION: a German philosopher known for his critiques of morality religion and culture and the concepts of the will to power and the superman
+
+TYPE: PHILOSOPHY
+NAME: ethics
+DEFINITION: the branch of philosophy concerned with what is morally right and wrong good and bad
+
+TYPE: PHILOSOPHY
+NAME: logic
+DEFINITION: the branch of philosophy that studies the principles of valid reasoning and argumentation
+
+TYPE: PHILOSOPHY
+NAME: epistemology
+DEFINITION: the branch of philosophy concerned with the nature origin and limits of human knowledge
+
+TYPE: PHILOSOPHY
+NAME: metaphysics
+DEFINITION: the branch of philosophy that examines the fundamental nature of reality existence and being
+
+TYPE: PHILOSOPHY
+NAME: existentialism
+DEFINITION: a philosophical movement emphasizing individual freedom choice responsibility and the search for meaning in an absurd world
+
+TYPE: PHILOSOPHY
+NAME: utilitarianism
+DEFINITION: an ethical theory that actions are right if they promote the greatest happiness for the greatest number of people
+
+TYPE: PHILOSOPHY
+NAME: stoicism
+DEFINITION: an ancient Greek philosophy teaching that virtue and wisdom come from self-control and acceptance of what cannot be changed
+
+# ─── LITERATURE ──────────────────────────────────────────────────────────────
+
+TYPE: LITERATURE
+NAME: literature
+DEFINITION: written works of artistic merit including novels poetry drama and essays
+
+TYPE: LITERATURE
+NAME: william_shakespeare
+DEFINITION: an English playwright and poet widely regarded as the greatest writer in the English language author of Hamlet Romeo and Juliet and Macbeth
+
+TYPE: LITERATURE
+NAME: novel
+DEFINITION: a long fictional narrative in prose that explores characters themes and plots
+
+TYPE: LITERATURE
+NAME: poetry
+DEFINITION: a form of literature that uses rhythm imagery and figurative language to express ideas and emotions
+
+TYPE: LITERATURE
+NAME: drama
+DEFINITION: a form of literature written for performance on stage consisting of dialogue and stage directions
+
+TYPE: LITERATURE
+NAME: metaphor
+DEFINITION: a figure of speech that directly compares two unlike things by stating one is the other without using like or as
+
+TYPE: LITERATURE
+NAME: simile
+DEFINITION: a figure of speech that compares two unlike things using the words like or as
+
+TYPE: LITERATURE
+NAME: irony
+DEFINITION: a literary device where the intended meaning is opposite to the literal meaning of words or events
+
+TYPE: LITERATURE
+NAME: alliteration
+DEFINITION: the repetition of the same consonant sound at the beginning of adjacent or closely connected words
+
+TYPE: LITERATURE
+NAME: personification
+DEFINITION: a figure of speech in which human qualities are attributed to non-human things
+
+TYPE: LITERATURE
+NAME: hyperbole
+DEFINITION: a figure of speech using extreme exaggeration to make a point or create emphasis
+
+TYPE: LITERATURE
+NAME: onomatopoeia
+DEFINITION: a word that phonetically imitates the sound it describes such as buzz hiss or splash
+
+TYPE: LITERATURE
+NAME: foreshadowing
+DEFINITION: a literary technique in which an author hints at events that will occur later in the story
+
+TYPE: LITERATURE
+NAME: protagonist
+DEFINITION: the main character in a story around whom the plot revolves
+
+TYPE: LITERATURE
+NAME: antagonist
+DEFINITION: the character or force that opposes the protagonist in a story
+
+TYPE: LITERATURE
+NAME: theme
+DEFINITION: the central idea or underlying message of a literary work
+
+TYPE: LITERATURE
+NAME: plot
+DEFINITION: the sequence of events that make up a story including exposition rising action climax falling action and resolution
+
+TYPE: LITERATURE
+NAME: narrative
+DEFINITION: a spoken or written account of connected events telling a story
+
+TYPE: LITERATURE
+NAME: fiction
+DEFINITION: literature that describes imaginary events and people not based on real events
+
+TYPE: LITERATURE
+NAME: nonfiction
+DEFINITION: literature based on real facts events and people
+
+# ─── ECONOMICS ───────────────────────────────────────────────────────────────
+
+TYPE: ECONOMICS
+NAME: economics
+DEFINITION: the social science that studies the production distribution and consumption of goods and services
+
+TYPE: ECONOMICS
+NAME: supply
+DEFINITION: the total amount of a product or service available for purchase at a given price
+
+TYPE: ECONOMICS
+NAME: demand
+DEFINITION: the quantity of a product or service that consumers are willing and able to buy at a given price
+
+TYPE: ECONOMICS
+NAME: supply_and_demand
+DEFINITION: the economic model where price is determined by the relationship between the quantity supplied and quantity demanded
+
+TYPE: ECONOMICS
+NAME: gdp
+DEFINITION: gross domestic product the total monetary value of all finished goods and services produced within a country in a specific time period
+
+TYPE: ECONOMICS
+NAME: inflation
+DEFINITION: the rate at which the general level of prices for goods and services rises reducing purchasing power
+
+TYPE: ECONOMICS
+NAME: deflation
+DEFINITION: a decrease in the general price level of goods and services increasing the purchasing power of money
+
+TYPE: ECONOMICS
+NAME: recession
+DEFINITION: a significant decline in economic activity spread across the economy lasting more than a few months
+
+TYPE: ECONOMICS
+NAME: depression
+DEFINITION: a severe and prolonged economic downturn characterized by high unemployment falling prices and reduced production
+
+TYPE: ECONOMICS
+NAME: capitalism
+DEFINITION: an economic system where private individuals and businesses own the means of production and operate for profit
+
+TYPE: ECONOMICS
+NAME: socialism
+DEFINITION: an economic system where the means of production are owned or regulated by the community as a whole typically through the state
+
+TYPE: ECONOMICS
+NAME: market_economy
+DEFINITION: an economic system where supply and demand determine the prices of goods and services with minimal government intervention
+
+TYPE: ECONOMICS
+NAME: monopoly
+DEFINITION: a market structure where a single seller controls the entire supply of a product or service
+
+TYPE: ECONOMICS
+NAME: fiscal_policy
+DEFINITION: government decisions about taxation and spending to influence the economy
+
+TYPE: ECONOMICS
+NAME: monetary_policy
+DEFINITION: actions by a central bank to control the money supply and interest rates to influence the economy
+
+TYPE: ECONOMICS
+NAME: interest_rate
+DEFINITION: the percentage charged on borrowed money or earned on savings by a financial institution
+
+TYPE: ECONOMICS
+NAME: stock_market
+DEFINITION: a marketplace where shares of publicly traded companies are bought and sold
+
+TYPE: ECONOMICS
+NAME: trade
+DEFINITION: the exchange of goods and services between individuals companies or countries
+
+TYPE: ECONOMICS
+NAME: export
+DEFINITION: a good or service produced domestically and sold to a foreign country
+
+TYPE: ECONOMICS
+NAME: import
+DEFINITION: a good or service produced in a foreign country and purchased domestically
+
+TYPE: ECONOMICS
+NAME: currency
+DEFINITION: a system of money in general use in a particular country such as dollars euros or yen
+
+TYPE: ECONOMICS
+NAME: tax
+DEFINITION: a compulsory financial charge imposed by a government on individuals or businesses to fund public services
+
+TYPE: ECONOMICS
+NAME: budget
+DEFINITION: a financial plan estimating income and expenditures over a specific period of time
+
+TYPE: ECONOMICS
+NAME: unemployment
+DEFINITION: the state of being without a job while actively seeking employment measured as a percentage of the labor force
+
+# ─── COMPUTER SCIENCE ────────────────────────────────────────────────────────
+
+TYPE: COMPUTER_SCIENCE
+NAME: computer_science
+DEFINITION: the study of computation algorithms data structures and the design of computer systems and software
+
+TYPE: COMPUTER_SCIENCE
+NAME: algorithm
+DEFINITION: a step-by-step set of instructions for solving a problem or performing a computation
+
+TYPE: COMPUTER_SCIENCE
+NAME: data_structure
+DEFINITION: a specialized format for organizing storing and accessing data in a computer
+
+TYPE: COMPUTER_SCIENCE
+NAME: array
+DEFINITION: a data structure that stores elements of the same type in contiguous memory locations accessed by index
+
+TYPE: COMPUTER_SCIENCE
+NAME: linked_list
+DEFINITION: a linear data structure where each element contains a value and a pointer to the next element
+
+TYPE: COMPUTER_SCIENCE
+NAME: stack
+DEFINITION: a last-in first-out data structure where elements are added and removed from the top
+
+TYPE: COMPUTER_SCIENCE
+NAME: queue
+DEFINITION: a first-in first-out data structure where elements are added at the back and removed from the front
+
+TYPE: COMPUTER_SCIENCE
+NAME: tree
+DEFINITION: a hierarchical data structure consisting of nodes connected by edges with a single root node
+
+TYPE: COMPUTER_SCIENCE
+NAME: binary_tree
+DEFINITION: a tree data structure where each node has at most two children called left and right
+
+TYPE: COMPUTER_SCIENCE
+NAME: graph
+DEFINITION: a data structure consisting of vertices and edges that represent relationships between objects
+
+TYPE: COMPUTER_SCIENCE
+NAME: hash_table
+DEFINITION: a data structure that maps keys to values using a hash function for efficient lookup
+
+TYPE: COMPUTER_SCIENCE
+NAME: sorting
+DEFINITION: the process of arranging data in a particular order such as ascending or descending
+
+TYPE: COMPUTER_SCIENCE
+NAME: binary_search
+DEFINITION: an efficient search algorithm that repeatedly divides a sorted list in half to find a target value with O of log n time complexity
+
+TYPE: COMPUTER_SCIENCE
+NAME: recursion
+DEFINITION: a programming technique where a function calls itself to solve a problem by breaking it into smaller subproblems
+
+TYPE: COMPUTER_SCIENCE
+NAME: big_o_notation
+DEFINITION: a mathematical notation that describes the upper bound of an algorithms time or space complexity as input size grows
+
+TYPE: COMPUTER_SCIENCE
+NAME: variable
+DEFINITION: a named storage location in a program that holds a value which can be changed during execution
+
+TYPE: COMPUTER_SCIENCE
+NAME: function
+DEFINITION: a reusable block of code that performs a specific task and can accept inputs and return outputs
+
+TYPE: COMPUTER_SCIENCE
+NAME: loop
+DEFINITION: a programming construct that repeats a block of code while a condition is true or for a set number of iterations
+
+TYPE: COMPUTER_SCIENCE
+NAME: conditional
+DEFINITION: a programming construct that executes different code based on whether a condition is true or false using if-else statements
+
+TYPE: COMPUTER_SCIENCE
+NAME: object_oriented_programming
+DEFINITION: a programming paradigm based on objects containing data and methods that interact through inheritance encapsulation and polymorphism
+
+TYPE: COMPUTER_SCIENCE
+NAME: class
+DEFINITION: a blueprint or template in object-oriented programming that defines the properties and behaviors of objects
+
+TYPE: COMPUTER_SCIENCE
+NAME: inheritance
+DEFINITION: a mechanism in object-oriented programming where a new class derives properties and methods from an existing class
+
+TYPE: COMPUTER_SCIENCE
+NAME: encapsulation
+DEFINITION: the bundling of data and methods within a class and restricting direct access to internal state
+
+TYPE: COMPUTER_SCIENCE
+NAME: polymorphism
+DEFINITION: the ability of different classes to be treated as instances of the same class through a common interface
+
+TYPE: COMPUTER_SCIENCE
+NAME: operating_system
+DEFINITION: software that manages computer hardware resources and provides services for application programs such as Windows Linux and macOS
+
+TYPE: COMPUTER_SCIENCE
+NAME: database
+DEFINITION: an organized collection of structured data stored and accessed electronically
+
+TYPE: COMPUTER_SCIENCE
+NAME: sql
+DEFINITION: structured query language a standard language for managing and querying relational databases
+
+TYPE: COMPUTER_SCIENCE
+NAME: api
+DEFINITION: application programming interface a set of protocols and tools that allow different software applications to communicate
+
+TYPE: COMPUTER_SCIENCE
+NAME: tcp_ip
+DEFINITION: transmission control protocol and internet protocol the fundamental communication protocols of the internet
+
+TYPE: COMPUTER_SCIENCE
+NAME: http
+DEFINITION: hypertext transfer protocol the foundation of data communication on the World Wide Web
+
+TYPE: COMPUTER_SCIENCE
+NAME: dns
+DEFINITION: domain name system the service that translates human-readable domain names into IP addresses
+
+TYPE: COMPUTER_SCIENCE
+NAME: ip_address
+DEFINITION: a unique numerical label assigned to each device connected to a computer network
+
+TYPE: COMPUTER_SCIENCE
+NAME: encryption
+DEFINITION: the process of converting data into a coded form to prevent unauthorized access
+
+TYPE: COMPUTER_SCIENCE
+NAME: machine_learning
+DEFINITION: a subset of artificial intelligence where computers learn patterns from data without being explicitly programmed
+
+TYPE: COMPUTER_SCIENCE
+NAME: artificial_intelligence
+DEFINITION: the simulation of human intelligence by computer systems including learning reasoning and self-correction
+
+TYPE: COMPUTER_SCIENCE
+NAME: neural_network
+DEFINITION: a computing system inspired by biological neural networks consisting of interconnected nodes that process information in layers
+
+TYPE: COMPUTER_SCIENCE
+NAME: deep_learning
+DEFINITION: a subset of machine learning using neural networks with many layers to learn complex patterns from large amounts of data
+
+TYPE: COMPUTER_SCIENCE
+NAME: programming_language
+DEFINITION: a formal language with a set of instructions used to produce various kinds of output and control computer behavior
+
+TYPE: COMPUTER_SCIENCE
+NAME: python
+DEFINITION: a high-level interpreted programming language known for its readability and versatility widely used in data science web development and AI
+
+TYPE: COMPUTER_SCIENCE
+NAME: rust
+DEFINITION: a systems programming language focused on safety performance and concurrency without a garbage collector
+
+TYPE: COMPUTER_SCIENCE
+NAME: javascript
+DEFINITION: a high-level programming language primarily used for creating interactive web pages and server-side applications
+
+TYPE: COMPUTER_SCIENCE
+NAME: open_source
+DEFINITION: software whose source code is freely available for anyone to view modify and distribute
+
+TYPE: COMPUTER_SCIENCE
+NAME: linux
+DEFINITION: a free and open-source operating system kernel created by Linus Torvalds widely used in servers smartphones and embedded systems
+
+TYPE: COMPUTER_SCIENCE
+NAME: cloud_computing
+DEFINITION: the delivery of computing services including storage processing and software over the internet on demand
+
+TYPE: COMPUTER_SCIENCE
+NAME: blockchain
+DEFINITION: a distributed digital ledger that records transactions across many computers ensuring data integrity without a central authority
+
+TYPE: COMPUTER_SCIENCE
+NAME: cybersecurity
+DEFINITION: the practice of protecting computer systems networks and data from unauthorized access theft and damage
+
+TYPE: COMPUTER_SCIENCE
+NAME: internet
+DEFINITION: a global network of interconnected computer networks that communicate using standardized protocols enabling worldwide information sharing
+
+TYPE: COMPUTER_SCIENCE
+NAME: world_wide_web
+DEFINITION: a system of interlinked documents and resources accessed through the internet using web browsers invented by Tim Berners-Lee in 1989
+
+TYPE: COMPUTER_SCIENCE
+NAME: compiler
+DEFINITION: a program that translates source code written in a programming language into machine code that a computer can execute
+
+TYPE: COMPUTER_SCIENCE
+NAME: bug
+DEFINITION: an error or flaw in a computer program that causes it to produce incorrect or unexpected results
+
+TYPE: COMPUTER_SCIENCE
+NAME: debugging
+DEFINITION: the process of finding and fixing errors or bugs in computer software
+
+# ─── TECHNOLOGY ──────────────────────────────────────────────────────────────
+
+TYPE: TECHNOLOGY
+NAME: technology
+DEFINITION: the application of scientific knowledge for practical purposes especially in industry and everyday life
+
+TYPE: TECHNOLOGY
+NAME: smartphone
+DEFINITION: a mobile device that combines cellular phone capabilities with computing functions including internet access and applications
+
+TYPE: TECHNOLOGY
+NAME: processor
+DEFINITION: the central processing unit of a computer that performs calculations and executes instructions
+
+TYPE: TECHNOLOGY
+NAME: ram
+DEFINITION: random access memory the short-term memory of a computer used to store data currently being processed
+
+TYPE: TECHNOLOGY
+NAME: ssd
+DEFINITION: solid state drive a storage device that uses flash memory to store data with faster access than traditional hard drives
+
+TYPE: TECHNOLOGY
+NAME: gpu
+DEFINITION: graphics processing unit a specialized processor designed for parallel processing used in graphics rendering and machine learning
+
+TYPE: TECHNOLOGY
+NAME: transistor
+DEFINITION: a semiconductor device that amplifies or switches electronic signals the fundamental building block of modern electronics
+
+TYPE: TECHNOLOGY
+NAME: robot
+DEFINITION: a machine capable of carrying out complex tasks automatically often programmable by a computer
+
+TYPE: TECHNOLOGY
+NAME: three_d_printing
+DEFINITION: a manufacturing process that creates three-dimensional objects by depositing material layer by layer from a digital design
+
+TYPE: TECHNOLOGY
+NAME: virtual_reality
+DEFINITION: a computer-generated simulation of a three-dimensional environment that can be interacted with using special equipment
+
+TYPE: TECHNOLOGY
+NAME: augmented_reality
+DEFINITION: technology that overlays digital information onto the real world through a device such as a smartphone or glasses
+
+# ─── HEALTH AND MEDICINE ────────────────────────────────────────────────────
+
+TYPE: HEALTH
+NAME: health
+DEFINITION: the state of complete physical mental and social well-being and not merely the absence of disease
+
+TYPE: HEALTH
+NAME: medicine
+DEFINITION: the science and practice of diagnosing treating and preventing disease and injury
+
+TYPE: HEALTH
+NAME: vaccine
+DEFINITION: a biological preparation that provides immunity against a specific disease by stimulating the immune system
+
+TYPE: HEALTH
+NAME: antibiotic
+DEFINITION: a medicine that destroys or slows the growth of bacteria used to treat bacterial infections
+
+TYPE: HEALTH
+NAME: vitamin
+DEFINITION: an organic compound required in small amounts by the body for normal growth and nutrition
+
+TYPE: HEALTH
+NAME: vitamin_a
+DEFINITION: a vitamin essential for vision immune function and skin health found in carrots sweet potatoes and leafy greens
+
+TYPE: HEALTH
+NAME: vitamin_c
+DEFINITION: a vitamin essential for immune function collagen production and antioxidant protection found in citrus fruits and peppers
+
+TYPE: HEALTH
+NAME: vitamin_d
+DEFINITION: a vitamin essential for calcium absorption and bone health produced by the skin in response to sunlight
+
+TYPE: HEALTH
+NAME: protein
+DEFINITION: a macronutrient made of amino acids essential for building and repairing tissues muscles and organs
+
+TYPE: HEALTH
+NAME: carbohydrate
+DEFINITION: a macronutrient that provides the bodys primary source of energy found in grains fruits and vegetables
+
+TYPE: HEALTH
+NAME: fat
+DEFINITION: a macronutrient that provides energy insulation and protection for organs found in oils nuts and dairy
+
+TYPE: HEALTH
+NAME: calorie
+DEFINITION: a unit of energy used to measure the energy content of food and the energy expenditure of the body
+
+TYPE: HEALTH
+NAME: nutrition
+DEFINITION: the process of providing the body with necessary food and nutrients for health growth and maintenance
+
+TYPE: HEALTH
+NAME: exercise
+DEFINITION: physical activity performed to improve or maintain health fitness and overall well-being
+
+TYPE: HEALTH
+NAME: mental_health
+DEFINITION: a state of well-being in which an individual realizes their abilities copes with normal stresses and works productively
+
+TYPE: HEALTH
+NAME: disease
+DEFINITION: a condition that impairs normal functioning of the body or mind causing specific symptoms
+
+TYPE: HEALTH
+NAME: infection
+DEFINITION: the invasion and multiplication of harmful microorganisms in the body causing disease
+
+TYPE: HEALTH
+NAME: pandemic
+DEFINITION: an outbreak of a disease that occurs over a wide geographic area affecting a large proportion of the population
+
+TYPE: HEALTH
+NAME: cancer
+DEFINITION: a group of diseases characterized by the uncontrolled growth and spread of abnormal cells in the body
+
+TYPE: HEALTH
+NAME: diabetes
+DEFINITION: a chronic disease affecting how the body processes blood sugar either by not producing enough insulin or not using it effectively
+
+TYPE: HEALTH
+NAME: blood
+DEFINITION: the fluid that circulates through the heart arteries and veins carrying oxygen nutrients and waste products
+
+TYPE: HEALTH
+NAME: first_aid
+DEFINITION: immediate medical assistance given to a sick or injured person before professional medical help arrives
+
+TYPE: HEALTH
+NAME: hygiene
+DEFINITION: practices and conditions that help maintain health and prevent the spread of disease such as handwashing and sanitation
+
+# ─── MUSIC ───────────────────────────────────────────────────────────────────
+
+TYPE: MUSIC
+NAME: music
+DEFINITION: the art of arranging sounds in time through melody harmony rhythm and timbre to express ideas and emotions
+
+TYPE: MUSIC
+NAME: melody
+DEFINITION: a sequence of musical notes arranged in a pattern that is perceived as a single entity
+
+TYPE: MUSIC
+NAME: harmony
+DEFINITION: the combination of simultaneously sounding musical notes to produce chords and progressions
+
+TYPE: MUSIC
+NAME: rhythm
+DEFINITION: the pattern of sounds and silences in music organized in time
+
+TYPE: MUSIC
+NAME: tempo
+DEFINITION: the speed at which a piece of music is played measured in beats per minute
+
+TYPE: MUSIC
+NAME: chord
+DEFINITION: three or more musical notes played simultaneously to create harmony
+
+TYPE: MUSIC
+NAME: scale
+DEFINITION: an ordered sequence of musical notes arranged by ascending or descending pitch
+
+TYPE: MUSIC
+NAME: octave
+DEFINITION: the interval between one musical note and the next note with the same name at double or half the frequency
+
+TYPE: MUSIC
+NAME: johann_sebastian_bach
+DEFINITION: a German composer of the Baroque period widely regarded as one of the greatest composers in Western music history
+
+TYPE: MUSIC
+NAME: wolfgang_amadeus_mozart
+DEFINITION: an Austrian composer of the Classical era a child prodigy who composed over 800 works including symphonies operas and concertos
+
+TYPE: MUSIC
+NAME: ludwig_van_beethoven
+DEFINITION: a German composer who bridged the Classical and Romantic periods known for his symphonies and continuing to compose after becoming deaf
+
+TYPE: MUSIC
+NAME: classical_music
+DEFINITION: a broad tradition of Western art music known for its formal structure and use of orchestras and chamber ensembles
+
+TYPE: MUSIC
+NAME: jazz
+DEFINITION: a music genre originating in African American communities in New Orleans characterized by improvisation syncopation and swing
+
+TYPE: MUSIC
+NAME: rock_music
+DEFINITION: a genre of popular music that originated in the 1950s characterized by electric guitars strong rhythms and vocals
+
+TYPE: MUSIC
+NAME: piano
+DEFINITION: a keyboard instrument that produces sound by hammers striking strings widely used in classical and popular music
+
+TYPE: MUSIC
+NAME: guitar
+DEFINITION: a stringed instrument played by plucking or strumming available in acoustic and electric forms
+
+TYPE: MUSIC
+NAME: violin
+DEFINITION: a small stringed instrument played with a bow the highest pitched member of the string family
+
+TYPE: MUSIC
+NAME: drums
+DEFINITION: percussion instruments consisting of a membrane stretched over a frame that is struck to produce sound
+
+TYPE: MUSIC
+NAME: orchestra
+DEFINITION: a large ensemble of musicians playing various instruments together typically including strings woodwinds brass and percussion
+
+# ─── ART ─────────────────────────────────────────────────────────────────────
+
+TYPE: ART
+NAME: art
+DEFINITION: the expression of human creativity and imagination through visual auditory or performing works that convey ideas and emotions
+
+TYPE: ART
+NAME: painting
+DEFINITION: the practice of applying pigment to a surface to create an image or composition
+
+TYPE: ART
+NAME: sculpture
+DEFINITION: the art of making three-dimensional forms by carving modeling casting or assembling materials
+
+TYPE: ART
+NAME: architecture
+DEFINITION: the art and science of designing and constructing buildings and other physical structures
+
+TYPE: ART
+NAME: leonardo_da_vinci
+DEFINITION: an Italian Renaissance polymath known for painting the Mona Lisa and The Last Supper as well as his scientific and engineering studies
+
+TYPE: ART
+NAME: michelangelo
+DEFINITION: an Italian Renaissance artist sculptor and architect known for painting the Sistine Chapel ceiling and sculpting David
+
+TYPE: ART
+NAME: vincent_van_gogh
+DEFINITION: a Dutch Post-Impressionist painter known for vivid colors and emotional intensity in works such as The Starry Night
+
+TYPE: ART
+NAME: pablo_picasso
+DEFINITION: a Spanish painter and sculptor who cofounded Cubism and created over 20000 works including Guernica
+
+TYPE: ART
+NAME: mona_lisa
+DEFINITION: a famous portrait painting by Leonardo da Vinci created around 1503 displayed in the Louvre Museum in Paris
+
+TYPE: ART
+NAME: impressionism
+DEFINITION: an art movement originating in 19th century France emphasizing light color and everyday subjects with visible brushstrokes
+
+TYPE: ART
+NAME: renaissance_art
+DEFINITION: art produced during the European Renaissance period from the 14th to 17th century characterized by realism perspective and classical themes
+
+TYPE: ART
+NAME: photography
+DEFINITION: the art and practice of creating images by recording light on a light-sensitive surface or digital sensor
+
+TYPE: ART
+NAME: cinema
+DEFINITION: the art of making motion pictures combining visual storytelling music dialogue and special effects
+
+# ─── GENERAL KNOWLEDGE ──────────────────────────────────────────────────────
+
+TYPE: GENERAL
+NAME: meter
+DEFINITION: the SI base unit of length equal to 100 centimeters or approximately 3.28 feet
+
+TYPE: GENERAL
+NAME: kilogram
+DEFINITION: the SI base unit of mass equal to 1000 grams
+
+TYPE: GENERAL
+NAME: second
+DEFINITION: the SI base unit of time defined as 9192631770 periods of cesium-133 radiation
+
+TYPE: GENERAL
+NAME: kilometer
+DEFINITION: a unit of length equal to 1000 meters or approximately 0.621 miles
+
+TYPE: GENERAL
+NAME: mile
+DEFINITION: a unit of length equal to 5280 feet or approximately 1.609 kilometers
+
+TYPE: GENERAL
+NAME: celsius
+DEFINITION: a temperature scale where water freezes at 0 degrees and boils at 100 degrees at standard atmospheric pressure
+
+TYPE: GENERAL
+NAME: fahrenheit
+DEFINITION: a temperature scale where water freezes at 32 degrees and boils at 212 degrees at standard atmospheric pressure
+
+TYPE: GENERAL
+NAME: kelvin
+DEFINITION: the SI unit of temperature starting at absolute zero where 0 kelvin equals minus 273.15 degrees Celsius
+
+TYPE: GENERAL
+NAME: metric_system
+DEFINITION: the international system of measurement based on units of ten including meters kilograms and liters
+
+TYPE: GENERAL
+NAME: liter
+DEFINITION: a metric unit of volume equal to 1000 milliliters or approximately 0.264 US gallons
+
+TYPE: GENERAL
+NAME: year
+DEFINITION: the time it takes for Earth to complete one orbit around the Sun approximately 365.25 days
+
+TYPE: GENERAL
+NAME: day
+DEFINITION: the time it takes for Earth to complete one rotation on its axis equal to 24 hours
+
+TYPE: GENERAL
+NAME: hour
+DEFINITION: a unit of time equal to 60 minutes or 3600 seconds
+
+TYPE: GENERAL
+NAME: minute
+DEFINITION: a unit of time equal to 60 seconds
+
+TYPE: GENERAL
+NAME: week
+DEFINITION: a period of seven days beginning with Monday or Sunday depending on the culture
+
+TYPE: GENERAL
+NAME: month
+DEFINITION: a unit of time approximately equal to the period of one cycle of the Moon roughly 30 days
+
+TYPE: GENERAL
+NAME: january
+DEFINITION: the first month of the year with 31 days named after Janus the Roman god of beginnings
+
+TYPE: GENERAL
+NAME: february
+DEFINITION: the second month of the year with 28 days or 29 in a leap year
+
+TYPE: GENERAL
+NAME: march
+DEFINITION: the third month of the year with 31 days named after Mars the Roman god of war
+
+TYPE: GENERAL
+NAME: april
+DEFINITION: the fourth month of the year with 30 days
+
+TYPE: GENERAL
+NAME: may
+DEFINITION: the fifth month of the year with 31 days named after Maia the Greek goddess of growth
+
+TYPE: GENERAL
+NAME: june
+DEFINITION: the sixth month of the year with 30 days named after Juno the Roman goddess of marriage
+
+TYPE: GENERAL
+NAME: july
+DEFINITION: the seventh month of the year with 31 days named after Julius Caesar
+
+TYPE: GENERAL
+NAME: august
+DEFINITION: the eighth month of the year with 31 days named after the Roman Emperor Augustus
+
+TYPE: GENERAL
+NAME: september
+DEFINITION: the ninth month of the year with 30 days from the Latin word septem meaning seven
+
+TYPE: GENERAL
+NAME: october
+DEFINITION: the tenth month of the year with 31 days from the Latin word octo meaning eight
+
+TYPE: GENERAL
+NAME: november
+DEFINITION: the eleventh month of the year with 30 days from the Latin word novem meaning nine
+
+TYPE: GENERAL
+NAME: december
+DEFINITION: the twelfth and final month of the year with 31 days from the Latin word decem meaning ten
+
+TYPE: GENERAL
+NAME: spring
+DEFINITION: the season between winter and summer characterized by warming temperatures and new plant growth
+
+TYPE: GENERAL
+NAME: summer
+DEFINITION: the warmest season of the year between spring and autumn with the longest days
+
+TYPE: GENERAL
+NAME: autumn
+DEFINITION: the season between summer and winter also called fall characterized by cooling temperatures and falling leaves
+
+TYPE: GENERAL
+NAME: winter
+DEFINITION: the coldest season of the year between autumn and spring with the shortest days
+
+TYPE: GENERAL
+NAME: north
+DEFINITION: the direction toward the North Pole along the Earths axis of rotation
+
+TYPE: GENERAL
+NAME: south
+DEFINITION: the direction toward the South Pole opposite to north
+
+TYPE: GENERAL
+NAME: east
+DEFINITION: the direction toward which Earth rotates where the Sun appears to rise
+
+TYPE: GENERAL
+NAME: west
+DEFINITION: the direction opposite to east where the Sun appears to set
+
+TYPE: GENERAL
+NAME: percent
+DEFINITION: a ratio expressed as a fraction of 100 denoted by the symbol percent
+FORMULA: percentage = (part / whole) * 100
+
+TYPE: GENERAL
+NAME: ratio
+DEFINITION: a comparison of two quantities by division expressing how many times one value contains or is contained within the other
+
+TYPE: GENERAL
+NAME: average
+DEFINITION: the sum of a set of values divided by the number of values also called the arithmetic mean
+FORMULA: average = sum of values / number of values
+
+TYPE: GENERAL
+NAME: area
+DEFINITION: the measure of the size of a surface measured in square units
+FORMULA: area of rectangle = length * width
+
+TYPE: GENERAL
+NAME: volume
+DEFINITION: the amount of three-dimensional space enclosed by a closed surface measured in cubic units
+FORMULA: volume of rectangular prism = length * width * height
+
+TYPE: GENERAL
+NAME: circumference
+DEFINITION: the distance around the outside of a circle
+FORMULA: circumference = 2 * pi * radius
+
+TYPE: GENERAL
+NAME: pi
+DEFINITION: a mathematical constant approximately equal to 3.14159 representing the ratio of a circles circumference to its diameter
+
+TYPE: GENERAL
+NAME: speed_formula
+DEFINITION: speed equals distance divided by time used to calculate how fast an object is moving
+FORMULA: speed = distance / time
+
+TYPE: GENERAL
+NAME: time_formula
+DEFINITION: time equals distance divided by speed used to calculate how long a journey takes
+FORMULA: time = distance / speed
+
+TYPE: GENERAL
+NAME: distance_formula
+DEFINITION: distance equals speed multiplied by time used to calculate how far an object travels
+FORMULA: distance = speed * time
+
+TYPE: GENERAL
+NAME: olympic_games
+DEFINITION: an international multi-sport event held every four years bringing together athletes from around the world originating in ancient Greece
+
+TYPE: GENERAL
+NAME: language
+DEFINITION: a structured system of communication using words and grammar used by humans to express thoughts ideas and emotions
+
+TYPE: GENERAL
+NAME: english
+DEFINITION: a West Germanic language spoken as a first or second language by over 1.5 billion people worldwide the most widely used language for international communication
+
+TYPE: GENERAL
+NAME: mandarin_chinese
+DEFINITION: the most spoken language by native speakers with over 900 million speakers primarily in China and Taiwan
+
+TYPE: GENERAL
+NAME: spanish
+DEFINITION: a Romance language spoken by over 500 million people worldwide the official language of 20 countries
+
+TYPE: GENERAL
+NAME: hindi
+DEFINITION: an Indo-Aryan language spoken primarily in India by over 600 million people as a first or second language
+
+TYPE: GENERAL
+NAME: arabic
+DEFINITION: a Semitic language spoken by over 300 million people across the Middle East and North Africa
+
+TYPE: GENERAL
+NAME: continent_count
+DEFINITION: there are seven continents on Earth Africa Antarctica Asia Australia Europe North America and South America
+
+TYPE: GENERAL
+NAME: ocean_count
+DEFINITION: there are five oceans on Earth the Pacific Atlantic Indian Southern and Arctic Oceans
+
+TYPE: GENERAL
+NAME: planet_count
+DEFINITION: there are eight planets in our solar system Mercury Venus Earth Mars Jupiter Saturn Uranus and Neptune
+
+TYPE: GENERAL
+NAME: human_body
+DEFINITION: the entire structure of a human being composed of about 37 trillion cells organized into organs and organ systems
+
+TYPE: GENERAL
+NAME: population_world
+DEFINITION: the total number of humans living on Earth approximately 8 billion people as of 2024
+
+TYPE: GENERAL
+NAME: gravity_earth
+DEFINITION: the acceleration due to gravity on Earths surface is approximately 9.81 meters per second squared
+
+TYPE: GENERAL
+NAME: boiling_point_water
+DEFINITION: water boils at 100 degrees Celsius or 212 degrees Fahrenheit at standard atmospheric pressure
+
+TYPE: GENERAL
+NAME: freezing_point_water
+DEFINITION: water freezes at 0 degrees Celsius or 32 degrees Fahrenheit at standard atmospheric pressure
+
+TYPE: GENERAL
+NAME: speed_of_light_value
+DEFINITION: the speed of light in a vacuum is approximately 299792458 meters per second or about 300000 kilometers per second
+
+TYPE: GENERAL
+NAME: earth_age
+DEFINITION: the Earth is approximately 4.54 billion years old based on radiometric dating of meteorites and rocks
+
+TYPE: GENERAL
+NAME: sun_distance
+DEFINITION: the average distance from the Earth to the Sun is approximately 149.6 million kilometers or one astronomical unit
+
+TYPE: GENERAL
+NAME: moon_distance
+DEFINITION: the average distance from the Earth to the Moon is approximately 384400 kilometers
+
+TYPE: GENERAL
+NAME: tallest_mountain
+DEFINITION: Mount Everest is the tallest mountain on Earth at 8849 meters above sea level located in the Himalayas
+
+TYPE: GENERAL
+NAME: longest_river
+DEFINITION: the Nile River is the longest river in the world at approximately 6650 kilometers flowing through northeastern Africa
+
+TYPE: GENERAL
+NAME: largest_ocean
+DEFINITION: the Pacific Ocean is the largest and deepest ocean covering more area than all the land on Earth combined
+
+TYPE: GENERAL
+NAME: largest_country
+DEFINITION: Russia is the largest country in the world by area covering over 17 million square kilometers
+
+TYPE: GENERAL
+NAME: smallest_country
+DEFINITION: Vatican City is the smallest country in the world by area at approximately 0.44 square kilometers located within Rome Italy
+
+TYPE: GENERAL
+NAME: largest_desert
+DEFINITION: the Antarctic Desert is the largest desert in the world by area followed by the Sahara the largest hot desert
+
+TYPE: GENERAL
+NAME: deepest_ocean_point
+DEFINITION: the Challenger Deep in the Mariana Trench is the deepest known point in the ocean at approximately 10994 meters below sea level
+
+TYPE: GENERAL
+NAME: human_bones
+DEFINITION: an adult human body has 206 bones that provide structure protection and enable movement
+
+TYPE: GENERAL
+NAME: human_teeth
+DEFINITION: an adult human typically has 32 teeth including incisors canines premolars and molars
+
+TYPE: GENERAL
+NAME: elements_count
+DEFINITION: there are 118 confirmed chemical elements in the periodic table ranging from hydrogen at number 1 to oganesson at number 118
+
+TYPE: GENERAL
+NAME: dna_structure
+DEFINITION: DNA has a double helix structure consisting of two strands of nucleotides twisted around each other discovered by Watson and Crick in 1953
+
+TYPE: GENERAL
+NAME: albert_einstein
+DEFINITION: a German-born theoretical physicist who developed the theory of relativity and contributed to quantum mechanics awarded the Nobel Prize in 1921
+
+TYPE: GENERAL
+NAME: isaac_newton
+DEFINITION: an English mathematician and physicist who formulated the laws of motion and universal gravitation and co-invented calculus
+
+TYPE: GENERAL
+NAME: nikola_tesla
+DEFINITION: a Serbian-American inventor and electrical engineer known for contributions to alternating current electrical systems and wireless technology
+
+TYPE: GENERAL
+NAME: thomas_edison
+DEFINITION: an American inventor who developed the practical incandescent light bulb the phonograph and the motion picture camera
+
+TYPE: GENERAL
+NAME: marie_curie
+DEFINITION: a Polish-French physicist and chemist who conducted pioneering research on radioactivity and was the first woman to win a Nobel Prize
+
+TYPE: GENERAL
+NAME: charles_babbage
+DEFINITION: an English mathematician considered the father of the computer for his concept of a programmable mechanical computing machine
+
+TYPE: GENERAL
+NAME: ada_lovelace
+DEFINITION: an English mathematician often regarded as the first computer programmer for her work on Charles Babbages Analytical Engine
+
+TYPE: GENERAL
+NAME: alan_turing
+DEFINITION: a British mathematician and computer scientist who formalized the concept of computation and helped break the Enigma code during World War II
+
+TYPE: GENERAL
+NAME: wright_brothers
+DEFINITION: Orville and Wilbur Wright American inventors who built and flew the first successful powered airplane on December 17 1903
+
+TYPE: GENERAL
+NAME: printing_press
+DEFINITION: a mechanical device for printing text and images invented by Johannes Gutenberg around 1440 revolutionizing the spread of knowledge
+
+TYPE: GENERAL
+NAME: compass
+DEFINITION: a navigational instrument that shows direction relative to Earths magnetic poles using a magnetized needle
+
+TYPE: GENERAL
+NAME: telephone
+DEFINITION: a device that converts sound into electrical signals for transmission over distances invented by Alexander Graham Bell in 1876
+
+TYPE: GENERAL
+NAME: airplane
+DEFINITION: a powered flying vehicle with fixed wings that generates lift by the forward motion of wings through air
+
+TYPE: GENERAL
+NAME: automobile
+DEFINITION: a wheeled motor vehicle used for transportation typically powered by an internal combustion engine or electric motor
+
+TYPE: GENERAL
+NAME: electricity_discovery
+DEFINITION: Benjamin Franklin demonstrated the electrical nature of lightning in 1752 and the modern understanding of electricity was developed through the work of Faraday Volta and others
+
+TYPE: GENERAL
+NAME: penicillin
+DEFINITION: the first true antibiotic discovered by Alexander Fleming in 1928 from the mold Penicillium notatum revolutionizing the treatment of bacterial infections

@@ -30,9 +30,11 @@ pub mod pruning;
 
 // ── Convenience re-exports ──────────────────────────────────────────────────
 pub use activations::{
-    fast_gelu, gelu, leaky_relu, log_softmax, mish, relu, sigmoid, silu, softmax, swish,
-    tanh, Activation, ActivationKind, FastGELU, GELU, LeakyReLU, LogSoftmax, Mish, ReLU,
-    Sigmoid, SiLU, Softmax, SoftmaxConfig, Swish, Tanh,
+    celu, elu, fast_gelu, gelu, glu, hard_sigmoid, hard_swish, leaky_relu, log_softmax, mish,
+    relu, selu, sigmoid, silu, softmax, softplus, softsign, swiglu, swish, tanh, Activation,
+    ActivationKind, FastGELU, GELU, HardSigmoid, HardSwish, HardTanh, LeakyReLU, LogSoftmax,
+    Mish, ReLU, SELU, Sigmoid, SiLU, Softmax, SoftmaxConfig, Softplus, Softsign, Swish, Tanh,
+    CELU, ELU,
 };
 pub use containers::{NamedModule, Sequential, SequentialNamed};
 pub use dropout::{AlphaDropout, Dropout, Dropout2d, FusedDropout};
@@ -49,7 +51,7 @@ pub use layers::{
 };
 pub use layers::conv2d::ConvConfig;
 pub use layers::multihead::MhaConfig;
-pub use module::{Buffer, Module, ModuleError, ModuleList, ModuleResult, NamedParameter, Parameter};
+pub use module::{Buffer, Module, ModuleDict, ModuleError, ModuleList, ModuleResult, NamedParameter, Parameter};
 pub use normalization::{
     BatchNorm2d, GroupNorm, NormalizationLayer, RMSNorm, RMSNormConfig,
 };

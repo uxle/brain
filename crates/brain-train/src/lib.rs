@@ -15,6 +15,10 @@ use brain_optim::sgd::{Sgd, SgdConfig};
 use std::collections::HashMap;
 use std::fmt;
 
+pub mod callbacks;
+
+pub use callbacks::{CallbackAction, EarlyStopping, MetricHistoryLogger, TrainingCallback};
+
 /// Result type used by integrated training APIs.
 pub type TrainResult<T> = Result<T, TrainError>;
 

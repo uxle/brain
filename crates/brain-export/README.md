@@ -1,24 +1,63 @@
-# `brain-export` (v0.2.0)
+# `brain-export`
 
-> Multi-Format Model Interoperability: Standalone Zero-Dependency Exporters for ONNX, TFLite, CoreML, and WebNN.
+> Multi-format model export: ONNX, TFLite, CoreML, and WebNN targets from a single pure-Rust model abstraction.
 
 ## Overview
 
-`brain-export` enables exporting Brain models to industry-standard runtime formats with zero external dependencies (no flatc, no protobuf compilers). It writes valid binary Protobuf ONNX files, binary FlatBuffers TFLite models, Apple CoreML `.mlpackage` archives, and W3C WebNN computational graph representations.
+`brain-export` converts Brain models into industry-standard deployment formats without pulling in protobuf or FlatBuffers toolchains. It defines a shared `ExportModel` parameter container and a `ModelExporter` trait, with per-format configs, op-name mapping tables, a pure-Rust ZIP packer, and a numerical verification hook. The `.brain` binary container with CRC tamper detection lives in `brain-core`; this crate provides the format layer on top of it.
 
-## Architecture
+## Features
+
+- `ModelExporter` trait with `OnnxExporter`, `TfliteExporter`, `CoreMlExporter`, `WebnnExporter` implementations and per-format configs (`OnnxConfig`, `TfliteConfig`, `CoreMlConfig`, `WebnnConfig`)
+- Operator-name mapping to ONNX ops, TFLite builtin codes, CoreML layer checks, and WebNN ops (`map_to_onnx_op`, `map_to_tflite_builtin_code`, `is_coreml_layer_supported`, `map_to_webnn_op`)
+- ONNX graph validation via `validate_onnx_graph` on the shared `ExportIr`/`ExportNode` IR
+- `ExportBuilder` fluent config and `ExportOptions` with opset version, quantization, and verification flags
+- `export_all` bulk multi-format export with `ExportSummary` reporting
+- `QuantExportConfig` (per-channel / bit-width), `verify_export` numeric tolerance checks, `create_zip_archive` pure-Rust ZIP packer
+- `.brain` serialization round-trip and CRC tamper detection exercised against `BrainModelFile` from `brain-core`
+
+## Modules
 
 | Module | Description |
 |---|---|
-| `onnx` | Standalone binary ONNX Protobuf serializer, operator registry, and graph validator |
-| `tflite` | Standalone binary FlatBuffers schema builder for TensorFlow Lite models |
-| `coreml` | Apple CoreML model package builder and neural network layer generator |
-| `webnn` | W3C WebNN JSON graph specification exporter and `MLGraphBuilder` generator |
-| `verify` | Numerical tolerance export verifier comparing reference outputs against exported graphs |
-| `zip` | Pure Rust ZIP archive packer for `.mlpackage` and zipped export bundles |
+| `model` | `ExportModel` parameter container and `ModelExporter` trait |
+| `core` | `ExportFormat` (`Onnx | Tflite | CoreMl | WebNn`), `ExportOptions`, `ExportError` |
+| `builder` | Fluent `ExportBuilder` (format, opset, build) |
+| `config` | `TargetPlatform` and `ExportConfig` |
+| `onnx` | `OnnxExporter`, `OnnxConfig`, graph checker, op mapping |
+| `tflite` | `TfliteExporter`, `TfliteConfig`, builtin-code mapping |
+| `coreml` | `CoreMlExporter`, `CoreMlConfig`, layer-support checks |
+| `webnn` | `WebnnExporter`, `WebnnConfig`, op mapping |
+| `common` | Shared `ExportIr`/`ExportNode` IR, dtype map, weight helpers |
+| `export_all` | `export_all` bulk export + `ExportSummary` |
+| `quant_export` | `QuantExportConfig` for quantized export |
+| `verify` | `verify_export` numeric tolerance comparison |
+| `zip` | Zero-dependency ZIP archive builder |
+| `ops` / `ops_supported` | Op metadata and support registry |
+| `convert`, `name_gen`, `utils` | Graph conversion, `sanitize_name`, ULEB128/CRC32 helpers |
 
-## Quality & Verification
+## Quick Start
 
-- **Tests**: 13,513 passed · 0 failed · 0 ignored
-- **Clippy**: Clean (`cargo clippy -p brain-export -- -D warnings`)
-- **Dependencies**: `std` + `brain-core`
+```rust
+use brain_export::model::{ExportModel, ModelExporter};
+use brain_export::onnx::{OnnxConfig, OnnxExporter};
+use brain_core::Tensor;
+
+let mut model = ExportModel::new("mlp");
+model.add_parameter("fc.weight", Tensor::from_slice(&[1.0, 0.0, 0.0, 1.0], vec![2, 2]));
+
+let exporter = OnnxExporter::new(OnnxConfig::default());
+exporter.export(&model, "out/onnx/model.onnx").expect("export");
+```
+
+For the `.brain` binary container, `BrainModelFile::new(name)` / `to_bytes()` / `from_bytes()` (with CRC validation) are provided by `brain-core` and covered in `tests/export_test.rs`.
+
+## Testing
+
+```bash
+cargo test -p brain-export -j 2
+```
+
+## Workspace Role
+
+Depends only on `brain-core` (no external crates). `brain-export` is the interoperability layer of the workspace: it turns the framework's tensor/model representation into consumable ONNX, TFLite, CoreML, and WebNN artifacts for deployment outside the Rust runtime.

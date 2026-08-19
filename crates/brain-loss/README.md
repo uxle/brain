@@ -1,52 +1,65 @@
-# `brain-loss` (v0.2.0)
+# `brain-loss`
 
-> Numerically Bulletproof Loss Functions: Classification, Regression, Contrastive, Adversarial, Metric Learning, Segmentation, Knowledge Distillation, and Composite Scheduling.
+Pure-Rust loss function library: classification, regression, contrastive, adversarial, metric, segmentation, and distillation losses.
 
 ## Overview
 
-`brain-loss` provides an exhaustive collection of mathematically rigorous, numerically stable loss functions for deep learning in pure, safe Rust. Built directly on `brain-core` tensors with zero external dependencies, every loss is protected against overflow, underflow, $\ln(0)$, and division-by-zero through fused log-domain kernels and stable approximations.
+`brain-loss` implements numerically robust loss functions over `brain-core` tensors, with a `Loss` trait that exposes both plain-tensor `forward` and differentiable `forward_value` (over `brain-autograd::Value`) so losses can drive autograd training. It includes a composite-loss orchestrator, masked losses, and fused softmax/NLL helpers.
 
-## Architecture
+## Features
+
+- **Classification** — `CrossEntropyLoss` (with label smoothing), `FocalLoss`, `HingeLoss`, `KLDivergenceLoss`.
+- **Regression** — `MSELoss`, `MAELoss`, `HuberLoss`, `SmoothL1Loss`, `QuantileLoss`, `CauchyLoss`, `CosineEmbeddingLoss`, `AngularDistanceLoss`.
+- **Contrastive & metric** — `InfoNCELoss`, `SimCLRLoss` (NT-Xent), `TripletMarginLoss`, `ContrastiveLoss`, `ArcFaceLoss`.
+- **Adversarial** — `WassersteinLoss`, `HingeAdversarialLoss`, `LSGANLoss`, `RelativisticLoss`.
+- **Segmentation & distillation** — `CEDiceLoss` (cross-entropy + soft Dice), `KnowledgeDistillationLoss` (temperature-scaled soft targets).
+- **Composition** — `CompositeLoss` orchestration (weighted sum, product, max), `apply_loss_mask` padding-aware reduction.
+- **Fused helpers** — `softmax`, `log_softmax`, `nll_loss`, `one_hot_target`, `log_sum_exp_2d`.
+- **Differentiable** — `Loss::forward_value(pred: &Value, target: &Tensor) -> LossResult<Value>` builds a differentiable loss node.
+
+## Modules
 
 | Module | Description |
 |---|---|
-| [`classification`](src/classification/mod.rs) | `CrossEntropyLoss` (fused log-softmax, label smoothing, class weights, ignore index), `FocalLoss` ($\gamma, \alpha$), `HingeLoss`, `KLDivergenceLoss` |
-| [`regression`](src/regression/mod.rs) | `MSELoss`, `MAELoss`, `HuberLoss`, `SmoothL1Loss`, `QuantileLoss` ($\tau$-pinball), `CauchyLoss`, `CosineEmbeddingLoss` |
-| [`contrastive`](src/contrastive/mod.rs) | `InfoNCELoss` (temperature-scaled negatives), `TripletMarginLoss` (semi-hard mining), `SimCLRLoss` (NT-Xent) |
-| [`adversarial`](src/adversarial/mod.rs) | `WassersteinLoss` (WGAN critic distance), `HingeAdversarialLoss`, `LSGANLoss`, `RelativisticLoss` (RaGAN) |
-| [`segmentation`](src/segmentation/mod.rs) | `CEDiceLoss` (fused Cross-Entropy + Soft Dice Loss for multi-class and binary segmentation) |
-| [`metric_loss`](src/metric_loss/mod.rs) | `ArcFaceLoss` (Additive Angular Margin Loss), CosFace, SphereFace for metric embedding |
-| [`distillation`](src/distillation.rs) | `KnowledgeDistillationLoss` (temperature-scaled soft-target KL divergence + feature hint transfer) |
-| [`masked`](src/masked.rs) | `apply_loss_mask` (sequence padding and boolean/float masked reductions) |
-| [`combine`](src/combine.rs) | `CompositeLoss` (multi-task objective weighting: weighted sum, product, max, and dynamic schedules) |
-| [`core`](src/core.rs) | `Loss` trait, `LossKind`, `LossValue`, `Reduction` (Mean, Sum, None), `LossError` |
-| [`ops`](src/ops.rs) | Fused `log_sum_exp_2d`, `log_softmax`, `softmax`, `nll_loss`, and `one_hot_target` |
-| [`utils`](src/utils.rs) | `reduction_apply`, `check_shapes`, `clamp_eps`, `weighted_average` |
+| `core` | `Loss` trait, `LossKind`, `LossValue`, `Reduction`, `LossError` |
+| `classification` | Cross-entropy, focal, hinge, KL divergence |
+| `regression` | MSE, MAE, Huber, SmoothL1, quantile, Cauchy, cosine-embedding |
+| `contrastive` | InfoNCE, SimCLR, triplet margin, contrastive |
+| `adversarial` | WGAN, hinge, LSGAN, relativistic |
+| `metric_loss` | ArcFace angular margin |
+| `segmentation` | Combined cross-entropy + soft Dice |
+| `distillation` | Temperature-scaled knowledge distillation |
+| `combine` | Weighted composite loss orchestrator |
+| `masked` | Masked loss wrappers |
+| `ops` | Fused softmax, log-softmax, NLL, one-hot |
+| `utils` | Shape verification, reduction, clamping helpers |
 
 ## Quick Start
 
 ```rust
-use brain_loss::{CrossEntropyLoss, CrossEntropyConfig, Reduction};
 use brain_core::Tensor;
+use brain_loss::classification::{CrossEntropyConfig, CrossEntropyLoss};
+use brain_loss::core::Reduction;
 
-fn main() {
-    let mut config = CrossEntropyConfig::default();
-    config.label_smoothing = 0.1;
-    config.reduction = Reduction::Mean;
+let ce = CrossEntropyLoss::new(CrossEntropyConfig {
+    reduction: Reduction::Mean,
+    label_smoothing: 0.0,
+    ..Default::default()
+});
 
-    let ce = CrossEntropyLoss::new(config);
-    let logits = Tensor::from_vec(vec![2.0, 1.0, 0.1, 0.5, 3.0, 0.2], vec![2, 3]);
-    let targets = vec![0, 1];
-
-    let loss = ce.forward_logits(&logits, &targets).unwrap();
-    println!("Loss: {}", loss.to_vec()[0]);
-}
+let logits = Tensor::from_slice(&[2.0, 1.0, 0.1, 0.5, 3.0, 0.2], vec![2, 3]);
+let targets = vec![0, 1];
+let loss = ce.forward_logits(&logits, &targets).unwrap();
+println!("loss = {}", loss.get(0));
 ```
 
-## Quality & Verification
+## Testing
 
-- **Total Files**: 27 source modules + root `lib.rs`
-- **Total Lines of Code**: 87,119 lines
-- **Tests**: **8,366 passed · 0 failed · 0 ignored**
-- **Clippy**: Clean (`cargo clippy -p brain-loss -- -D warnings`)
-- **Dependencies**: `std` + `brain-core` only
+```bash
+cargo test -p brain-loss --test loss_test -j 2
+cargo test -p brain-loss -j 2
+```
+
+## Workspace Role
+
+Depends on `brain-core` and `brain-autograd`. Consumers: `brain-train`, `brain-cli`, and the `brain` facade (via its `loss` feature).

@@ -2,6 +2,19 @@
 
 All notable changes to the Brain framework will be documented in this file.
 
+## [Unreleased]
+
+### Added
+- **`brain-autograd`**: 10 new operators with analytical VJPs verified against central finite differences: `abs`, `clamp`, `sin`, `cos`, `recip`, `square`, `sign` (unary) and `min_elem`, `max_elem` (tie-split 0.5/0.5), `where_cond` (ternary mask). All wired into `GradFn` (`parents`, `take_parents`, `op_name`, `apply_vjp`) with panic-asserting `grad_check` tests.
+- **`brain-core` tensor ops**: `matvec`, `cosine_similarity` (dim-wise), `var_mean`, `var_along_dim`, `std_along_dim`, `cumsum`, `cumprod`, `repeat` (torch `repeat` semantics), `adaptive_avg_pool2d`, `adaptive_max_pool2d` — all with unit tests.
+- **`brain-nn` activations** (new `activations/extra.rs`): `PReLU`, `LogSigmoid` (stable), `TanhShrink`, `HardShrink`, `SoftShrink`, `Shrink`, `ThresholdedReLU`, `Threshold`, `ReLU6`, `Softmin`, `QuietSoftmax` (DeepSeek-R1 per-element temperature) — struct wrappers + free functions.
+- **`brain-nn` layers**: `AdaptiveAvgPool2d`, `AdaptiveMaxPool2d`, `PixelShuffle` (sub-pixel conv), `InstanceNorm2d` (per-sample-channel, affine/no-affine).
+- **Chatbot truthfulness remediation** (`brain-core::BrainMind`): colon-fact indexing gate in `teach_file` (`END` bounding, non-indented `KEY: VALUE` only), subject-targeted `question_subject`/`search_knowledge_facts`, question gate in `talk()` (unknown questions fall back to neural continuation or honest "I don't know"), `learn_sentence` stop subjects.
+- **Real neural training in `BrainMind`**: exact cross-entropy backpropagation (`neural_backward`) through LM head, RMSNorm, Swish FFN, causal self-attention, and embeddings; `neural_train_sequence` (SGD) and `neural_adam_train_sequence` (Adam, bias-corrected, moments persisted) replace the former constant-bump trainer; Adam integrated into `talk()` and `teach_file`. Gradients verified numerically (all 8 weight matrices ≤ ~1e-5 error).
+
+### Changed
+- `brain-autograd` grad_check suite now contains real panic-asserting tests for every new op (28 passed, 3 deferred).
+
 ## [1.0.0] - 2026-08-18
 
 ### Milestone Release: Production-Ready Deep Learning Framework

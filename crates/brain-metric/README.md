@@ -1,60 +1,68 @@
-# `brain-metric` (v0.2.0)
+# `brain-metric`
 
-> Production-Grade Model Evaluation Metrics: Classification, Regression, Detection (mAP), Segmentation (mIoU), NLP (BLEU/ROUGE), Ranking, Clustering, Tracking, and Reporting.
+> Production metrics for classification, regression, detection, segmentation, NLP, ranking, clustering, and time series — with live tracking and report export.
 
 ## Overview
 
-`brain-metric` provides an extensive suite of mathematically exact, production-grade model evaluation metrics in pure, safe Rust with zero runtime dependencies (built on `brain-core` tensors). It covers multi-class/multi-label classification, ROC/PR AUC, calibration (ECE/MCE), continuous & robust regression, time-series forecasting, bounding box detection mAP (COCO/VOC), semantic segmentation (mIoU/Dice), sequence metrics (BLEU, ROUGE, METEOR, Levenshtein), information retrieval ranking (MRR, NDCG), unsupervised clustering, statistical tests, live epoch accumulation, and multi-format report exports.
+`brain-metric` provides a mathematically exact metrics suite over `brain-core` tensors and plain slices. It covers multi-class classification (accuracy, macro/micro/weighted PRF, ROC/PR AUC, calibration), regression (MSE/RMSE/MAE/MAPE/R² plus robust variants), detection mAP and IoU, segmentation mIoU, NLP (BLEU, METEOR-lite, perplexity, Levenshtein), ranking (MRR, NDCG@k), clustering purity, multilabel, imbalance, and time-series metrics — with a stateful `MetricTracker` and markdown/CSV report formatting.
 
-## Architecture
+## Features
+
+- Classification: `accuracy_score`, `precision_recall_f1` (`AverageMode`: Macro/Micro/Weighted/None), `roc_auc_score`, `pr_auc_score`, `compute_calibration` (`CalibrationReport`)
+- Regression: `mse_score`, `rmse_score`, `mae_score`, `r2_score`, `mape_score` plus robust `median_absolute_error`, `huber_metric`
+- Detection & segmentation: `bbox_iou`, `mean_average_precision` (mAP), `miou_and_pixel_accuracy`
+- NLP & ranking: `sentence_bleu`, `meteor_score_lite`, `perplexity_score`, `edit_distance_levenshtein`, `mean_reciprocal_rank`, `ndcg_at_k`
+- Multilabel, imbalance, stats, time series: `exact_match_ratio`, `hamming_loss`, `matthews_correlation_coefficient`, `g_mean_score`, `pearson_correlation`, `mase_score`, `forecast_bias`
+- Ops & utilities: `confusion_matrix`, `binarize_probs`, `threshold_sweep_roc`, `logits_to_predictions`, `stable_divide`, `topk_indices`, histogram binning
+- `MetricTracker` rolling mean accumulator, `aggregate_metric_runs` (mean/variance/CI), `compare_models`, `format_markdown_report` / `format_csv_report`
+
+## Modules
 
 | Module | Description |
 |---|---|
-| [`classification`](src/classification/mod.rs) | `accuracy_score`, `precision_recall_f1` (Macro/Micro/Weighted), `roc_auc_score`, `pr_auc_score`, `compute_calibration` (ECE/MCE) |
-| [`regression`](src/regression/mod.rs) | `mse_score`, `rmse_score`, `mae_score`, `mape_score`, `r2_score`, `median_absolute_error`, `huber_metric` |
-| [`detection`](src/detection/mod.rs) | Bounding box `bbox_iou`, `mean_average_precision` (mAP) with COCO 101-point and VOC 11-point interpolation |
-| [`segmentation`](src/segmentation/mod.rs) | `miou_and_pixel_accuracy` (Mean IoU and Pixel Accuracy over arbitrary class counts) |
-| [`nlp`](src/nlp/mod.rs) | Sentence `sentence_bleu` (n-grams 1–4, brevity penalty), `meteor_score_lite`, `perplexity_score`, `edit_distance_levenshtein` |
-| [`ranking`](src/ranking/mod.rs) | `mean_reciprocal_rank` (MRR), `ndcg_at_k` (Normalized Discounted Cumulative Gain at $k$) |
-| [`cluster`](src/cluster/mod.rs) | `cluster_purity`, Normalized Mutual Information (NMI), Adjusted Rand Index (ARI) |
-| [`time_series`](src/time_series.rs) | `mase_score` (Mean Absolute Scaled Error), `forecast_bias` |
-| [`stats`](src/stats/mod.rs) | `pearson_correlation`, Spearman rank correlation, Chi-Square goodness-of-fit |
-| [`multilabel`](src/multilabel.rs) | `exact_match_ratio` (subset accuracy), `hamming_loss` |
-| [`imbalance`](src/imbalance.rs) | `matthews_correlation_coefficient` (MCC), `g_mean_score` (Geometric Mean) |
-| [`aggregate`](src/aggregate.rs) | `aggregate_metric_runs` (calculates mean, sample variance, standard deviation, and Student's t 95% CI) |
-| [`track`](src/track.rs) | `MetricTracker` stateful accumulator for epoch-by-epoch training/eval loops |
-| [`compare`](src/compare.rs) | `compare_models` (pairwise delta evaluation and relative percentage gains) |
-| [`report`](src/report.rs) | `format_markdown_report`, `format_csv_report` for reporting tables |
-| [`core`](src/core.rs) | `Metric` trait, `MetricKind`, `MetricValue`, `MetricError`, `MetricResult` |
-| [`ops`](src/ops.rs) | `confusion_matrix`, `binarize_probs`, `threshold_sweep_roc`, `logits_to_predictions` |
-| [`utils`](src/utils.rs) | `stable_divide`, `sort_descending_by_value`, `bin_values_uniform`, `topk_indices` |
+| `classification` | Accuracy, PRF, AUC (ROC/PR), calibration reports |
+| `regression` | MSE/RMSE/MAE/MAPE/R² + robust (`robust.rs`) metrics |
+| `detection` | `bbox_iou`, `mean_average_precision` (mAP) |
+| `segmentation` | `miou_and_pixel_accuracy` |
+| `nlp` | BLEU, METEOR-lite, perplexity, Levenshtein |
+| `ranking` | MRR, NDCG@k |
+| `cluster` | `cluster_purity` |
+| `multilabel` | Exact-match ratio, Hamming loss |
+| `imbalance` | MCC, geometric mean |
+| `stats` | `pearson_correlation` |
+| `time_series` | MASE, forecast bias |
+| `ops` | Confusion matrix, threshold sweeps, binarization, argmax |
+| `track` | `MetricTracker` epoch accumulator |
+| `aggregate` | `aggregate_metric_runs` with variance and CI |
+| `compare` | `compare_models` pairwise delta report |
+| `report` | `format_markdown_report`, `format_csv_report` |
+| `core` / `config` | `MetricKind`, `MetricValue`, `MetricError`, `MetricConfig`, `AverageMode` |
+| `utils` | Stable divide, sorting, binning, top-k |
 
 ## Quick Start
 
 ```rust
 use brain_metric::{accuracy_score, precision_recall_f1, AverageMode, MetricTracker};
 
-fn main() {
-    let preds = vec![0, 1, 2, 1, 0];
-    let targets = vec![0, 1, 2, 0, 0];
+let preds = vec![0, 1, 2, 1, 0];
+let targets = vec![0, 1, 2, 0, 0];
 
-    let acc = accuracy_score(&preds, &targets);
-    println!("Accuracy: {:.2}%", acc * 100.0);
+let acc = accuracy_score(&preds, &targets);
+let prf = precision_recall_f1(&preds, &targets, 3, AverageMode::Macro);
+println!("acc={:.2} macro-f1={:.4}", acc, prf.f1);
 
-    let prf = precision_recall_f1(&preds, &targets, 3, AverageMode::Macro);
-    println!("Macro F1: {:.4}", prf.f1);
-
-    let mut tracker = MetricTracker::new();
-    tracker.update("eval_loss", 0.35, 32);
-    tracker.update("eval_loss", 0.25, 32);
-    println!("Mean eval loss: {:.4}", tracker.mean("eval_loss").unwrap());
-}
+let mut tracker = MetricTracker::new();
+tracker.update("eval_loss", 0.35, 32);
+tracker.update("eval_loss", 0.25, 32);
+println!("mean eval loss: {:.4}", tracker.mean("eval_loss").unwrap());
 ```
 
-## Quality & Verification
+## Testing
 
-- **Total Files**: 26 source modules + root `lib.rs`
-- **Total Lines of Code**: 83,805 lines
-- **Tests**: **8,662 passed · 0 failed · 0 ignored**
-- **Clippy**: Clean (`cargo clippy -p brain-metric -- -D warnings`)
-- **Dependencies**: `std` + `brain-core` only
+```bash
+cargo test -p brain-metric -j 2
+```
+
+## Workspace Role
+
+Depends only on `brain-core`. `brain-metric` is the evaluation layer of the framework: `brain-train` tracks training progress via `MetricTracker`, and benchmark/reporting workflows use its formatters to compare runs and models.

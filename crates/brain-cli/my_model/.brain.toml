@@ -1,0 +1,4 @@
+# Brain framework project configuration
+[model]
+name = "model"
+default_arch = "mlp"

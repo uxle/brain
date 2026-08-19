@@ -903,7 +903,7 @@ impl DType {
     /// assert_eq!(DType::promote(DType::F16, DType::F32), DType::F32);
     /// assert_eq!(DType::promote(DType::I8, DType::F32), DType::F32);
     /// assert_eq!(DType::promote(DType::I16, DType::I32), DType::I32);
-    /// assert_eq!(DType::promote(DType::U32, DType::I32), DType::U32);
+    /// assert_eq!(DType::promote(DType::U32, DType::I32), DType::I64);
     /// ```
     pub fn promote(a: DType, b: DType) -> DType {
         if a == b {
@@ -912,37 +912,94 @@ impl DType {
 
         // Bool promotion
         if a == DType::Bool {
-            return if b.is_float() { DType::F32 } else { DType::I8 };
+            return b;
         }
         if b == DType::Bool {
-            return if a.is_float() { DType::F32 } else { DType::I8 };
+            return a;
         }
 
         // Complex promotion
         if a.is_complex() || b.is_complex() {
             return match (a, b) {
                 (DType::Complex128, _) | (_, DType::Complex128) => DType::Complex128,
+                (DType::Complex64, other) | (other, DType::Complex64) => {
+                    if other == DType::F64 || other == DType::I64 || other == DType::U64 {
+                        DType::Complex128
+                    } else {
+                        DType::Complex64
+                    }
+                }
                 _ => DType::Complex64,
             };
         }
 
-        // Float promotion
+        // Float + Float
         if a.is_float() && b.is_float() {
-            return if a > b { a } else { b };
-        }
-        if a.is_float() {
-            return a;
-        }
-        if b.is_float() {
-            return b;
+            let max_bits = a.bit_width().max(b.bit_width());
+            return match max_bits {
+                64 => DType::F64,
+                32 => DType::F32,
+                _ => {
+                    if a == DType::BF16 || b == DType::BF16 {
+                        if a == DType::F16 || b == DType::F16 {
+                            DType::F32
+                        } else {
+                            DType::BF16
+                        }
+                    } else {
+                        DType::F16
+                    }
+                }
+            };
         }
 
-        // Integer promotion: wider type wins, unsigned > signed at same width
+        // Float + Int
+        if a.is_float() || b.is_float() {
+            let (f, i) = if a.is_float() { (a, b) } else { (b, a) };
+            let i_bits = i.bit_width();
+            if i_bits >= 64 || f == DType::F64 {
+                return DType::F64;
+            } else if f == DType::F32 || i_bits >= 16 {
+                return DType::F32;
+            } else {
+                return f;
+            }
+        }
+
+        // Int + Int
         if a.is_int() && b.is_int() {
-            return if a > b { a } else { b };
+            let max_bits = a.bit_width().max(b.bit_width());
+            if a.is_signed_int() == b.is_signed_int() {
+                if a.is_signed_int() {
+                    return match max_bits {
+                        8 => DType::I8,
+                        16 => DType::I16,
+                        32 => DType::I32,
+                        _ => DType::I64,
+                    };
+                } else {
+                    return match max_bits {
+                        8 => DType::U8,
+                        16 => DType::U16,
+                        32 => DType::U32,
+                        _ => DType::U64,
+                    };
+                }
+            } else {
+                let (signed_dt, unsigned_dt) = if a.is_signed_int() { (a, b) } else { (b, a) };
+                if signed_dt.bit_width() > unsigned_dt.bit_width() {
+                    return signed_dt;
+                } else {
+                    return match unsigned_dt.bit_width() {
+                        8 => DType::I16,
+                        16 => DType::I32,
+                        32 => DType::I64,
+                        _ => DType::U64,
+                    };
+                }
+            }
         }
 
-        // Default fallback
         DType::F32
     }
 
@@ -2122,7 +2179,7 @@ mod tests {
     #[test]
     fn test_promote_bool() {
         assert_eq!(DType::promote(DType::Bool, DType::F32), DType::F32);
-        assert_eq!(DType::promote(DType::Bool, DType::I32), DType::I8);
+        assert_eq!(DType::promote(DType::Bool, DType::I32), DType::I32);
         assert_eq!(DType::promote(DType::Bool, DType::Bool), DType::Bool);
     }
 
@@ -2936,7 +2993,7 @@ mod tests {
         assert_eq!(DType::common_dtype(&[DType::F32, DType::F32]).unwrap(), DType::F32);
         assert_eq!(
             DType::common_dtype(&[DType::I8, DType::U8, DType::I16, DType::U16, DType::F16, DType::BF16]).unwrap(),
-            DType::BF16
+            DType::F32
         );
     }
 

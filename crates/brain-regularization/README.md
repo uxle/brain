@@ -1,73 +1,59 @@
 # `brain-regularization`
 
-Production-grade regularization toolkit: dropout family, normalization layers, weight decay, explicit penalty regularizers, early stopping, and data augmentations for the Brain deep learning framework.
+> Dropout family, normalization layers, weight regularizers, early stopping, label smoothing, curriculum, and augmentation — in safe Rust.
+
+## Overview
+
+`brain-regularization` supplies the regularization toolbox for training: inverted `Dropout` / `Dropout2d` with eval mode, alpha and concrete (adaptive) dropout, spectral and weight normalization, L1/L2/ElasticNet regularizers, decoupled weight decay, mixup/cutout augmentation, label smoothing, early stopping and plateau/budget stop rules, and a curriculum scheduler — all operating on `brain-core` tensors.
 
 ## Features
 
-- **Dropout Family**:
-  - `Dropout`: Inverted dropout ($p \in [0, 1)$), deterministic seed reproduction, in-place scaling, binary mask access, and fused `forward_add` residual integration.
-  - `Dropout2d` / `Dropout3d`: Spatial & volumetric feature map dropout zeroing whole channels independently.
-  - `AlphaDropout`: SELU self-normalizing network compatibility preserving zero mean and unit variance.
-  - `ConcreteDropout`: Continuous relaxation of dropout with temperature annealing and learned parameter $p$ (Gal & Ghahramani).
-  - `compute_mc_dropout_statistics`: Monte Carlo test-time sampling for epistemic uncertainty, predictive mean, variance, and confidence intervals.
-- **Normalization Layers**:
-  - `BatchNorm1d` / `BatchNorm2d` / `BatchNorm3d`: Running statistics accumulation via exponential moving averages ($\eta$), affine scale/shift ($\gamma, \beta$), numerical stability ($\epsilon$), and training/eval mode toggling.
-  - `LayerNorm`: Feature dimension normalization with learnable affine parameters and fused residual addition.
-  - `RMSNorm`: Root Mean Square Normalization for modern high-performance Large Language Models (LLMs).
-  - `GroupNorm`: Channels partitioned into $G$ independent groups for batch-size invariant normalization.
-  - `InstanceNorm1d` / `InstanceNorm2d` / `InstanceNorm3d`: Per-sample channel normalization for style transfer and generative models.
-  - `WeightNorm`: Magnitude-direction reparameterization $w = g \cdot v / \|v\|$.
-  - `SpectralNorm`: Power iteration spectral radius estimation $\sigma(W)$ bounding Lipschitz continuity.
-- **Explicit Regularizers & Weight Decay**:
-  - `L1Regularizer` (Lasso): Enforces parameter sparsity with subgradient penalties.
-  - `L2Regularizer` (Ridge): Penalizes large parameter norms with isotropic shrinkage.
-  - `ElasticNetRegularizer`: Combined convex $L_1 + L_2$ penalty formulation.
-  - `DecoupledWeightDecay`: AdamW / SGDW style direct parameter decay $w \leftarrow w \cdot (1 - \eta \lambda)$.
-- **Termination & Training Policies**:
-  - `EarlyStopping`: Monitored validation metric tracker with patience counters, minimum delta thresholds, Min/Max modes, and best-checkpoint restoration.
-  - `StopOnPlateau`, `StopOnBudget`, `CompositeStopPolicy`: Flexible training termination rules.
-  - `CurriculumScheduler`: Progressive regularization annealing (e.g. ramping dropout probability $p(t)$).
-  - `Mixup`, `Cutout`, `CutMix`: Tensor-level implicit data augmentations.
-  - `GaussianNoise`, `apply_fgsm_perturbation`: Jitter injection and Fast Gradient Sign Method adversarial regularization.
-  - `LabelSmoothing`: Soft target distribution generation for classification targets.
-  - `compute_consistency_loss`: Pi-model stochastic consistency penalty.
-  - `RegStack`: Multi-regularizer composition with independent loss weights.
-  - `RegHook`: Training loop interceptor integrating with `brain-optim`.
-- **Zero Runtime Dependencies**: Pure standard library (`std`) and `brain-core` only. Edition 2021 stable Rust.
+- `Dropout` (seeded, inverted scaling, `eval_mode`, residual `forward_add`) and `Dropout2d`; `AlphaDropout`, `ConcreteDropout` with `current_p`
+- Normalization: BatchNorm, LayerNorm (+ residual), RMSNorm, GroupNorm, InstanceNorm (`normalization` module), plus `SpectralNorm` and `WeightNorm` weight reparameterizations
+- Regularizers: `L1Regularizer`, `L2Regularizer`, `ElasticNetRegularizer` over parameter tensors; `DecoupledWeightDecay::apply_decay`
+- Training controls: `EarlyStopping::step` with configurable patience/restore, `StopOnPlateau`, `StopOnBudget`, `CurriculumScheduler::get_value`, `RegHook` train hooks
+- Augmentation & robustness: `Mixup`, `Cutout`, noise injection, FGSM perturbation, MC-dropout uncertainty (`compute_mc_dropout_statistics`), consistency loss
+- `LabelSmoothing::smooth_targets`, `RegularizerSet` penalty aggregation, `RegRegistry::parse_kind` string-based kind resolution, `RegConfig`/`DropoutConfig`/`NormConfig`
+
+## Modules
+
+| Module | Description |
+|---|---|
+| `dropout` | `Dropout`, `Dropout2d`, `AlphaDropout`, `ConcreteDropout` |
+| `normalization` | BatchNorm, LayerNorm, RMSNorm, GroupNorm, InstanceNorm, SpectralNorm, WeightNorm |
+| `regularizers` | L1 / L2 / ElasticNet regularizers |
+| `decay` | `DecoupledWeightDecay` |
+| `earlystop` | `EarlyStopping`, `EarlyStopConfig`, `EarlyStopState` |
+| `stopping` | `StopOnBudget`, `StopOnPlateau` |
+| `label_smooth` | `LabelSmoothing` |
+| `curriculum` | `CurriculumScheduler` |
+| `augment` | `Mixup`, `Cutout`, implicit-regularization config |
+| `perturb` | Noise injection, FGSM perturbation |
+| `dropout_uncertainty` | MC-dropout statistics |
+| `consistency` | Consistency loss |
+| `rules` | `RegularizerSet` weighted penalties |
+| `registry` | `RegRegistry::parse_kind` |
+| `train_hooks` | `RegHook` post-optimizer-step hook |
+| `core` / `config` / `utils` / `ops` | `RegState`, configs, RNG, tensor-level helpers |
 
 ## Quick Start
 
 ```rust
-use brain_core::Tensor;
-use brain_regularization::prelude::*;
+use brain_regularization::dropout::Dropout;
 
-// 1. Setup Inverted Dropout
-let mut dropout = Dropout::new(0.2);
-let x = Tensor::from_slice(&[1.0, 2.0, 3.0, 4.0], vec![4]);
-let dropped = dropout.apply(&x).unwrap();
-
-// Switch to evaluation mode
+let mut dropout = Dropout::with_seed(0.5, 42);
+let x = brain_core::Tensor::from_slice(&[1.0; 16], vec![4, 4]);
+let train_out = dropout.apply(&x).expect("dropout train");
 dropout.eval_mode();
-let eval_out = dropout.apply(&x).unwrap();
-assert_eq!(eval_out.data(), x.data());
-
-// 2. Setup Layer Normalization
-let ln_config = LayerNormConfig {
-    normalized_shape: vec![4],
-    eps: 1e-5,
-    elementwise_affine: true,
-};
-let ln = LayerNorm::new(ln_config);
-let normalized = ln.forward(&x).unwrap();
-
-// 3. Setup Early Stopping
-let mut early_stop = EarlyStopping::new(EarlyStopConfig {
-    patience: 3,
-    min_delta: 1e-3,
-    mode: MetricMode::Min,
-    restore_best_weights: true,
-});
-
-let should_halt = early_stop.step(0, 0.45, None);
-assert!(!should_halt);
+let eval_out = dropout.apply(&x).expect("dropout eval"); // identity
 ```
+
+## Testing
+
+```bash
+cargo test -p brain-regularization -j 2
+```
+
+## Workspace Role
+
+Depends only on `brain-core`. `brain-regularization` slots between `brain-nn` and `brain-train`: layers are wrapped in dropout/norm/weight regularizers, and training hooks keep early stopping, decay, and curriculum in lockstep with optimizer steps.

@@ -106,14 +106,38 @@ pub fn run_make_command(args: &[String], sink: &OutputSink) -> ExitCode {
         .unwrap_or(8)
         .max(1);
 
+    let optim_name = matches
+        .get_option("optim")
+        .unwrap_or("sgd")
+        .to_lowercase();
+    if optim_name != "sgd" {
+        sink.println(&format!(
+            "warning: optimizer '{}' is not supported in current trainer, falling back to 'sgd'",
+            optim_name
+        ));
+    }
+
+    let loss_name = matches
+        .get_option("loss")
+        .unwrap_or("cross_entropy")
+        .to_lowercase();
+    if loss_name != "cross_entropy" {
+        sink.println(&format!(
+            "warning: loss '{}' is not supported for classification in current trainer, falling back to 'cross_entropy'",
+            loss_name
+        ));
+    }
+
     sink.println(&format!(
-        "make: arch={} dataset={} samples={} features={} classes={} hidden={} lr={} epochs={} batch={}",
+        "make: arch={} dataset={} samples={} features={} classes={} hidden={} optim={} loss={} lr={} epochs={} batch={}",
         arch_name,
         data_path,
         dataset.features.len(),
         dataset.n_features,
         n_classes,
         hidden,
+        optim_name,
+        loss_name,
         lr,
         epochs,
         batch_size
@@ -123,9 +147,11 @@ pub fn run_make_command(args: &[String], sink: &OutputSink) -> ExitCode {
         // Try square image layout
         let side = (dataset.n_features as f64).sqrt().round() as usize;
         let s = if side * side == dataset.n_features && side >= 3 { side } else { 6 };
-        let conv_out_h = (s.saturating_sub(2)) / 2;
-        let conv_out_w = (s.saturating_sub(2)) / 2;
-        let flat_size = (4 * conv_out_h * conv_out_w).max(1);
+        let conv_out_h = brain_core::Shape::output_dim(s, 1, 3, 1, 1);
+        let conv_out_w = brain_core::Shape::output_dim(s, 1, 3, 1, 1);
+        let pool_out_h = brain_core::Shape::output_dim(conv_out_h, 0, 2, 2, 1);
+        let pool_out_w = brain_core::Shape::output_dim(conv_out_w, 0, 2, 2, 1);
+        let flat_size = (4 * pool_out_h * pool_out_w).max(1);
 
         let m = Sequential::new()
             .add(brain_train::Conv2d::new(1, 4, 3, true))

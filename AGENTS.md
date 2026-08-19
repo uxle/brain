@@ -22,15 +22,22 @@ cargo test -p brain-quantization --test quant_linear -j 2
 
 ## 2. Codebase Map
 
-- **`crates/brain-core`**: Tensor N-D array primitives, memory allocators, shape algebra, and cache-blocked GEMM.
-- **`crates/brain-autograd`**: Reverse-mode automatic differentiation engine (`Value`, `GradFn`, `Tape`).
-- **`crates/brain-nn`**: Neural network layers (`Linear`, `Conv2d`, `BatchNorm2d`, `Embedding`, `Sequential`).
-- **`crates/brain-loss`**: Loss functions with differentiable `forward_value` methods (`CrossEntropyLoss`, `MSELoss`, `SmoothL1Loss`).
-- **`crates/brain-optim`**: Numerical optimizers (`Sgd`, `Adam`, `AdamW`), LR schedulers, and `StateDict`.
-- **`crates/brain-train`**: Trainer abstraction, mini-batching, and checkpointing.
-- **`crates/brain-onnx`**: Pure-Rust ONNX protobuf parser, IR lowering, and interpreter.
-- **`crates/brain-quantization`**: Dynamic Int8 quantization and magnitude pruning.
-- **`crates/brain-cli` & `crates/brain`**: CLI application binary (`brain make`, `brain check`, `brain run`, `brain train`).
+- **`crates/brain-core`**: Tensor N-D array primitives, memory allocators, shape algebra, cache-blocked GEMM, BLAS L1-3, linalg (LU/QR/Cholesky/SVD), FFT, pooling (incl. adaptive), reductions (incl. cumsum/cumprod/var_mean), `BrainMind` (chatbot + neural SGD/Adam training).
+- **`crates/brain-autograd`**: Reverse-mode automatic differentiation engine (`Value`, `GradFn`, `Tape`) with ~30 verified ops (abs, clamp, sin, cos, recip, square, sign, min_elem, max_elem, where_cond, ...), plus Hessian/Jacobian/JVP and checkpointing.
+- **`crates/brain-nn`**: Neural network layers (`Linear`, `Conv1d/2d`, `ConvTranspose2d`, `LSTM`, `GRU`, `MultiheadAttention`, `PixelShuffle`, adaptive pools), 30+ activations (`PReLU`, `LogSigmoid`, `QuietSoftmax`, `ReLU6`, ...), normalization (`BatchNorm2d`, `LayerNorm`, `GroupNorm`, `RMSNorm`, `InstanceNorm2d`).
+- **`crates/brain-loss`**: 30+ loss functions with differentiable `forward_value` methods (CE, focal, KLDiv, Huber, Quantile, InfoNCE, SimCLR, Triplet, ArcFace, CEDice, distillation, ...).
+- **`crates/brain-optim`**: 16 optimizers (SGD, Adam/AdamW/Adamax/Nadam, RAdam, Lamb, Lion, NovoGrad, RMSprop, Adagrad, Adadelta), 12 LR schedulers, clipping, `StateDict`.
+- **`crates/brain-train`**: Trainer abstraction, mini-batching, `ModelState` checkpoints, callbacks (EarlyStopping, MetricHistoryLogger).
+- **`crates/brain-metric`**: 60+ evaluation metrics (accuracy, ROC/PR AUC, MCC, perplexity, MRR, NDCG, mAP, IoU, calibration, reports).
+- **`crates/brain-transformer`**: Transformer encoder/decoder, MHA/GQA/MQA/Cross/Relative/Flash attention, RoPE, Alibi, KV cache, Llama/GPT/T5/Bert lites, generation pipelines.
+- **`crates/brain-rnn`**: LSTM/GRU/Vanilla/Peephole cells and sequences, Bidirectional, PackedSequence, BeamSearch, TeacherForcing.
+- **`crates/brain-onnx`**: Pure-Rust ONNX protobuf parser, IR lowering, and interpreter (opset 9-21).
+- **`crates/brain-quantization`**: Dynamic/static Int8 quantization, calibration, QLinear/QConv2d, pruning, CSR sparse ops.
+- **`crates/brain-graph` / `brain-compile`**: Static graph IR with passes, scheduling, interpreter, JIT cache, memory plans.
+- **`crates/brain-data` / `brain-dataset`**: DataSource, streaming/mmap loaders, DataLoader + WorkerPool, transforms, samplers, splits.
+- **`crates/brain-cli` & `crates/brain`**: CLI application binary (`brain make`, `brain check`, `brain run`, `brain train`, `brain chat`, `brain dataset`, `brain doctor`, ...) and umbrella facade.
+- **Research**: `brain-rl` (DQN/PPO/A2C/SAC), `brain-gnn` (GCN/GAT/SAGE), `brain-diffusion` (DDPM/DDIM/PLMS), `brain-gan`, `brain-neuroevolution` (GA/CMA-ES/HyperNEAT), `brain-vit`, `brain-cv`, `brain-audio`, `brain-text`.
+- **Systems**: `brain-distributed` (ring/tree allreduce, data/model/tensor/pipeline parallelism), `brain-federated` (FedAvg, secure aggregation), `brain-benchmark`, `brain-export` (ONNX/TFLite/CoreML/WebNN), `brain-utils`.
 
 ---
 

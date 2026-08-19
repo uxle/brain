@@ -266,30 +266,23 @@ fn check_avg_pool_counts_valid_only() {
 #[test]
 fn check_dtype_is_lossless_cast() {
     use brain_core::dtype::DType;
-    // U64 + I32: different size, U64 bigger => U64 (both same sign category? no, unsigned vs signed, different size)
     let p = DType::promote(DType::U64, DType::I32);
-    println!("promote(U64, I32) = {:?}", p);
+    assert_eq!(p, DType::U64);
 
-    // Lossless cast checks
-    // F16 -> BF16: BF16 has fewer mantissa bits (7) than F16 (10), so NOT lossless
     let f16_to_bf16 = DType::BF16.is_lossless_cast(DType::F16);
-    println!("is_lossless_cast(BF16 <- F16) = {} (expected false: BF16 has less mantissa precision)", f16_to_bf16);
+    assert!(!f16_to_bf16);
 
-    // I8 -> I16: lossless
     let i8_to_i16 = DType::I16.is_lossless_cast(DType::I8);
-    println!("is_lossless_cast(I16 <- I8) = {} (expected true)", i8_to_i16);
+    assert!(i8_to_i16);
 
-    // I16 -> I8: not lossless
     let i16_to_i8 = DType::I8.is_lossless_cast(DType::I16);
-    println!("is_lossless_cast(I8 <- I16) = {} (expected false)", i16_to_i8);
+    assert!(!i16_to_i8);
 
-    // U8 -> I16: lossless (U8 in [0,255] fits in I16)
     let u8_to_i16 = DType::I16.is_lossless_cast(DType::U8);
-    println!("is_lossless_cast(I16 <- U8) = {} (expected true)", u8_to_i16);
+    assert!(u8_to_i16);
 
-    // I32 -> F32: NOT lossless (i32 up to 2^31 needs 32 bits, f32 has 24 mantissa bits)
     let i32_to_f32 = DType::F32.is_lossless_cast(DType::I32);
-    println!("is_lossless_cast(F32 <- I32) = {} (expected false: I32 can exceed f32 precision)", i32_to_f32);
+    assert!(!i32_to_f32);
 }
 
 #[test]
@@ -299,4 +292,114 @@ fn check_dilated_conv_output() {
     let out = conv::conv2d_ext(&input, &weight, None, (1, 1), (0, 0), (2, 2));
     assert_eq!(out.shape(), &[1, 1, 1, 1]);
     assert_eq!(out.to_vec(), vec![9.0]);
+}
+
+#[test]
+fn check_tensordot_multi_axis() {
+    // a: [2, 3, 4], b: [3, 4, 5] -> contract axes ([1, 2], [0, 1]) -> out: [2, 5]
+    let a = Tensor::ones(vec![2, 3, 4]);
+    let b = Tensor::ones(vec![3, 4, 5]);
+    let out = arith::tensordot(&a, &b, (&[1, 2], &[0, 1]));
+    assert_eq!(out.shape(), &[2, 5]);
+    // Each contracted entry is sum of 3*4 = 12 ones -> 12.0
+    for &v in out.data() {
+        assert_eq!(v, 12.0);
+    }
+}
+
+#[test]
+fn check_topk_multi_dim() {
+    // a: [2, 3] = [[3, 1, 2], [4, 6, 5]]
+    let a = Tensor::from_slice(&[3.0, 1.0, 2.0, 4.0, 6.0, 5.0], vec![2, 3]);
+    let (top_vals, top_idx) = brain_core::tensor::compare::topk(&a, 2, 1, true);
+    assert_eq!(top_vals.shape(), &[2, 2]);
+    assert_eq!(top_vals.to_vec(), vec![3.0, 2.0, 6.0, 5.0]);
+    assert_eq!(top_idx, vec![0, 2, 1, 2]);
+}
+
+#[test]
+fn check_pad_reflect() {
+    // [1, 2, 3] with reflect pad (1, 1) -> [2, 1, 2, 3, 2]
+    let t = Tensor::from_slice(&[1.0, 2.0, 3.0], vec![3]);
+    let out = brain_core::tensor::pad::pad(&t, &[1, 1], "reflect", 0.0);
+    assert_eq!(out.shape(), &[5]);
+    assert_eq!(out.to_vec(), vec![2.0, 1.0, 2.0, 3.0, 2.0]);
+}
+
+#[test]
+fn check_parallel_gemm_large_matrices() {
+    // 128x128 identity x random matrix
+    let n = 128;
+    let mut eye_data = vec![0.0f64; n * n];
+    for i in 0..n {
+        eye_data[i * n + i] = 1.0;
+    }
+    let eye = Tensor::from_vec(eye_data, vec![n, n]);
+
+    let mut mat_data = vec![0.0f64; n * n];
+    for i in 0..n * n {
+        mat_data[i] = (i as f64) * 0.01;
+    }
+    let mat = Tensor::from_vec(mat_data.clone(), vec![n, n]);
+
+    let out = arith::matmul(&eye, &mat);
+    assert_eq!(out.shape(), &[n, n]);
+    for (o, m) in out.data().iter().zip(mat_data.iter()) {
+        assert!(approx(*o, *m), "Parallel GEMM mismatch: {} vs {}", o, m);
+    }
+}
+
+#[test]
+fn check_parallel_batched_gemm() {
+    // [4, 32, 32] x [4, 32, 32]
+    let b = 4;
+    let n = 32;
+    let a = Tensor::ones(vec![b, n, n]);
+    let b_mat = Tensor::ones(vec![b, n, n]);
+
+    let out = arith::matmul(&a, &b_mat);
+    assert_eq!(out.shape(), &[b, n, n]);
+    for &v in out.data() {
+        assert_eq!(v, 32.0);
+    }
+}
+
+#[test]
+fn check_parallel_elementwise_map() {
+    let size = 16384;
+    let mut data = vec![0.0f64; size];
+    for i in 0..size {
+        data[i] = i as f64;
+    }
+    let t = Tensor::from_vec(data, vec![size]);
+    let mapped = t.map(|x| x * 2.0 + 1.0);
+
+    for (i, &v) in mapped.data().iter().enumerate() {
+        assert_eq!(v, (i as f64) * 2.0 + 1.0);
+    }
+}
+
+#[test]
+fn check_backend_abstraction_dispatch() {
+    use brain_core::{Backend, CpuBackend, SimdCpuBackend};
+
+    let cpu = CpuBackend;
+    let simd = SimdCpuBackend;
+
+    assert_eq!(cpu.name(), "CpuBackend");
+    assert_eq!(simd.name(), "SimdCpuBackend");
+
+    let a = Tensor::from_slice(&[1.0, 2.0, 3.0, 4.0], vec![2, 2]);
+    let b = Tensor::from_slice(&[5.0, 6.0, 7.0, 8.0], vec![2, 2]);
+
+    let res_cpu = cpu.matmul(&a, &b).unwrap();
+    let res_simd = simd.matmul(&a, &b).unwrap();
+
+    assert_eq!(res_cpu.shape(), &[2, 2]);
+    assert_eq!(res_simd.shape(), &[2, 2]);
+    assert_eq!(res_cpu.to_vec(), res_simd.to_vec());
+
+    let add_cpu = cpu.add(&a, &b).unwrap();
+    let add_simd = simd.add(&a, &b).unwrap();
+    assert_eq!(add_cpu.to_vec(), add_simd.to_vec());
 }

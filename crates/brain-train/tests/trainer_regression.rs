@@ -165,3 +165,44 @@ fn test_gradient_accumulation_training() {
         after.loss
     );
 }
+
+#[test]
+fn test_batch_shape_mismatch_and_error_handling() {
+    // 3 samples in inputs vs 2 targets -> should return ShapeMismatch error
+    let inputs = Tensor::from_vec(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], vec![3, 2]);
+    let targets = vec![0, 1];
+    let result = Batch::new(inputs, targets);
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_checkpoint_corruption_rejection() {
+    // Missing header
+    let bad_header = b"NOT_A_BRAIN_FILE\nmeta|format|v1\n";
+    assert!(ModelState::from_brain_bytes(bad_header).is_err());
+
+    // Invalid shape delimiter
+    let bad_shape = b"BRAIN_STATE_V1\ntensor|w|2y2|1.0,2.0,3.0,4.0\n";
+    assert!(ModelState::from_brain_bytes(bad_shape).is_err());
+}
+
+#[test]
+fn test_trainer_eval_metric_consistency() {
+    let inputs = Tensor::from_vec(vec![1.0, 0.0, 0.0, 1.0], vec![2, 2]);
+    let targets = vec![0, 1];
+    let batch = Batch::new(inputs, targets).unwrap();
+    let batches = vec![batch];
+
+    let model = Sequential::new()
+        .add(Linear::new(2, 2, true));
+
+    let trainer = Trainer::builder()
+        .model(model)
+        .learning_rate(0.1)
+        .build()
+        .unwrap();
+
+    let eval_res = trainer.evaluate(&batches).unwrap();
+    assert!(eval_res.loss.is_finite());
+    assert!(eval_res.accuracy >= 0.0 && eval_res.accuracy <= 1.0);
+}

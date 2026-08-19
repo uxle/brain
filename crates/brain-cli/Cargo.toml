@@ -4,5 +4,9 @@ version = "0.2.0"
 edition = "2021"
 
 [dependencies]
+brain-autograd = { path = "../brain-autograd" }
 brain-core = { path = "../brain-core" }
+brain-loss = { path = "../brain-loss" }
+brain-optim = { path = "../brain-optim" }
 brain-train = { path = "../brain-train" }
+brain-transformer = { path = "../brain-transformer" }

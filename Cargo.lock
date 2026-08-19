@@ -47,8 +47,12 @@ dependencies = [
 name = "brain-cli"
 version = "0.2.0"
 dependencies = [
+ "brain-autograd",
  "brain-core",
+ "brain-loss",
+ "brain-optim",
  "brain-train",
+ "brain-transformer",
 ]
 
 [[package]]

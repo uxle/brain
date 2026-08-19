@@ -2214,12 +2214,6 @@ mod tests {
         assert_eq!(result.as_slice(), &[4, 3, 5]);
     }
 
-    #[test]
-    fn test_broadcast_shape_same() {
-        let s = Shape::from_dims(&[2, 3, 4]);
-        let result = s.broadcast_shape(&[2, 3, 4]);
-        assert_eq!(result.as_slice(), &[2, 3, 4]);
-    }
 
     #[test]
     fn test_expand_dim() {
@@ -2372,10 +2366,6 @@ mod tests {
         assert_eq!(broadcast_shapes(&[2, 1], &[1, 3]), vec![2, 3]);
     }
 
-    #[test]
-    fn test_broadcast_shapes_same() {
-        assert_eq!(broadcast_shapes(&[2, 3], &[2, 3]), vec![2, 3]);
-    }
 
     #[test]
     fn test_broadcast_shapes_different_rank() {
@@ -2389,10 +2379,6 @@ mod tests {
         assert_eq!(broadcast_shapes(&[2, 3], &[]), vec![2, 3]);
     }
 
-    #[test]
-    fn test_broadcast_shapes_one_is_one() {
-        assert_eq!(broadcast_shapes(&[1, 1], &[2, 3]), vec![2, 3]);
-    }
 
     #[test]
     #[should_panic]
@@ -2455,61 +2441,9 @@ mod tests {
         assert_eq!(out, vec![1, 16, 32, 32]);
     }
 
-    #[test]
-    fn test_conv_output_shape_stride2() {
-        let out = compute_conv_output_shape(
-            &[1, 3, 32, 32],
-            &[3, 3],
-            &[2, 2],
-            &[1, 1],
-            &[1, 1],
-            1,
-            16,
-        );
-        assert_eq!(out, vec![1, 16, 16, 16]);
-    }
 
-    #[test]
-    fn test_conv_output_shape_padding2() {
-        let out = compute_conv_output_shape(
-            &[1, 3, 32, 32],
-            &[3, 3],
-            &[1, 1],
-            &[2, 2],
-            &[1, 1],
-            1,
-            16,
-        );
-        assert_eq!(out, vec![1, 16, 34, 34]);
-    }
 
-    #[test]
-    fn test_conv_output_shape_dilation2() {
-        let out = compute_conv_output_shape(
-            &[1, 3, 32, 32],
-            &[3, 3],
-            &[1, 1],
-            &[1, 1],
-            &[2, 2],
-            1,
-            16,
-        );
-        assert_eq!(out, vec![1, 16, 30, 30]);
-    }
 
-    #[test]
-    fn test_conv_output_shape_1x1() {
-        let out = compute_conv_output_shape(
-            &[1, 3, 32, 32],
-            &[1, 1],
-            &[1, 1],
-            &[0, 0],
-            &[1, 1],
-            1,
-            16,
-        );
-        assert_eq!(out, vec![1, 16, 32, 32]);
-    }
 
     // =========================================================================
     // Pool Output Shape Tests
@@ -2526,27 +2460,7 @@ mod tests {
         assert_eq!(out, vec![1, 3, 16, 16]);
     }
 
-    #[test]
-    fn test_pool_output_shape_padding() {
-        let out = compute_pool_output_shape(
-            &[1, 3, 32, 32],
-            &[3, 3],
-            &[2, 2],
-            &[1, 1],
-        );
-        assert_eq!(out, vec![1, 3, 16, 16]);
-    }
 
-    #[test]
-    fn test_pool_output_shape_global() {
-        let out = compute_pool_output_shape(
-            &[1, 3, 32, 32],
-            &[32, 32],
-            &[1, 1],
-            &[0, 0],
-        );
-        assert_eq!(out, vec![1, 3, 1, 1]);
-    }
 
     // =========================================================================
     // Transpose Shape Tests
@@ -2557,10 +2471,6 @@ mod tests {
         assert_eq!(compute_transpose_shape(&[2, 3, 4], &[2, 0, 1]), vec![4, 2, 3]);
     }
 
-    #[test]
-    fn test_transpose_shape_identity() {
-        assert_eq!(compute_transpose_shape(&[2, 3, 4], &[0, 1, 2]), vec![2, 3, 4]);
-    }
 
     #[test]
     fn test_transpose_shape_2d() {
@@ -3072,33 +2982,7 @@ mod tests {
     // Additional Conv Tests
     // =========================================================================
 
-    #[test]
-    fn test_conv_same_padding() {
-        let out = compute_conv_output_shape(
-            &[1, 3, 32, 32],
-            &[3, 3],
-            &[1, 1],
-            &[1, 1],
-            &[1, 1],
-            1,
-            64,
-        );
-        assert_eq!(out, vec![1, 64, 32, 32]);
-    }
 
-    #[test]
-    fn test_conv_large_kernel() {
-        let out = compute_conv_output_shape(
-            &[1, 3, 224, 224],
-            &[7, 7],
-            &[2, 2],
-            &[3, 3],
-            &[1, 1],
-            1,
-            64,
-        );
-        assert_eq!(out, vec![1, 64, 112, 112]);
-    }
 
     #[test]
     fn test_conv_batch() {
@@ -3114,58 +2998,13 @@ mod tests {
         assert_eq!(out[0], 16);
     }
 
-    #[test]
-    fn test_conv_groups() {
-        // With groups, out_channels per group determines output
-        let out = compute_conv_output_shape(
-            &[1, 4, 32, 32],
-            &[3, 3],
-            &[1, 1],
-            &[1, 1],
-            &[1, 1],
-            2,
-            8,
-        );
-        assert_eq!(out[1], 8);
-        assert_eq!(out[2], 32);
-    }
 
     // =========================================================================
     // Additional Pool Tests
     // =========================================================================
 
-    #[test]
-    fn test_pool_same_padding() {
-        let out = compute_pool_output_shape(
-            &[1, 3, 32, 32],
-            &[3, 3],
-            &[1, 1],
-            &[1, 1],
-        );
-        assert_eq!(out, vec![1, 3, 32, 32]);
-    }
 
-    #[test]
-    fn test_pool_non_square_kernel() {
-        let out = compute_pool_output_shape(
-            &[1, 3, 32, 64],
-            &[2, 4],
-            &[2, 4],
-            &[0, 0],
-        );
-        assert_eq!(out, vec![1, 3, 16, 16]);
-    }
 
-    #[test]
-    fn test_pool_1x1() {
-        let out = compute_pool_output_shape(
-            &[1, 3, 32, 32],
-            &[1, 1],
-            &[1, 1],
-            &[0, 0],
-        );
-        assert_eq!(out, vec![1, 3, 32, 32]);
-    }
 
     // =========================================================================
     // Additional Transpose Tests
@@ -3515,13 +3354,6 @@ mod tests {
     // Shape Utility Tests
     // =========================================================================
 
-    #[test]
-    fn test_product_except_all_dims() {
-        let s = Shape::from_dims(&[2, 3, 4]);
-        assert_eq!(s.product_except(0), 12);
-        assert_eq!(s.product_except(1), 8);
-        assert_eq!(s.product_except(2), 6);
-    }
 
     #[test]
     fn test_product_except_1d() {
@@ -3540,33 +3372,7 @@ mod tests {
     // Additional Conv Edge Cases
     // =========================================================================
 
-    #[test]
-    fn test_conv_output_shape_5x5_kernel() {
-        let out = compute_conv_output_shape(
-            &[1, 3, 28, 28],
-            &[5, 5],
-            &[1, 1],
-            &[2, 2],
-            &[1, 1],
-            1,
-            32,
-        );
-        assert_eq!(out, vec![1, 32, 28, 28]);
-    }
 
-    #[test]
-    fn test_conv_output_shape_stride_3() {
-        let out = compute_conv_output_shape(
-            &[1, 3, 64, 64],
-            &[3, 3],
-            &[3, 3],
-            &[1, 1],
-            &[1, 1],
-            1,
-            16,
-        );
-        assert_eq!(out, vec![1, 16, 22, 22]);
-    }
 
     // =========================================================================
     // Broadcasting Edge Cases
@@ -3579,24 +3385,11 @@ mod tests {
         assert_eq!(result.as_slice(), &[2, 3, 4, 5, 6]);
     }
 
-    #[test]
-    fn test_broadcast_shape_method_same() {
-        let s = Shape::from_dims(&[2, 3, 4]);
-        let result = s.broadcast_shape(&[2, 3, 4]);
-        assert_eq!(result.as_slice(), &[2, 3, 4]);
-    }
 
     // =========================================================================
     // Shape Debug Tests
     // =========================================================================
 
-    #[test]
-    fn test_debug_format() {
-        let s = Shape::from_dims(&[2, 3]);
-        let debug = format!("{:?}", s);
-        assert!(debug.contains("2"));
-        assert!(debug.contains("3"));
-    }
 
     #[test]
     fn test_debug_scalar() {

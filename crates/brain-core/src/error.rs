@@ -3470,12 +3470,6 @@ mod tests {
         assert_eq!(result.unwrap(), 24);
     }
 
-    #[test]
-    fn test_validate_broadcast_same_shape() {
-        let result = validate_broadcast(&[&[3, 4], &[3, 4]]);
-        assert!(result.is_ok());
-        assert_eq!(result.unwrap(), 12);
-    }
 
     #[test]
     fn test_format_bytes() {

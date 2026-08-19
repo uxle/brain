@@ -1,60 +1,60 @@
 # `brain-quantization`
 
-Production-grade dynamic and static quantization engine, Quantization-Aware Training (QAT) with Straight-Through Estimators (STE), fine-grained block/group-wise LLM quantization, structured & unstructured pruning, sparse matrix representations (CSR, CSC, COO), and mixed precision allocation for the Brain deep learning framework.
+Pure-Rust quantization and sparsity engine: dynamic/static int8, QAT, pruning, and sparse linear algebra.
+
+## Overview
+
+`brain-quantization` provides post-training dynamic and static quantization, fake-quantization for quantization-aware training, magnitude and structured pruning, CSR sparse-matrix kernels, block/activation/mixed-precision quantizers, and end-to-end graph quantization — all over `brain-core` tensors in 100% safe Rust.
 
 ## Features
 
-- **Core Quantization Abstractions**:
-  - `QuantTensor`: Dual container holding integer representations (`i32`, `i8`, `u8`, packed `i4`) along with affine scaling factors and zero-point offsets.
-  - `QuantScheme`: Affine & Symmetric schemes for Per-Tensor, Per-Channel, and Group-Wise / Block-Wise quantization.
-  - `QuantDType`: Support for `Int8`, `UInt8`, `Int4`, `UInt4`, `Int16`, `UInt16`, `FP8E4M3`, `FP8E5M2`, `BFloat16`, and `Float16`.
-- **Calibration & Observers (4+ Methods)**:
-  - `MinMaxObserver`: Global batch minimum/maximum tracking with zero-point derivation.
-  - `PercentileObserver`: 99.9% outlier-resistant calibration clipping.
-  - `MovingAverageObserver`: Exponential smoothing across sequential training batches.
-  - `EntropyObserver`: KL-divergence minimizing histogram observer for optimal quantization thresholds.
-- **Quantized Neural Network Layers**:
-  - `QLinear`: Int8 weights, Int8 activations, Int32 accumulation, fused bias addition, and requantization.
-  - `QConv2d`: 2D spatial convolution with per-channel filter scales, spatial padding/strides, and saturating integer arithmetic.
-  - `q8_matmul`: Tiled integer matrix multiplication micro-kernel with saturating SIMD arithmetic.
-  - `FakeQuantize`: Quantization-Aware Training (QAT) simulation with Straight-Through Estimator (STE) gradient propagation.
-- **Pruning & Sparse Matrix Computation**:
-  - `MagnitudePruner`: Global & local L1/L2 magnitude unstructured pruning.
-  - `StructuredPruner`: Channel and filter pruning based on tensor norms.
-  - `IterativePruneSchedule`: Cubic polynomial decay curves (Zhu & Gupta).
-  - `LotteryTicketSchedule`: Iterative magnitude pruning with weight rewinding.
-  - `CsrMatrix`: Compressed Sparse Row matrix representation with $O(\text{NNZ})$ storage.
-  - `spmv` & `spmm`: Highly optimized Sparse Matrix-Vector and Sparse Matrix-Matrix multiplication kernels.
-- **Advanced Quantization Dynamics**:
-  - `BlockQuantizer`: Fine-grained sub-tensor group scaling (group sizes 32, 64, 128) for GPTQ / AWQ LLM compression.
-  - `ActQuantizer`: Per-token dynamic activation scaling and SmoothQuant outlier migration transforms.
-  - `MixedPrecisionQuantizer`: Layer sensitivity analysis and automatic bit-width allocation (Int4 / Int8 / FP16).
-  - `GraphQuantizer`: IR graph pass inserting Quantize/Dequantize (`Q`/`DQ`) nodes and fusing patterns (Conv $\rightarrow$ Quant $\rightarrow$ ReLU).
-  - `analyze_quantization_error`: Numerical diagnostics including SNR, PSNR, MSE, and MAE.
-- **Architecture**:
-  - Pure, safe Rust with zero external runtime dependencies.
-  - 100% test coverage with **7,842 tests** across **28 files** (~93,768 lines).
+- **Core quantization** — `QuantTensor`, `QParams`, `QuantScheme` (symmetric/affine), `QuantDType` (Int8 etc.), `quantize_tensor` / `dequantize_tensor` / `apply_magnitude_prune` helpers.
+- **Dynamic & static** — `DynamicQuantizer`, `StaticQuantizer`, `FakeQuantize` (QAT), and calibration observers (`MinMaxObserver`, `PercentileObserver`, `MovingAverageObserver`, `EntropyObserver`).
+- **Quantized operators** — `QLinear` (with `QLinearConfig`), `QConv2d`, `q8_matmul` (`QMatMulConfig`).
+- **Pruning** — `MagnitudePruner`, `StructuredPruner`, `IterativePruneSchedule`, and CSR/CSC/COO sparse matrices with `spmm` / `spmv`.
+- **Advanced quantizers** — `BlockQuantizer`, `ActQuantizer` (activation quantization), `MixedPrecisionQuantizer`, `GraphQuantizer` (whole-graph).
+- **Analysis & runtime** — `analyze_quantization_error` (`QuantErrorReport`), `QuantBench` (`QuantBenchReport`), and a `QuantRuntime` plus `QuantBuilder` pipeline (`PipelineMode`).
+
+## Modules
+
+| Module | Description |
+|---|---|
+| `core` | `QuantTensor`, `QParams`, `QuantDType`, `QuantScheme`, error types |
+| `quantizer` / `quant_dynamic` / `quant_static` / `fake_quant` | Quantizer implementations and QAT |
+| `calibration` | Min/max, percentile, moving-average, entropy observers |
+| `qlinear` / `qconv` / `qmatmul` | Quantized operators |
+| `prune` | Magnitude and structured pruners, iterative schedules |
+| `sparse` | CSR/CSC/COO matrices and sparse kernels |
+| `block_quant` / `act_quant` / `mixed` / `graph_quant` | Advanced quantization strategies |
+| `error_analysis` / `bench_quant` | Error analysis and benchmark reports |
+| `runtime` / `builder` | Quantization runtime and pipeline builder |
+| `impl` | `quantize_tensor`, `dequantize_tensor`, `apply_magnitude_prune` |
 
 ## Quick Start
 
 ```rust
 use brain_core::Tensor;
-use brain_quantization::prelude::*;
+use brain_core::tensor::arithmetic::matmul;
+use brain_quantization::{dequantize_tensor, quantize_tensor, QuantConfig, QuantDType};
 
-// 1. Build a static quantization pipeline
-let builder = QuantBuilder::new()
-    .static_quant()
-    .int8()
-    .symmetric(false);
+let weight = Tensor::from_vec(vec![0.12, -0.45, 0.78, -0.23, 0.91, -0.05, 0.33, -0.88], vec![2, 4]);
+let cfg = QuantConfig { dtype: QuantDType::Int8, ..Default::default() };
+let qweight = quantize_tensor(&weight, &cfg).unwrap();
+let deq = dequantize_tensor(&qweight).unwrap();
 
-// 2. Perform tensor quantization
-let tensor = Tensor::from_slice(&[-1.0, 0.0, 0.5, 2.0], vec![4]);
-let qconfig = QuantConfig::default();
-let qtensor = quantize_tensor(&tensor, &qconfig).unwrap();
-
-println!("Quantized data: {:?}", qtensor.data);
-println!("Scale: {}, Zero Point: {}", qtensor.params.scales[0], qtensor.params.zero_points[0]);
-
-// 3. Dequantize back to high precision
-let restored = dequantize_tensor(&qtensor).unwrap();
+let x = Tensor::from_vec(vec![1.0, 0.5, -0.5, 2.0], vec![1, 4]);
+let y = matmul(&x, &deq.transpose(0, 1)); // quantized linear forward
 ```
+
+## Testing
+
+```bash
+cargo test -p brain-quantization --test quant_linear -j 2
+cargo test -p brain-quantization -j 2
+```
+
+`quant_linear` verifies fp32 vs quantized linear outputs agree within `1e-2`.
+
+## Workspace Role
+
+Depends on `brain-core` and `brain-graph`. Consumer: the `brain` facade (via its `export` feature).

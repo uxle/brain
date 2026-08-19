@@ -117,6 +117,8 @@ pub fn load_task(
 
     let mut n_features = 0usize;
 
+    let mut is_first_data_line = true;
+
     for (lineno, raw) in text.lines().enumerate() {
         let line = raw.trim();
 
@@ -124,7 +126,20 @@ pub fn load_task(
             continue;
         }
 
-        let values = Dataset::parse_sample(line)?;
+        let values = match Dataset::parse_sample(line) {
+            Ok(v) => {
+                is_first_data_line = false;
+                v
+            }
+            Err(err) => {
+                if is_first_data_line {
+                    is_first_data_line = false;
+                    continue;
+                } else {
+                    return Err(format!("line {}: {}", lineno + 1, err));
+                }
+            }
+        };
 
         if values.is_empty() {
             continue;

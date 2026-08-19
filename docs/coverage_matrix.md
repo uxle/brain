@@ -14,6 +14,11 @@ This matrix specifies the correctness, differentiability, and test coverage stat
 | `max_pool2d` | F64, F32 | Yes | Analytical | Yes (`grad_max_pool2d`) | N/A |
 | `avg_pool2d`, `avg_pool2d_ext` | F64, F32 | Yes | Analytical | Yes (`grad_avg_pool2d`) | N/A |
 | `relu`, `sigmoid`, `tanh` | F64, F32 | Yes | Analytical | Yes | N/A |
+| `abs`, `clamp`, `sin`, `cos`, `recip`, `square`, `sign` | F64, F32 | Yes | Analytical | Yes (`grad_check`) | N/A |
+| `min_elem`, `max_elem`, `where_cond` | F64, F32 | Yes | Analytical (tie-split 0.5/0.5) | Yes (`grad_check`) | N/A |
+| `matvec`, `cosine_similarity` | F64, F32 | Yes | N/A | N/A | N/A |
+| `var_mean`, `var_along_dim`, `std_along_dim`, `cumsum`, `cumprod` | F64, F32 | Yes (unit tests) | N/A | N/A | N/A |
+| `repeat`, `roll` | F64, F32 | Yes (unit tests) | N/A | N/A | N/A |
 | `softmax`, `log_softmax` | F64, F32 | Yes (Numerically stable) | Analytical | Yes | N/A |
 | `transpose`, `reshape`, `permute` | All | Yes | Analytical | Yes | N/A |
 
@@ -31,6 +36,10 @@ This matrix specifies the correctness, differentiability, and test coverage stat
 | `Flatten` | Yes (`Value::reshape`) | Shape-restoration VJP | None | N/A |
 | `Embedding` | Yes (`Value::embedding`) | Index-scatter gradient | L2 | Yes (`ModelState`) |
 | `BatchNorm2d` | Yes (Running stats tracking) | Mean / Var normalization | None | Yes |
+| `AdaptiveAvgPool2d`, `AdaptiveMaxPool2d` | Yes (torch region semantics) | N/A (nn-level) | None | N/A |
+| `PixelShuffle` | Yes (sub-pixel rearrangement) | N/A (nn-level) | None | N/A |
+| `InstanceNorm2d` | Yes (per-sample-channel) | N/A (nn-level) | None | Yes |
+| Activations: `PReLU`, `LogSigmoid`, `TanhShrink`, `HardShrink`, `SoftShrink`, `Shrink`, `ThresholdedReLU`, `Threshold`, `ReLU6`, `Softmin`, `QuietSoftmax` | Yes | N/A (pure pointwise) | None | N/A |
 
 ---
 
