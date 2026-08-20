@@ -29,3 +29,21 @@ fn test_diffusion_config_and_unet_creation() {
     let unet = Unet2d::new(unet_cfg);
     assert_eq!(unet.config.in_channels, 3);
 }
+
+#[test]
+fn test_ddpm_and_ddim_sampling_steps() {
+    use brain_core::Tensor;
+    use brain_diffusion::{DdimSampler, DdpmSampler, Sampler};
+
+    let ddpm = DdpmSampler::new();
+    let ddim = DdimSampler::new(0.0);
+
+    let x = Tensor::from_slice(&[0.5, -0.5, 1.0, -1.0], vec![1, 4]);
+    let noise = Tensor::from_slice(&[0.05, -0.05, 0.1, -0.1], vec![1, 4]);
+
+    let step_ddpm = ddpm.step(&x, &noise, 50, 49);
+    assert_eq!(step_ddpm.shape(), &[1, 4]);
+
+    let step_ddim = ddim.step(&x, &noise, 50, 25);
+    assert_eq!(step_ddim.shape(), &[1, 4]);
+}

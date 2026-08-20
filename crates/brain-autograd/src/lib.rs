@@ -49,7 +49,10 @@ pub use backward::grad::{backward_from, backward_with_grad, zero_grad_from};
 pub use grad_fns::GradFn;
 pub use graph_closure::{grad, grad_and_hess, hessian, jacobian, jvp, value_and_grad, vjp};
 pub use tape::{OpRecord, Tape};
-pub use value::{values_close, Value};
+pub use value::{
+    is_grad_enabled, set_grad_enabled, values_close, with_enable_grad, with_no_grad, NoGradGuard,
+    Value,
+};
 
 /// Package version string.
 pub const VERSION: &str = "0.2.0";

@@ -56,7 +56,11 @@ pub use generator::{
 pub use losses::perceptual::{
     feature_matching_loss, gram_matrix, perceptual_loss, PerceptualConfig,
 };
-pub use losses::{bce_loss_d, hinge_loss_d, hinge_loss_g, lsgan_loss_d, wgan_loss_d, wgan_loss_g};
+pub use losses::{
+    bce_loss_d, bce_loss_g, hinge_loss_d, hinge_loss_g, lsgan_loss_d, lsgan_loss_g,
+    r1_gradient_penalty, r2_gradient_penalty, sample_wgan_gp_interpolates, wgan_gp_loss_d,
+    wgan_loss_d, wgan_loss_g, ClassicLoss,
+};
 pub use ops::{
     batch_norm, image_grid, interpolate_latents, leaky_relu, mix_style, relu, resize_like,
     sigmoid_act, spectral_norm_apply, tanh_act, wgan_clip,

@@ -48,8 +48,8 @@ pub mod utils;
 // ── Convenience re-exports ──────────────────────────────────────────────────
 pub use aggregate::{aggregate_metric_runs, AggregateReport};
 pub use classification::{
-    accuracy_score, compute_calibration, pr_auc_score, precision_recall_f1, roc_auc_score,
-    AucConfig, CalibrationReport, PrfReport,
+    accuracy_score, cohen_kappa, compute_calibration, matthews_corrcoef, multiclass_roc_auc,
+    pr_auc_score, precision_recall_f1, roc_auc_score, AucConfig, CalibrationReport, PrfReport,
 };
 pub use cluster::{cluster_purity, ClusterConfig};
 pub use compare::{compare_models, CompareReport};

@@ -63,6 +63,10 @@ fn test_normalization_layers() {
     let rms = RMSNorm::new(8, 1e-5);
     let rms_out = Module::forward(&rms, &x_2d).unwrap();
     assert_eq!(rms_out.shape(), &[1, 8]);
+
+    let gn = GroupNorm::new(2, 8);
+    let gn_out = Module::forward(&gn, &x_2d).unwrap();
+    assert_eq!(gn_out.shape(), &[1, 8]);
 }
 
 // -----------------------------------------------------------------------------

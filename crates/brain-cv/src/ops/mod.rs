@@ -6,7 +6,7 @@ pub mod boxes;
 pub mod geometry;
 pub mod hist_eq;
 
-pub use boxes::{box_area, box_iou_matrix};
+pub use boxes::{box_area, box_giou_matrix, box_iou_matrix};
 pub use geometry::{affine_grid, grid_sample};
 pub use hist_eq::{equalize_histogram, ColorSpace};
 

@@ -44,6 +44,7 @@ pub use decay::{DecayConfig, DecoupledWeightDecay};
 pub use dropout::{adaptive::ConcreteDropout, alpha::AlphaDropout, Dropout, Dropout2d};
 pub use dropout_uncertainty::{compute_mc_dropout_statistics, McDropoutConfig, McDropoutResult};
 pub use earlystop::{EarlyStopConfig, EarlyStopState, EarlyStopping, MetricMode};
+pub use ewc::ElasticWeightConsolidation;
 pub use label_smooth::{LabelSmoothConfig, LabelSmoothing};
 pub use normalization::{
     BatchNorm1d, BatchNorm2d, BatchNorm3d, BatchNormConfig, GroupNorm, GroupNormConfig,

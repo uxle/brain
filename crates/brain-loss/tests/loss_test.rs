@@ -54,3 +54,32 @@ fn test_mse_mae_huber_losses() {
     let huber_val = huber.compute(&pred, &target).expect("Huber").data()[0];
     assert!(huber_val > 0.0);
 }
+
+#[test]
+fn test_focal_loss_and_infonce_loss() {
+    use brain_loss::classification::focal::{FocalConfig, FocalLoss};
+    use brain_loss::contrastive::infonce::{InfoNCELoss, InfoNceConfig};
+
+    // Focal Loss
+    let focal = FocalLoss::new(FocalConfig {
+        gamma: 2.0,
+        alpha: 0.25,
+        reduction: Reduction::Mean,
+    });
+    let logits = Tensor::from_slice(&[5.0, -5.0], vec![1, 2]);
+    let focal_loss = focal.forward_logits(&logits, &[0]).unwrap();
+    assert!(focal_loss.data()[0] >= 0.0);
+
+    // InfoNCE Loss
+    let infonce = InfoNCELoss::new(InfoNceConfig {
+        temperature: 0.5,
+        reduction: Reduction::Mean,
+    });
+    let q = Tensor::from_slice(&[1.0, 0.0], vec![1, 2]);
+    let pos = Tensor::from_slice(&[0.9, 0.1], vec![1, 2]);
+    let neg1 = Tensor::from_slice(&[-0.8, 0.2], vec![1, 2]);
+    let neg2 = Tensor::from_slice(&[0.0, -1.0], vec![1, 2]);
+
+    let info_loss = infonce.compute(&q, &pos, &[neg1, neg2]).unwrap();
+    assert!(info_loss.data()[0] >= 0.0);
+}

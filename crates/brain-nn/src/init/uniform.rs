@@ -3,6 +3,7 @@
 //! Standard statistical distributions and orthogonal matrix initialization.
 #![allow(missing_docs)]
 
+use brain_core::random::{NormalDist, UniformDist};
 use brain_core::Tensor;
 
 /// Initialization scheme descriptor.
@@ -21,39 +22,43 @@ pub enum InitScheme {
 /// Generates a Tensor filled with uniform random values in [min_val, max_val].
 pub fn uniform_init(shape: &[usize], min_val: f64, max_val: f64) -> Tensor {
     let total: usize = shape.iter().product();
-    let mut data = Vec::with_capacity(total);
-    for i in 0..total {
-        let norm = ((i * 1103515245 + 12345) % 65536) as f64 / 65536.0;
-        data.push(min_val + norm * (max_val - min_val));
-    }
+    let dist = UniformDist::new(min_val, max_val);
+    let data = brain_core::random::with_rng(|rng| {
+        let mut v = Vec::with_capacity(total);
+        for _ in 0..total {
+            v.push(dist.sample(rng));
+        }
+        v
+    });
     Tensor::from_vec(data, shape.to_vec())
 }
 
 /// Generates a Tensor filled with normal random values N(mean, std^2).
 pub fn normal_init(shape: &[usize], mean: f64, std: f64) -> Tensor {
     let total: usize = shape.iter().product();
-    let mut data = Vec::with_capacity(total);
-    for i in 0..total {
-        let u1 = (((i * 1664525 + 1013904223) % 65536) as f64 / 65536.0).max(1e-12);
-        let u2 = ((i * 22695477 + 1) % 65536) as f64 / 65536.0;
-        let z = (-2.0 * u1.ln()).sqrt() * (2.0 * std::f64::consts::PI * u2).cos();
-        data.push(mean + z * std);
-    }
+    let dist = NormalDist::new(mean, std);
+    let data = brain_core::random::with_rng(|rng| {
+        let mut v = Vec::with_capacity(total);
+        for _ in 0..total {
+            v.push(dist.sample(rng));
+        }
+        v
+    });
     Tensor::from_vec(data, shape.to_vec())
 }
 
 /// Generates an orthogonal 2D matrix using Gram-Schmidt orthogonalization.
 pub fn orthogonal_init(rows: usize, cols: usize, gain: f64) -> Tensor {
-    let mut mat = vec![vec![0.0f64; cols]; rows];
-    for r in 0..rows {
-        for c in 0..cols {
-            let i = r * cols + c;
-            let u1 = (((i * 1664525 + 1013904223) % 65536) as f64 / 65536.0).max(1e-12);
-            let u2 = ((i * 22695477 + 1) % 65536) as f64 / 65536.0;
-            let z = (-2.0 * u1.ln()).sqrt() * (2.0 * std::f64::consts::PI * u2).cos();
-            mat[r][c] = z;
+    let dist = NormalDist::new(0.0, 1.0);
+    let mut mat = brain_core::random::with_rng(|rng| {
+        let mut m = vec![vec![0.0f64; cols]; rows];
+        for r in 0..rows {
+            for c in 0..cols {
+                m[r][c] = dist.sample(rng);
+            }
         }
-    }
+        m
+    });
 
     if rows <= cols {
         for r in 0..rows {

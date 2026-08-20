@@ -59,6 +59,7 @@ pub mod zip;
 // Re-exports
 pub use builder::ExportBuilder;
 pub use config::{ExportConfig, TargetPlatform};
+pub use convert::{convert_bn_to_safetensors, convert_safetensors_to_bn, ConversionReport};
 pub use core::{ExportError, ExportFormat, ExportOptions};
 pub use model::{ExportModel, ModelExporter};
 pub use safetensors::{SafetensorInfo, SafetensorsArchive};

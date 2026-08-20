@@ -45,3 +45,28 @@ fn test_ewc_continual_learning_penalty() {
     let penalty1 = ewc.compute_penalty(&[p2]);
     assert!(penalty1 > 0.0);
 }
+
+#[test]
+fn test_alpha_dropout_and_ewc_gradients() {
+    use brain_regularization::dropout::AlphaDropout;
+    use brain_regularization::ewc::ElasticWeightConsolidation;
+
+    // Alpha Dropout
+    let mut alpha_drop = AlphaDropout::new(0.2);
+    let x = Tensor::from_slice(&[0.0; 1000], vec![1000]);
+    let out = alpha_drop.apply(&x).unwrap();
+    assert_eq!(out.shape(), &[1000]);
+
+    // EWC Gradients
+    let mut ewc = ElasticWeightConsolidation::new(50.0);
+    let p = Tensor::from_slice(&[2.0, 3.0], vec![2]);
+    let grads = vec![vec![1.0, 1.0]];
+    ewc.register_task(&[p.clone()], &grads);
+
+    let p_new = Tensor::from_slice(&[2.5, 2.5], vec![2]);
+    let penalty_grads = ewc.compute_gradients(&[p_new]);
+    assert_eq!(penalty_grads.len(), 1);
+    assert_eq!(penalty_grads[0].shape(), &[2]);
+    // Grad for p[0]: lambda * (1 + 1e-4) * (2.5 - 2.0) = 50.0 * 1.0001 * 0.5 ~ 25.0
+    assert!((penalty_grads[0].data()[0] - 25.0).abs() < 0.1);
+}

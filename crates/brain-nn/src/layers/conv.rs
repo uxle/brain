@@ -69,17 +69,12 @@ impl Conv2d {
         }
     }
 
-    /// Construct with a fully custom config. Returns an error immediately
-    /// if `dilation != (1, 1)` -- see the module-level doc comment for why
-    /// this is rejected rather than silently mishandled.
+    /// Construct with a fully custom config.
     pub fn with_config(config: ConvConfig, has_bias: bool) -> ModuleResult<Self> {
-        if config.dilation != (1, 1) {
-            return Err(ModuleError::InvalidParameter(format!(
-                "Conv2d dilation {:?} is not yet supported: brain_autograd::Value::conv2d \
-                 has no dilated-convolution gradient formula implemented yet (Phase 0.1, \
-                 tracked and un-done). Use dilation=(1,1) until that lands.",
-                config.dilation
-            )));
+        if config.dilation.0 == 0 || config.dilation.1 == 0 {
+            return Err(ModuleError::InvalidParameter(
+                "Conv2d dilation components must be >= 1".to_string(),
+            ));
         }
         let weight_tensor = kaiming_uniform(
             &[
@@ -111,21 +106,18 @@ impl Conv2d {
                 got: shape.to_vec(),
             });
         }
-        // Guard again here, not just in with_config -- config is a public
-        // field and could be mutated after construction.
-        if self.config.dilation != (1, 1) {
+        if self.config.dilation.0 == 0 || self.config.dilation.1 == 0 {
             return Err(ModuleError::InvalidParameter(
-                "Conv2d.config.dilation was changed to a non-(1,1) value after \
-                 construction; dilated convolution has no gradient path yet (Phase 0.1)."
-                    .to_string(),
+                "Conv2d dilation components must be >= 1".to_string(),
             ));
         }
 
-        Ok(input.conv2d(
+        Ok(input.conv2d_ext(
             &self.weight,
             self.bias.as_ref(),
             self.config.stride,
             self.config.padding,
+            self.config.dilation,
         ))
     }
 }
@@ -216,13 +208,23 @@ mod tests {
     }
 
     #[test]
-    fn test_conv2d_dilation_rejected_not_silently_dropped() {
+    fn test_conv2d_dilation_forward_and_backward_supported() {
         let mut config = ConvConfig::default();
+        config.in_channels = 1;
+        config.out_channels = 1;
+        config.kernel_size = (2, 2);
+        config.stride = (1, 1);
+        config.padding = (0, 0);
         config.dilation = (2, 2);
-        let result = Conv2d::with_config(config, false);
-        assert!(
-            result.is_err(),
-            "dilation != (1,1) should error, not silently ignore dilation"
-        );
+
+        let conv = Conv2d::with_config(config, false).expect("dilated conv2d should construct");
+        let x = Value::new(Tensor::ones(vec![1, 1, 4, 4]), true);
+        let out = conv.forward(&x).expect("dilated conv2d forward");
+        assert_eq!(out.shape(), &[1, 1, 2, 2]);
+
+        let loss = out.sum();
+        loss.backward().expect("dilated conv2d backward");
+        assert!(conv.weight.grad().is_some());
+        assert!(x.grad().is_some());
     }
 }

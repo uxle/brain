@@ -93,3 +93,49 @@ fn test_default_collation() {
     assert_eq!(batch.samples[0].id, 0);
     assert_eq!(batch.samples[1].id, 1);
 }
+
+#[test]
+fn test_advanced_stack_and_sequence_padding_collation() {
+    use brain_data::collate::{pad_and_stack_sequences, stack_samples_to_tensor};
+
+    // Homogeneous Tensor Stacking
+    let s1 =
+        Sample::new(0, Tensor::from_slice(&[1.0, 2.0], vec![2])).with_label(Tensor::scalar(0.0));
+    let s2 =
+        Sample::new(1, Tensor::from_slice(&[3.0, 4.0], vec![2])).with_label(Tensor::scalar(1.0));
+
+    let (data, labels) = stack_samples_to_tensor(&[s1, s2]);
+    assert_eq!(data.shape(), &[2, 2]);
+    assert_eq!(data.data(), &[1.0, 2.0, 3.0, 4.0]);
+    assert_eq!(labels.unwrap().data(), &[0.0, 1.0]);
+
+    // Variable-length Sequence Padding
+    let seq1 = Sample::new(0, Tensor::from_slice(&[10.0, 20.0], vec![2]));
+    let seq2 = Sample::new(1, Tensor::from_slice(&[30.0, 40.0, 50.0, 60.0], vec![4]));
+
+    let (padded, mask) = pad_and_stack_sequences(&[seq1, seq2], -1.0);
+    assert_eq!(padded.shape(), &[2, 4]);
+    assert_eq!(mask.shape(), &[2, 4]);
+
+    assert_eq!(
+        padded.data(),
+        &[10.0, 20.0, -1.0, -1.0, 30.0, 40.0, 50.0, 60.0]
+    );
+    assert_eq!(mask.data(), &[1.0, 1.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0]);
+}
+
+#[test]
+fn test_asynchronous_bounded_prefetch_pipeline() {
+    use brain_data::prefetch::PrefetchIter;
+
+    let b1 = SampleBatch::new(vec![Sample::new(0, Tensor::scalar(100.0))]);
+    let b2 = SampleBatch::new(vec![Sample::new(1, Tensor::scalar(200.0))]);
+    let b3 = SampleBatch::new(vec![Sample::new(2, Tensor::scalar(300.0))]);
+
+    let mut prefetch = PrefetchIter::from_batches_bounded(vec![b1, b2, b3], 2);
+    let mut collected = Vec::new();
+    while let Some(batch) = prefetch.next() {
+        collected.push(batch.samples[0].id);
+    }
+    assert_eq!(collected, vec![0, 1, 2]);
+}

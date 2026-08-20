@@ -6,9 +6,65 @@
 use crate::grad_fns::GradFn;
 use brain_core::tensor::arithmetic as arith_t;
 use brain_core::{BrainResult, Tensor};
+use std::cell::Cell;
 use std::ops::{Add, Div, Mul, Neg, Sub};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, RwLock};
+
+thread_local! {
+    static GRAD_ENABLED: Cell<bool> = const { Cell::new(true) };
+}
+
+/// Returns whether gradient computation is enabled on the current thread.
+pub fn is_grad_enabled() -> bool {
+    GRAD_ENABLED.with(|g| g.get())
+}
+
+/// Sets whether gradient computation is enabled on the current thread.
+pub fn set_grad_enabled(enabled: bool) {
+    GRAD_ENABLED.with(|g| g.set(enabled));
+}
+
+/// RAII Guard that disables gradient tracking for its scope (PyTorch `torch.no_grad` equivalent).
+pub struct NoGradGuard {
+    prev_state: bool,
+}
+
+impl NoGradGuard {
+    /// Creates a new `NoGradGuard` disabling gradient tracking.
+    pub fn new() -> Self {
+        let prev = is_grad_enabled();
+        set_grad_enabled(false);
+        Self { prev_state: prev }
+    }
+}
+
+impl Default for NoGradGuard {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Drop for NoGradGuard {
+    fn drop(&mut self) {
+        set_grad_enabled(self.prev_state);
+    }
+}
+
+/// Executes closure with gradient tracking disabled.
+pub fn with_no_grad<R>(f: impl FnOnce() -> R) -> R {
+    let _guard = NoGradGuard::new();
+    f()
+}
+
+/// Executes closure with gradient tracking enabled.
+pub fn with_enable_grad<R>(f: impl FnOnce() -> R) -> R {
+    let prev = is_grad_enabled();
+    set_grad_enabled(true);
+    let res = f();
+    set_grad_enabled(prev);
+    res
+}
 
 static NEXT_VALUE_ID: AtomicUsize = AtomicUsize::new(1);
 
@@ -92,12 +148,18 @@ impl Value {
 
     /// Creates an operation node in the computation graph.
     pub fn from_op(tensor: Tensor, grad_fn: GradFn, requires_grad: bool) -> Self {
+        let is_enabled = is_grad_enabled();
+        let (fn_to_store, req) = if is_enabled {
+            (grad_fn, requires_grad)
+        } else {
+            (GradFn::None, false)
+        };
         Self {
             id: NEXT_VALUE_ID.fetch_add(1, Ordering::Relaxed),
             data: Arc::new(tensor),
             grad: Arc::new(RwLock::new(None)),
-            requires_grad,
-            grad_fn,
+            requires_grad: req,
+            grad_fn: fn_to_store,
             name: None,
             is_leaf: false,
         }
@@ -384,7 +446,19 @@ impl Value {
         crate::ops::unary::mean(self)
     }
 
-    /// 2D spatial convolution.
+    /// 2D spatial convolution with stride, padding, and dilation.
+    pub fn conv2d_ext(
+        &self,
+        weight: &Value,
+        bias: Option<&Value>,
+        stride: (usize, usize),
+        padding: (usize, usize),
+        dilation: (usize, usize),
+    ) -> Value {
+        crate::ops::conv_grad::conv2d_ext(self, weight, bias, stride, padding, dilation)
+    }
+
+    /// 2D spatial convolution (default dilation = (1, 1)).
     pub fn conv2d(
         &self,
         weight: &Value,
@@ -424,6 +498,16 @@ impl Value {
         padding: (usize, usize),
     ) -> Value {
         crate::ops::pool_grad::avg_pool2d(self, kernel_size, stride, padding)
+    }
+
+    /// 2D Adaptive Average Pooling.
+    pub fn adaptive_avg_pool2d(&self, out_h: usize, out_w: usize) -> Value {
+        crate::ops::pool_grad::adaptive_avg_pool2d(self, out_h, out_w)
+    }
+
+    /// 2D Adaptive Max Pooling.
+    pub fn adaptive_max_pool2d(&self, out_h: usize, out_w: usize) -> Value {
+        crate::ops::pool_grad::adaptive_max_pool2d(self, out_h, out_w)
     }
 
     /// Linear transformation `input * weight^T + bias` or `input * weight + bias`.

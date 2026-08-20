@@ -42,7 +42,7 @@ pub fn run_cli(args: &[String], sink: &OutputSink) -> ExitCode {
         "check" => crate::commands::check_cmd::run_check_command(&args[1..], sink),
         "script" => {
             if args.len() < 2 {
-                sink.println("Usage: brain script <file.brain>");
+                sink.println("Usage: brain script <file.bn|file.brain>");
                 ExitCode::INVALID_USAGE
             } else {
                 let file_path = &args[1];
@@ -64,10 +64,8 @@ pub fn run_cli(args: &[String], sink: &OutputSink) -> ExitCode {
             crate::init::scaffold_project(name, sink)
         }
         unknown => {
-            sink.println(&format!(
-                "Unknown command: '{}'. Run 'brain --help' for usage.",
-                unknown
-            ));
+            sink.println(&format!("error: unknown command '{}'", unknown));
+            sink.println("Run 'brain help' for available commands.");
             ExitCode::INVALID_USAGE
         }
     }
@@ -79,27 +77,24 @@ pub fn print_version(sink: &OutputSink) {
 }
 
 /// Prints top-level CLI help and subcommand descriptions.
-pub fn print_help(sink: &OutputSink) {
-    sink.println("Brain Deep Learning Framework CLI");
+fn print_help(sink: &OutputSink) {
+    sink.println("Brain 1.0 — Embedded Neural Engine & Deep Learning Framework");
+    sink.println("");
     sink.println("Usage: brain <command> [options]");
     sink.println("");
     sink.println("Commands:");
-    sink.println("  new        Create a newborn 3D cubic neural mind in a .bn file");
-    sink.println("  chat       Start an interactive conversation with a growing BrainMind");
-    sink.println("  make       Build, train, and checkpoint a model from a dataset");
-    sink.println("  run        Load a model checkpoint and run inference");
-    sink.println("  agent      Run autonomous perceive-think-act-learn agent loop");
-    sink.println("  train      Train models with progress bars and metric tracking");
-    sink.println("  model      Build, inspect, and evaluate deep neural models");
-    sink.println("  check      Verify model and computational graph integrity");
-    sink.println("  tensor     Inspect, create, transform, and evaluate tensors");
-    sink.println("  bench      Run high-resolution operator & model benchmarks");
+    sink.println("  make       Train and package a neural model (.bn / .brain)");
+    sink.println("  run        Execute inference on input data with a trained model");
+    sink.println("  check      Verify checkpoint integrity and numerical health");
+    sink.println("  chat       Interactive conversational neural reasoning");
+    sink.println("  space      Manage decentralized compute nodes and spaces");
+    sink.println("  agent      Run autonomous goal-directed agents");
+    sink.println("  script     Execute declarative .bn / .brain automation scripts");
     sink.println("  dataset    Inspect, split, and cache datasets");
     sink.println("  convert    Convert and export tensor and model formats");
-    sink.println("  repl       Start interactive computation REPL");
-    sink.println("  script     Execute declarative .brain automation scripts");
     sink.println("  doctor     Diagnose system hardware and backend health");
     sink.println("  init       Scaffold a new Brain project workspace");
+    sink.println("  repl       Start interactive computation REPL");
 }
 
 #[cfg(test)]

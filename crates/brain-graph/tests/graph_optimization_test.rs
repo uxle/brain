@@ -94,3 +94,48 @@ fn test_constant_folding_pass() {
         "Constant node must be folded"
     );
 }
+
+#[test]
+fn test_operator_fusion_planning() {
+    use brain_graph::passes::fusion::plan_fusion;
+
+    let mut builder = GraphBuilder::new("fusion_test");
+    let x = builder.add_input("x", vec![2, 2], DType::F32);
+    let w = builder.add_constant("w", vec![2, 2], vec![1.0; 4]);
+
+    let mm = builder.add_node("matmul", OpKind::MatMul, vec![x, w], vec![2, 2]);
+    let relu = builder.add_node("relu", OpKind::Relu, vec![mm], vec![2, 2]);
+    builder.mark_output(relu);
+
+    let graph = builder.build().expect("Graph build");
+    let plan = plan_fusion(&graph).expect("Fusion planning");
+
+    assert_eq!(plan.fused_groups.len(), 1);
+    assert_eq!(plan.fused_groups[0], vec![0, 1]);
+}
+
+#[test]
+fn test_level_synchronous_schedule_generation() {
+    use brain_graph::schedule::generate_schedule;
+
+    let mut builder = GraphBuilder::new("sched_test");
+    let x = builder.add_input("x", vec![2, 2], DType::F32);
+    let c1 = builder.add_constant("c1", vec![2, 2], vec![1.0; 4]);
+    let c2 = builder.add_constant("c2", vec![2, 2], vec![2.0; 4]);
+
+    // Stage 0: Two parallel adds
+    let add1 = builder.add_node("add1", OpKind::Add, vec![x, c1], vec![2, 2]);
+    let add2 = builder.add_node("add2", OpKind::Add, vec![x, c2], vec![2, 2]);
+
+    // Stage 1: Mul consuming both
+    let mul = builder.add_node("mul", OpKind::Mul, vec![add1, add2], vec![2, 2]);
+    builder.mark_output(mul);
+
+    let graph = builder.build().expect("Graph build");
+    let sched = generate_schedule(&graph);
+
+    assert_eq!(sched.num_stages(), 2);
+    assert_eq!(sched.max_parallelism(), 2);
+    assert_eq!(sched.stages[0].len(), 2);
+    assert_eq!(sched.stages[1].len(), 1);
+}

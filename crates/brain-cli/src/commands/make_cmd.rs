@@ -17,10 +17,10 @@ use crate::parser::ArgParser;
 use brain_core::Tensor;
 use brain_train::{Batch, Linear, ModelState, ReLU, Sequential, TrainerBuilder};
 
-/// Handles `brain make MODELOUT.brain --data DATA.txt [opts]`.
+/// Handles `brain make MODELOUT.bn --data DATA.txt [opts]`.
 pub fn run_make_command(args: &[String], sink: &OutputSink) -> ExitCode {
     if args.is_empty() {
-        sink.println("Usage: brain make <output.brain> --data <data.txt> [options]");
+        sink.println("Usage: brain make <output.bn|output.brain> --data <data.txt> [options]");
         sink.println("Options:");
         sink.println("  --arch STR    Model architecture: mlp (default) or convnet");
         sink.println("  --hidden N    Hidden units in the MLP (default 16)");

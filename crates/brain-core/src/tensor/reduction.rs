@@ -271,6 +271,21 @@ pub fn norm_along_axis(a: &Tensor, p: f64, dim: usize, keepdim: bool) -> Tensor 
     }
 }
 
+/// Computes numerically stable log-sum-exp along a specified dimension.
+pub fn logsumexp_along_dim(a: &Tensor, dim: usize, keepdim: bool) -> Tensor {
+    assert!(dim < a.ndim(), "logsumexp_along_dim: dim out of bounds");
+    let max_t = max_along_dim(a, dim, true);
+    let shifted = a.map2(&max_t, |x, m| (x - m).exp());
+    let sum_exp = reduce_along_dim(&shifted, dim, keepdim, 0.0, |acc, x| acc + x);
+    let log_sum = crate::tensor::math::log(&sum_exp);
+    if keepdim {
+        log_sum.map2(&max_t, |ls, m| ls + m)
+    } else {
+        let max_squeezed = max_along_dim(a, dim, false);
+        log_sum.map2(&max_squeezed, |ls, m| ls + m)
+    }
+}
+
 // =============================================================================
 // Variance / Standard Deviation Along a Dimension
 // =============================================================================
@@ -502,5 +517,16 @@ mod tests {
         let b = Tensor::from_slice(&[-2.0, 3.0, -1.0], vec![3]);
         let cp = cumprod(&b, 0);
         assert_eq!(cp.to_vec(), vec![-2.0, -6.0, 6.0]);
+    }
+
+    #[test]
+    fn test_logsumexp_along_dim() {
+        let a = Tensor::from_slice(&[1.0, 2.0, 3.0, 4.0], vec![2, 2]);
+        let lse = logsumexp_along_dim(&a, 1, false);
+        assert_eq!(lse.shape(), &[2]);
+        let exp0 = (1.0f64.exp() + 2.0f64.exp()).ln();
+        let exp1 = (3.0f64.exp() + 4.0f64.exp()).ln();
+        assert!((lse.get(0) - exp0).abs() < 1e-9);
+        assert!((lse.get(1) - exp1).abs() < 1e-9);
     }
 }

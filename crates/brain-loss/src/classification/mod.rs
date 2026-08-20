@@ -5,11 +5,13 @@
 
 pub mod bce;
 pub mod ce;
+pub mod ctc;
 pub mod focal;
 pub mod other;
 
 pub use bce::{BCEConfig, BCELoss, BCEWithLogitsLoss};
 pub use ce::{CrossEntropyConfig, CrossEntropyLoss};
+pub use ctc::{CTCConfig, CTCLoss};
 pub use focal::{FocalConfig, FocalLoss};
 pub use other::{ClassLossKind, HingeLoss, KLDivergenceLoss};
 

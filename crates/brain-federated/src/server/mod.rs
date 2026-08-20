@@ -6,7 +6,9 @@
 pub mod aggregate;
 pub mod round;
 
-pub use aggregate::{fed_avg_aggregate, AggregationAlgorithm};
+pub use aggregate::{
+    fed_avg_aggregate, median_aggregate, trimmed_mean_aggregate, AggregationAlgorithm,
+};
 pub use round::RoundStats;
 
 use crate::core::RoundId;

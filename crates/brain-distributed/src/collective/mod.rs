@@ -6,7 +6,9 @@ pub mod allreduce;
 pub mod ring;
 pub mod tree;
 
-pub use allreduce::{AllReduceAlgorithm, AllReduceConfig};
+pub use allreduce::{
+    execute_allreduce, ring_allreduce_simulate, AllReduceAlgorithm, AllReduceConfig,
+};
 pub use ring::RingTopology;
 pub use tree::TreeTopology;
 

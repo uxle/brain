@@ -63,7 +63,10 @@ pub mod utils;
 pub use builder::DatasetBuilder;
 pub use config::DatasetConfig;
 pub use core::{Batch, Item};
-pub use dataset::Dataset;
+pub use dataset::{ConcatDataset, Dataset, Subset, TensorDataset};
+pub use splits::{
+    k_fold_split_indices, random_split_indices, stratified_split_indices, SplitResult,
+};
 
 /// Package version string.
 pub const VERSION: &str = "0.2.0";

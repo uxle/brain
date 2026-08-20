@@ -286,6 +286,11 @@ pub fn gelu(a: &Tensor) -> Tensor {
     a.map(|x| 0.5 * x * (1.0 + (SQRT_2_OVER_PI * (x + 0.044715 * x.powi(3))).tanh()))
 }
 
+/// Quick GELU approximation: x * sigmoid(1.702 * x).
+pub fn quick_gelu(a: &Tensor) -> Tensor {
+    a.map(|x| x / (1.0 + (-1.702 * x).exp()))
+}
+
 /// Sigmoid Linear Unit (SiLU / Swish): x * sigmoid(x).
 pub fn silu(a: &Tensor) -> Tensor {
     a.map(|x| x / (1.0 + (-x).exp()))
@@ -297,6 +302,45 @@ pub fn mish(a: &Tensor) -> Tensor {
         let sp = if x > 20.0 { x } else { (1.0 + x.exp()).ln() };
         x * sp.tanh()
     })
+}
+
+/// Error function erf(x) via high-precision Chebyshev polynomial approximation.
+pub fn erf(a: &Tensor) -> Tensor {
+    a.map(scalar_erf)
+}
+
+/// Complementary error function erfc(x) = 1 - erf(x).
+pub fn erfc(a: &Tensor) -> Tensor {
+    a.map(|x| 1.0 - scalar_erf(x))
+}
+
+/// Normalized sinc function: sinc(x) = sin(pi * x) / (pi * x), with sinc(0) = 1.
+pub fn sinc(a: &Tensor) -> Tensor {
+    a.map(|x| {
+        if x.abs() < 1e-15 {
+            1.0
+        } else {
+            let px = std::f64::consts::PI * x;
+            px.sin() / px
+        }
+    })
+}
+
+fn scalar_erf(x: f64) -> f64 {
+    if x == 0.0 {
+        return 0.0;
+    }
+    let sign = if x < 0.0 { -1.0 } else { 1.0 };
+    let x_abs = x.abs();
+    let p = 0.3275911;
+    let a1 = 0.254829592;
+    let a2 = -0.284496736;
+    let a3 = 1.421413741;
+    let a4 = -1.453152027;
+    let a5 = 1.061405429;
+    let t = 1.0 / (1.0 + p * x_abs);
+    let poly = ((((a5 * t + a4) * t + a3) * t + a2) * t + a1) * t;
+    sign * (1.0 - poly * (-x_abs * x_abs).exp())
 }
 
 // =============================================================================
@@ -343,5 +387,20 @@ mod tests {
 
         let p = Tensor::from_slice(&[1.0, 4.0, 9.0], vec![3]);
         assert_eq!(sqrt(&p).to_vec(), vec![1.0, 2.0, 3.0]);
+    }
+
+    #[test]
+    fn test_erf_erfc_sinc_quick_gelu() {
+        let zero = Tensor::zeros(vec![1]);
+        assert_eq!(erf(&zero).get(0), 0.0);
+        assert_eq!(erfc(&zero).get(0), 1.0);
+        assert_eq!(sinc(&zero).get(0), 1.0);
+        assert_eq!(quick_gelu(&zero).get(0), 0.0);
+
+        let t = Tensor::from_slice(&[1.0], vec![1]);
+        // erf(1.0) approx 0.84270079
+        assert!((erf(&t).get(0) - 0.8427).abs() < 1e-3);
+        assert!((erfc(&t).get(0) - (1.0 - 0.8427)).abs() < 1e-3);
+        assert_eq!(sinc(&t).get(0).abs() < 1e-15, true); // sinc(1.0) = sin(pi)/pi = 0.0
     }
 }

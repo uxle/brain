@@ -4,6 +4,7 @@
 #![allow(missing_docs)]
 
 use super::calculate_fan;
+use brain_core::random::{NormalDist, UniformDist};
 use brain_core::Tensor;
 
 /// Configuration for Kaiming/Xavier initialization.
@@ -16,15 +17,17 @@ pub struct InitConfig {
 pub fn kaiming_uniform(shape: &[usize], a: f64) -> Tensor {
     let (fan_in, _) = calculate_fan(shape);
     let gain = (2.0 / (1.0 + a * a)).sqrt();
-    let bound = gain * (3.0 / fan_in as f64).sqrt();
+    let bound = gain * (3.0 / (fan_in as f64).max(1.0)).sqrt();
 
     let total: usize = shape.iter().product();
-    let mut data = Vec::with_capacity(total);
-    for i in 0..total {
-        // Deterministic pseudo-random progression
-        let norm = ((i * 1103515245 + 12345) % 65536) as f64 / 65536.0;
-        data.push(-bound + norm * 2.0 * bound);
-    }
+    let dist = UniformDist::new(-bound, bound);
+    let data = brain_core::random::with_rng(|rng| {
+        let mut v = Vec::with_capacity(total);
+        for _ in 0..total {
+            v.push(dist.sample(rng));
+        }
+        v
+    });
 
     Tensor::from_vec(data, shape.to_vec())
 }
@@ -33,16 +36,17 @@ pub fn kaiming_uniform(shape: &[usize], a: f64) -> Tensor {
 pub fn kaiming_normal(shape: &[usize], a: f64) -> Tensor {
     let (fan_in, _) = calculate_fan(shape);
     let gain = (2.0 / (1.0 + a * a)).sqrt();
-    let std = gain / (fan_in as f64).sqrt();
+    let std = gain / (fan_in as f64).max(1.0).sqrt();
 
     let total: usize = shape.iter().product();
-    let mut data = Vec::with_capacity(total);
-    for i in 0..total {
-        let u1 = (((i * 1664525 + 1013904223) % 65536) as f64 / 65536.0).max(1e-12);
-        let u2 = ((i * 22695477 + 1) % 65536) as f64 / 65536.0;
-        let z = (-2.0 * u1.ln()).sqrt() * (2.0 * std::f64::consts::PI * u2).cos();
-        data.push(z * std);
-    }
+    let dist = NormalDist::new(0.0, std);
+    let data = brain_core::random::with_rng(|rng| {
+        let mut v = Vec::with_capacity(total);
+        for _ in 0..total {
+            v.push(dist.sample(rng));
+        }
+        v
+    });
 
     Tensor::from_vec(data, shape.to_vec())
 }
@@ -53,11 +57,14 @@ pub fn xavier_uniform(shape: &[usize]) -> Tensor {
     let bound = (6.0 / (fan_in + fan_out) as f64).sqrt();
 
     let total: usize = shape.iter().product();
-    let mut data = Vec::with_capacity(total);
-    for i in 0..total {
-        let norm = ((i * 1103515245 + 12345) % 65536) as f64 / 65536.0;
-        data.push(-bound + norm * 2.0 * bound);
-    }
+    let dist = UniformDist::new(-bound, bound);
+    let data = brain_core::random::with_rng(|rng| {
+        let mut v = Vec::with_capacity(total);
+        for _ in 0..total {
+            v.push(dist.sample(rng));
+        }
+        v
+    });
 
     Tensor::from_vec(data, shape.to_vec())
 }
@@ -68,13 +75,14 @@ pub fn xavier_normal(shape: &[usize]) -> Tensor {
     let std = (2.0 / (fan_in + fan_out) as f64).sqrt();
 
     let total: usize = shape.iter().product();
-    let mut data = Vec::with_capacity(total);
-    for i in 0..total {
-        let u1 = (((i * 1664525 + 1013904223) % 65536) as f64 / 65536.0).max(1e-12);
-        let u2 = ((i * 22695477 + 1) % 65536) as f64 / 65536.0;
-        let z = (-2.0 * u1.ln()).sqrt() * (2.0 * std::f64::consts::PI * u2).cos();
-        data.push(z * std);
-    }
+    let dist = NormalDist::new(0.0, std);
+    let data = brain_core::random::with_rng(|rng| {
+        let mut v = Vec::with_capacity(total);
+        for _ in 0..total {
+            v.push(dist.sample(rng));
+        }
+        v
+    });
 
     Tensor::from_vec(data, shape.to_vec())
 }

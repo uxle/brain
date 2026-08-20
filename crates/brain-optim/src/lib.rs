@@ -5,6 +5,7 @@
 #![allow(missing_docs)]
 
 pub mod adadelta;
+pub mod adafactor;
 pub mod adagrad;
 pub mod adam;
 pub mod adan;
@@ -17,6 +18,7 @@ pub mod lion;
 pub mod lookahead;
 pub mod loss_landscape;
 pub mod lr_finder;
+pub mod muon;
 pub mod novograd;
 pub mod optimizer;
 pub mod radam;
@@ -24,10 +26,12 @@ pub mod rmsprop;
 pub mod sam;
 pub mod schedulers;
 pub mod sgd;
+pub mod sophia;
 pub mod state;
 pub mod swa;
 
 pub use adadelta::{Adadelta, AdadeltaConfig};
+pub use adafactor::{Adafactor, AdafactorConfig};
 pub use adagrad::{Adagrad, AdagradConfig};
 pub use adam::{
     variants::{AdamVariant, Adamax, Nadam},
@@ -45,6 +49,7 @@ pub use lion::{Lion, LionConfig};
 pub use lookahead::{Lookahead, LookaheadConfig};
 pub use loss_landscape::{create_filter_normalized_direction, interpolate_1d, LossLandscapeConfig};
 pub use lr_finder::{LrFindConfig, LrFindResult, LrFinder};
+pub use muon::{Muon, MuonConfig};
 pub use novograd::{NovoGrad, NovoGradConfig};
 pub use optimizer::{
     OptimResult, Optimizer, OptimizerConfig, OptimizerError, ParamGroup, ParamId, StepInfo,
@@ -58,6 +63,7 @@ pub use schedulers::{
     ReduceLROnPlateau, StepLR, StepMode,
 };
 pub use sgd::{nesterov::SgdNesterov, Sgd, SgdConfig};
+pub use sophia::{SophiaG, SophiaGConfig};
 pub use state::{OptimizerCheckpoint, StateDict};
 pub use swa::{SwAConfig, SwAOptimizer};
 

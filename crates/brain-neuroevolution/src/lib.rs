@@ -48,7 +48,9 @@ pub use benchmark::{ackley_fn, rastrigin_fn, rosenbrock_fn, sphere_fn};
 pub use checkpoint::EvoCheckpoint;
 pub use config::OperatorConfig;
 pub use core::{AlgorithmKind, EvoConfig, EvoError, EvoResult};
-pub use crossover::{single_point_crossover, uniform_crossover};
+pub use crossover::{
+    blx_alpha_crossover, sbx_crossover, single_point_crossover, uniform_crossover,
+};
 pub use es::{Cmaes, CmaesConfig, Es1p1, Es1p1Config, EsKind, EsResult};
 pub use fitness::{FitnessFn, FitnessStats};
 pub use ga::{Ga, GaConfig, GaResult, TerminationConfig};
@@ -65,7 +67,7 @@ pub use neuro::{
 pub use ops::{apply_to_weights, genome_to_tensor, tensor_to_genome};
 pub use parallel::{evaluate_population_parallel, ParallelConfig};
 pub use population::Population;
-pub use selection::{tournament_select, SelectionKind};
+pub use selection::{rank_based_select, roulette_wheel_select, tournament_select, SelectionKind};
 pub use utils::{rank_fitness, FastRng};
 
 /// Framework version string.

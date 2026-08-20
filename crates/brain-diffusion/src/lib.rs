@@ -53,6 +53,7 @@ pub use builder::DiffusionBuilder;
 pub use config::DiffusionConfig;
 pub use core::DiffusionState;
 pub use diffusion::DiffusionModel;
+pub use samplers::{DdimSampler, DdpmSampler, EulerAncestralSampler, PlmsSampler, Sampler};
 pub use schedules::{CosineSchedule, LinearSchedule, NoiseSchedule};
 pub use unet::{Unet2d, UnetConfig};
 

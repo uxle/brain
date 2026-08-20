@@ -82,12 +82,6 @@ impl Module for AvgPool2d {
 }
 
 /// 2D Adaptive Average Pooling layer to a fixed output size.
-///
-/// NOT yet migrated onto `Value` -- see module-level doc comment. Calling
-/// `Module::forward` returns an error. Use `forward_tensor_only` if you
-/// need the forward-pass-only behavior (e.g. inference with no gradient
-/// requirement) until Phase 0.2 (tracked follow-up: add
-/// `Value::adaptive_avg_pool2d` with a real VJP) lands.
 #[derive(Debug, Clone, Copy)]
 pub struct AdaptiveAvgPool2d {
     pub out_h: usize,
@@ -99,28 +93,30 @@ impl AdaptiveAvgPool2d {
         Self { out_h, out_w }
     }
 
-    /// Forward-only, non-differentiable path. Does NOT build a tape entry --
-    /// do not use this inside a graph you intend to call `.backward()` on;
-    /// gradients will simply stop here.
+    pub fn forward(&self, input: &Value) -> Value {
+        input.adaptive_avg_pool2d(self.out_h, self.out_w)
+    }
+
+    /// Forward-only, non-differentiable path.
     pub fn forward_tensor_only(&self, input: &Tensor) -> Tensor {
         brain_core::tensor::pool::adaptive_avg_pool2d(input, self.out_h, self.out_w)
     }
 }
 
 impl Module for AdaptiveAvgPool2d {
-    fn forward(&self, _input: &Value) -> ModuleResult<Value> {
-        Err(ModuleError::InvalidParameter(
-            "AdaptiveAvgPool2d has no Value-based (differentiable) forward path yet -- \
-             brain_autograd::Value has no adaptive-pooling primitive (Phase 0.2, tracked \
-             and un-done). Use `forward_tensor_only()` for inference-only use, or wait for \
-             Phase 0.2."
-                .to_string(),
-        ))
+    fn forward(&self, input: &Value) -> ModuleResult<Value> {
+        let shape = input.shape();
+        if shape.len() != 4 {
+            return Err(ModuleError::ShapeMismatch {
+                expected: vec![1, 1, self.out_h, self.out_w],
+                got: shape.to_vec(),
+            });
+        }
+        Ok(self.forward(input))
     }
 }
 
-/// 2D Adaptive Max Pooling layer to a fixed output size. Same status as
-/// `AdaptiveAvgPool2d` above -- see its doc comment.
+/// 2D Adaptive Max Pooling layer to a fixed output size.
 #[derive(Debug, Clone, Copy)]
 pub struct AdaptiveMaxPool2d {
     pub out_h: usize,
@@ -132,21 +128,26 @@ impl AdaptiveMaxPool2d {
         Self { out_h, out_w }
     }
 
-    /// Forward-only, non-differentiable path -- see `AdaptiveAvgPool2d::forward_tensor_only`.
+    pub fn forward(&self, input: &Value) -> Value {
+        input.adaptive_max_pool2d(self.out_h, self.out_w)
+    }
+
+    /// Forward-only, non-differentiable path.
     pub fn forward_tensor_only(&self, input: &Tensor) -> Tensor {
         brain_core::tensor::pool::adaptive_max_pool2d(input, self.out_h, self.out_w)
     }
 }
 
 impl Module for AdaptiveMaxPool2d {
-    fn forward(&self, _input: &Value) -> ModuleResult<Value> {
-        Err(ModuleError::InvalidParameter(
-            "AdaptiveMaxPool2d has no Value-based (differentiable) forward path yet -- \
-             brain_autograd::Value has no adaptive-pooling primitive (Phase 0.2, tracked \
-             and un-done). Use `forward_tensor_only()` for inference-only use, or wait for \
-             Phase 0.2."
-                .to_string(),
-        ))
+    fn forward(&self, input: &Value) -> ModuleResult<Value> {
+        let shape = input.shape();
+        if shape.len() != 4 {
+            return Err(ModuleError::ShapeMismatch {
+                expected: vec![1, 1, self.out_h, self.out_w],
+                got: shape.to_vec(),
+            });
+        }
+        Ok(self.forward(input))
     }
 }
 
@@ -191,8 +192,7 @@ mod tests {
         assert_eq!(out.data().to_vec(), vec![3.5, 5.5, 11.5, 13.5]);
     }
 
-    /// Gradient check that was impossible before Phase 0 for MaxPool2d --
-    /// confirms the gradient routes entirely to the argmax position within
+    /// Gradient check confirms the gradient routes entirely to the argmax position within
     /// each pooling window, via the real tape.
     #[test]
     fn test_max_pool2d_gradient_routes_to_argmax_via_tape() {
@@ -211,10 +211,21 @@ mod tests {
     }
 
     #[test]
-    fn test_adaptive_pool_forward_errors_until_phase_0_2() {
+    fn test_adaptive_pool_forward_and_backward() {
         let ap = AdaptiveAvgPool2d::new(2, 2);
-        let t = Value::new(Tensor::zeros(vec![1, 1, 4, 4]), false);
-        let result = ap.forward(&t);
-        assert!(result.is_err(), "adaptive pooling should error via Module::forward, not silently skip gradient tracking");
+        let t = Value::new(Tensor::ones(vec![1, 1, 4, 4]), true);
+        let out = ap.forward(&t);
+        assert_eq!(out.shape(), &[1, 1, 2, 2]);
+        let loss = out.sum();
+        loss.backward().unwrap();
+        assert!(t.grad().is_some());
+
+        let mp = AdaptiveMaxPool2d::new(2, 2);
+        let t_max = Value::new(Tensor::ones(vec![1, 1, 4, 4]), true);
+        let out_max = mp.forward(&t_max);
+        assert_eq!(out_max.shape(), &[1, 1, 2, 2]);
+        let loss_max = out_max.sum();
+        loss_max.backward().unwrap();
+        assert!(t_max.grad().is_some());
     }
 }

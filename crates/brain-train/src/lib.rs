@@ -46,6 +46,8 @@ pub enum TrainError {
     Loss(String),
     /// Serialized model state could not be parsed.
     State(String),
+    /// I/O error during state read or write.
+    Io(String),
 }
 
 impl fmt::Display for TrainError {
@@ -62,6 +64,7 @@ impl fmt::Display for TrainError {
             TrainError::Module(msg) => write!(f, "module error: {}", msg),
             TrainError::Loss(msg) => write!(f, "loss error: {}", msg),
             TrainError::State(msg) => write!(f, "state error: {}", msg),
+            TrainError::Io(msg) => write!(f, "io error: {}", msg),
         }
     }
 }
@@ -439,6 +442,7 @@ impl Conv2d {
             grad_output,
             self.stride,
             self.padding,
+            (1, 1),
         )
         .map_err(|e| TrainError::Module(e.to_string()))?;
 
@@ -930,7 +934,7 @@ pub struct ModelState {
 }
 
 impl ModelState {
-    /// Encodes state as a small deterministic Brain text checkpoint.
+    /// Encodes state as a small deterministic Brain / BN text checkpoint.
     pub fn to_brain_bytes(&self) -> Vec<u8> {
         let mut out = String::from("BRAIN_STATE_V1\n");
         for (key, value) in &self.metadata {
@@ -968,6 +972,30 @@ impl ModelState {
         out.into_bytes()
     }
 
+    /// Alias for [`ModelState::to_brain_bytes`] encoding as `.bn` checkpoint.
+    pub fn to_bn_bytes(&self) -> Vec<u8> {
+        self.to_brain_bytes()
+    }
+
+    /// Saves the model state to disk at the specified path (`.bn` or `.brain`).
+    pub fn save_file(&self, path: impl AsRef<std::path::Path>) -> TrainResult<()> {
+        let bytes = self.to_bn_bytes();
+        let p = path.as_ref();
+        if let Some(parent) = p.parent() {
+            if !parent.as_os_str().is_empty() {
+                let _ = std::fs::create_dir_all(parent);
+            }
+        }
+        std::fs::write(p, &bytes).map_err(|e| TrainError::Io(e.to_string()))
+    }
+
+    /// Loads the model state from disk from a `.bn` or `.brain` file.
+    pub fn load_file(path: impl AsRef<std::path::Path>) -> TrainResult<Self> {
+        let p = path.as_ref();
+        let bytes = std::fs::read(p).map_err(|e| TrainError::Io(e.to_string()))?;
+        Self::from_bn_bytes(&bytes)
+    }
+
     /// Extracts parameter tensors in order.
     pub fn parameters(&self) -> Vec<Tensor> {
         self.tensors.iter().map(|nt| nt.tensor.clone()).collect()
@@ -980,6 +1008,11 @@ impl ModelState {
 
     /// Deserializes model state from bytes.
     pub fn from_bytes(bytes: &[u8]) -> TrainResult<Self> {
+        Self::from_brain_bytes(bytes)
+    }
+
+    /// Alias for [`ModelState::from_brain_bytes`] decoding a `.bn` checkpoint.
+    pub fn from_bn_bytes(bytes: &[u8]) -> TrainResult<Self> {
         Self::from_brain_bytes(bytes)
     }
 

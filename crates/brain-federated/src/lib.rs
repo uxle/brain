@@ -53,7 +53,8 @@ pub use ops::{l2_norm_delta, scale_delta};
 pub use privacy::{add_dp_noise, mask_tensor, DpConfig, GaussianNoise, SecureAggregator};
 pub use process::{apply_weight_decay, cosine_lr, mse_eval};
 pub use server::{
-    fed_avg_aggregate, AggregationAlgorithm, FederatedServer, RoundStats, ServerConfig,
+    fed_avg_aggregate, median_aggregate, trimmed_mean_aggregate, AggregationAlgorithm,
+    FederatedServer, RoundStats, ServerConfig,
 };
 pub use transform::{normalize_weights, polyak_average};
 pub use utils::{sample_clients, stddev};

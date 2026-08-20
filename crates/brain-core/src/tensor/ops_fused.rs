@@ -94,6 +94,53 @@ pub fn fused_rmsnorm(x: &Tensor, weight: &Tensor, eps: f64) -> Tensor {
     out
 }
 
+/// Fused Residual Add + RMSNorm: out = RMSNorm(x + residual, weight, eps) in a single memory pass.
+pub fn fused_add_rmsnorm(
+    x: &Tensor,
+    residual: &Tensor,
+    weight: &Tensor,
+    eps: f64,
+) -> (Tensor, Tensor) {
+    assert_eq!(x.shape(), residual.shape());
+    assert_eq!(x.ndim(), 2);
+    let (rows, cols) = (x.shape()[0], x.shape()[1]);
+    let mut sum_out = Tensor::zeros(vec![rows, cols]);
+    let mut norm_out = Tensor::zeros(vec![rows, cols]);
+
+    for r in 0..rows {
+        let mut sum_sq = 0.0;
+        for c in 0..cols {
+            let sum_val = x.get_2d(r, c) + residual.get_2d(r, c);
+            sum_out.set_2d(r, c, sum_val);
+            sum_sq += sum_val * sum_val;
+        }
+        let rms = 1.0 / ((sum_sq / (cols as f64)) + eps).sqrt();
+        for c in 0..cols {
+            let w = weight.get(c);
+            norm_out.set_2d(r, c, sum_out.get_2d(r, c) * rms * w);
+        }
+    }
+    (norm_out, sum_out)
+}
+
+/// Fused SwiGLU activation: out = (gate * sigmoid(gate)) * up.
+pub fn fused_swiglu(gate: &Tensor, up: &Tensor) -> Tensor {
+    assert_eq!(gate.shape(), up.shape());
+    let numel = gate.numel();
+    let g_data = gate.data();
+    let u_data = up.data();
+    let mut out = Vec::with_capacity(numel);
+
+    for i in 0..numel {
+        let g = g_data[i];
+        let sig = 1.0 / (1.0 + (-g).exp());
+        let swish = g * sig;
+        out.push(swish * u_data[i]);
+    }
+
+    Tensor::new(out, gate.shape().to_vec())
+}
+
 // =============================================================================
 // Tests
 // =============================================================================
@@ -125,5 +172,24 @@ mod tests {
         let c = Tensor::from_slice(&[0.5, 0.5], vec![2]);
         let fma = fused_fma(&a, &b, &c);
         assert_eq!(fma.to_vec(), vec![3.5, 8.5]);
+    }
+
+    #[test]
+    fn test_fused_add_rmsnorm_and_swiglu() {
+        let x = Tensor::from_slice(&[1.0, 2.0], vec![1, 2]);
+        let res = Tensor::from_slice(&[0.5, 0.5], vec![1, 2]);
+        let w = Tensor::from_slice(&[1.0, 1.0], vec![2]);
+        let (norm, sum) = fused_add_rmsnorm(&x, &res, &w, 1e-5);
+        assert_eq!(sum.data(), &[1.5, 2.5]);
+        assert_eq!(norm.shape(), &[1, 2]);
+
+        let gate = Tensor::from_slice(&[0.0, 1.0], vec![2]);
+        let up = Tensor::from_slice(&[2.0, 3.0], vec![2]);
+        let swi = fused_swiglu(&gate, &up);
+        assert_eq!(swi.shape(), &[2]);
+        // swish(0) = 0 * 0.5 = 0; 0 * 2 = 0
+        assert!((swi.data()[0] - 0.0).abs() < 1e-6);
+        // swish(1) = 1 / (1 + exp(-1)) ~= 0.73105857863; * 3 ~= 2.1931757
+        assert!((swi.data()[1] - (1.0 / (1.0 + (-1.0f64).exp()) * 3.0)).abs() < 1e-5);
     }
 }

@@ -40,7 +40,9 @@ pub mod tensor;
 // =============================================================================
 
 pub use brain_mind::{BrainMind, TeachSummary};
-pub use device::{Backend, CpuBackend, Device, DeviceInfo, DeviceType, SimdCpuBackend};
+pub use device::{
+    Backend, CpuBackend, Device, DeviceInfo, DeviceQuota, DeviceType, SimdCpuBackend,
+};
 pub use dtype::{DType, DTypeInfo};
 pub use error::{BrainError, BrainResult};
 pub use serialization::{BrainModelFile, NodeCoord3D, TensorArchive, BN_MAGIC};

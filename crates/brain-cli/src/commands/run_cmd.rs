@@ -8,7 +8,7 @@ use brain_train::{Linear, ModelState, ReLU, Sequential, TrainableModule};
 
 pub fn run_run_command(args: &[String], sink: &OutputSink) -> ExitCode {
     if args.is_empty() {
-        sink.println("Usage: brain run <model.brain> [--data DATA | --input \"a,b,c\"]");
+        sink.println("Usage: brain run <model.bn|model.brain> [--data DATA | --input \"a,b,c\"]");
 
         sink.println("Options:");
 

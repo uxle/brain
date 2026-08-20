@@ -265,26 +265,27 @@ fn test_layernorm_and_rmsnorm_gradient() {
     );
 
     let mut rms = RMSNorm::new(3, 1e-5);
-    rms.weight = Tensor::from_slice(&[1.2, 0.8, 1.0], vec![3]);
-    let w_data = rms.weight.to_vec();
+    rms.weight = Value::new(Tensor::from_slice(&[1.2, 0.8, 1.0], vec![3]), true);
+    let w_data = rms.weight.data().to_vec();
     check_param_gradient(
         |w_test| {
             let mut r = rms.clone();
-            r.weight = Tensor::from_slice(w_test, vec![3]);
+            r.weight = Value::new(Tensor::from_slice(w_test, vec![3]), true);
             Module::forward(&r, &in_fixed)
                 .unwrap()
+                .data()
                 .to_vec()
                 .iter()
                 .sum()
         },
         &w_data,
         &[
-            (Module::forward(&rms, &in_fixed).unwrap().to_vec()[0] / 1.2
-                + Module::forward(&rms, &in_fixed).unwrap().to_vec()[3] / 1.2),
-            (Module::forward(&rms, &in_fixed).unwrap().to_vec()[1] / 0.8
-                + Module::forward(&rms, &in_fixed).unwrap().to_vec()[4] / 0.8),
-            (Module::forward(&rms, &in_fixed).unwrap().to_vec()[2] / 1.0
-                + Module::forward(&rms, &in_fixed).unwrap().to_vec()[5] / 1.0),
+            (Module::forward(&rms, &in_fixed).unwrap().data().to_vec()[0] / 1.2
+                + Module::forward(&rms, &in_fixed).unwrap().data().to_vec()[3] / 1.2),
+            (Module::forward(&rms, &in_fixed).unwrap().data().to_vec()[1] / 0.8
+                + Module::forward(&rms, &in_fixed).unwrap().data().to_vec()[4] / 0.8),
+            (Module::forward(&rms, &in_fixed).unwrap().data().to_vec()[2] / 1.0
+                + Module::forward(&rms, &in_fixed).unwrap().data().to_vec()[5] / 1.0),
         ],
         1e-5,
         1e-4,

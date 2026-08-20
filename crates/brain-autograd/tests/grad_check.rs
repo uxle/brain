@@ -796,7 +796,30 @@ fn test_fft_grad_deferred() {}
 fn test_sparse_grad_deferred() {}
 
 #[test]
-#[ignore = "tracked in Stage D, phase 93"]
-fn test_quant_grad_deferred() {}
+fn test_with_no_grad_and_zero_grad() {
+    use brain_autograd::{with_no_grad, Value};
+
+    let mut x = Value::scalar(3.0);
+    x.set_requires_grad(true);
+
+    // With grad enabled
+    let y = x.mul(&x);
+    assert!(y.requires_grad());
+    y.backward().unwrap();
+    assert_eq!(x.grad().unwrap().get(0), 6.0);
+
+    // zero_grad
+    x.zero_grad();
+    assert!(x.grad().is_none());
+
+    // Inside with_no_grad
+    let z = with_no_grad(|| {
+        let res = x.mul(&x);
+        assert!(!res.requires_grad());
+        assert!(!res.grad_fn().is_op());
+        res
+    });
+    assert!(!z.requires_grad());
+}
 
 fn main() {}

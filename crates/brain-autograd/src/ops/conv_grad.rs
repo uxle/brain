@@ -7,17 +7,24 @@ use crate::value::Value;
 use brain_core::{BrainResult, Tensor};
 use std::sync::Arc;
 
-/// Differentiable 2D convolution forward operation.
-pub fn conv2d(
+/// Differentiable 2D convolution forward operation with stride, padding, and dilation.
+pub fn conv2d_ext(
     input: &Value,
     weight: &Value,
     bias: Option<&Value>,
     stride: (usize, usize),
     padding: (usize, usize),
+    dilation: (usize, usize),
 ) -> Value {
     let bias_tensor = bias.map(|b| b.data());
-    let out_tensor =
-        brain_core::tensor::conv::conv2d(input.data(), weight.data(), bias_tensor, stride, padding);
+    let out_tensor = brain_core::tensor::conv::conv2d_ext(
+        input.data(),
+        weight.data(),
+        bias_tensor,
+        stride,
+        padding,
+        dilation,
+    );
     let requires_grad = input.requires_grad()
         || weight.requires_grad()
         || bias.map(|b| b.requires_grad()).unwrap_or(false);
@@ -29,12 +36,24 @@ pub fn conv2d(
             bias: bias.map(|b| Arc::new(b.clone())),
             stride,
             padding,
+            dilation,
         }
     } else {
         GradFn::None
     };
 
     Value::from_op(out_tensor, grad_fn, requires_grad)
+}
+
+/// Differentiable 2D convolution forward operation (default dilation = (1, 1)).
+pub fn conv2d(
+    input: &Value,
+    weight: &Value,
+    bias: Option<&Value>,
+    stride: (usize, usize),
+    padding: (usize, usize),
+) -> Value {
+    conv2d_ext(input, weight, bias, stride, padding, (1, 1))
 }
 
 /// Differentiable 2D transposed convolution forward operation.
@@ -79,6 +98,7 @@ pub fn grad_conv2d(
     grad_output: &Tensor,
     stride: (usize, usize),
     padding: (usize, usize),
+    dilation: (usize, usize),
 ) -> BrainResult<(Tensor, Tensor, Option<Tensor>)> {
     assert_eq!(input.ndim(), 4, "conv2d input must be 4D (N, C, H, W)");
     assert_eq!(weight.ndim(), 4, "conv2d weight must be 4D (O, C, KH, KW)");
@@ -113,6 +133,7 @@ pub fn grad_conv2d(
 
     let (sh, sw) = stride;
     let (ph, pw) = padding;
+    let (dh, dw) = (dilation.0.max(1), dilation.1.max(1));
 
     let mut dinput = Tensor::zeros(vec![n, in_c, in_h, in_w]);
     let mut dweight = Tensor::zeros(vec![out_c, in_c, kh, kw]);
@@ -135,11 +156,11 @@ pub fn grad_conv2d(
 
                     for ic in 0..in_c {
                         for fh in 0..kh {
-                            let ih = h_start + fh as isize;
+                            let ih = h_start + (fh * dh) as isize;
                             if ih >= 0 && (ih as usize) < in_h {
                                 let ih = ih as usize;
                                 for fw in 0..kw {
-                                    let iw = w_start + fw as isize;
+                                    let iw = w_start + (fw * dw) as isize;
                                     if iw >= 0 && (iw as usize) < in_w {
                                         let iw = iw as usize;
                                         let in_val = input.get_4d(b, ic, ih, iw);

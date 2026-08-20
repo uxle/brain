@@ -188,3 +188,64 @@ fn test_onnx_eval_matmul_non_identity() {
     let y = outputs.get("Y").unwrap();
     assert_eq!(y.to_vec(), vec![13.0, 16.0]);
 }
+
+#[test]
+fn test_onnx_gemm_and_model_checker() {
+    let mut model = OnnxModel {
+        ir_version: 8,
+        opset_version: 17,
+        producer_name: "brain-test".into(),
+        graph: OnnxGraph::default(),
+    };
+    model.graph.name = "gemm_test".into();
+    model.graph.inputs = vec!["A".into()];
+    model.graph.outputs = vec!["Y".into()];
+
+    let b_data = vec![1.0, 2.0, 3.0, 4.0];
+    let c_data = vec![0.5, 0.5];
+
+    model.graph.values.insert(
+        "B".into(),
+        OnnxValue {
+            name: "B".into(),
+            shape: vec![2, 2],
+            is_initializer: true,
+            tensor_data: Some(Tensor::from_vec(b_data, vec![2, 2])),
+        },
+    );
+    model.graph.values.insert(
+        "C".into(),
+        OnnxValue {
+            name: "C".into(),
+            shape: vec![1, 2],
+            is_initializer: true,
+            tensor_data: Some(Tensor::from_vec(c_data, vec![1, 2])),
+        },
+    );
+
+    let mut attrs = HashMap::new();
+    attrs.insert("alpha".into(), "1.0".into());
+    attrs.insert("beta".into(), "1.0".into());
+
+    model.graph.nodes.push(OnnxNode {
+        name: "gemm_node".into(),
+        op_type: "Gemm".into(),
+        domain: "ai.onnx".into(),
+        inputs: vec!["A".into(), "B".into(), "C".into()],
+        outputs: vec!["Y".into()],
+        attributes: attrs,
+    });
+
+    let report = check_model(&model).expect("Check model");
+    assert!(report.is_valid);
+
+    // A = [[2.0, 1.0]]
+    // A @ B + C = [[2*1 + 1*3 + 0.5, 2*2 + 1*4 + 0.5]] = [[5.5, 8.5]]
+    let a = Tensor::from_vec(vec![2.0, 1.0], vec![1, 2]);
+    let mut inputs = HashMap::new();
+    inputs.insert("A".into(), a);
+
+    let outputs = evaluate_onnx_model(&model, &inputs, &EvalConfig::default()).unwrap();
+    let y = outputs.get("Y").unwrap();
+    assert_eq!(y.to_vec(), vec![5.5, 8.5]);
+}

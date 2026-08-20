@@ -121,10 +121,10 @@ impl BrainMind {
         let vocab_size = 256;
 
         // Initialize neural transformer weights with Xavier/Glorot scaling
-        let scale = (2.0 / (embed_dim as f64 + embed_dim as f64)).sqrt();
-        let init_mat = |rows, cols| {
+        let mut seed = 0x1234_5678_9ABC_DEF0u64;
+        let mut init_mat = |rows, cols| {
+            let scale = (2.0 / (rows as f64 + cols as f64)).sqrt();
             let mut data = Vec::with_capacity(rows * cols);
-            let mut seed = 42u64;
             for _ in 0..rows * cols {
                 seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1);
                 let rand_f = ((seed >> 33) as f64 / 2147483648.0) - 1.0;

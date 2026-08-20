@@ -7,8 +7,9 @@ pub mod classic;
 pub mod perceptual;
 
 pub use classic::{
-    bce_loss_d, bce_loss_g, hinge_loss_d, hinge_loss_g, lsgan_loss_d, lsgan_loss_g, wgan_loss_d,
-    wgan_loss_g, ClassicLoss,
+    bce_loss_d, bce_loss_g, hinge_loss_d, hinge_loss_g, lsgan_loss_d, lsgan_loss_g,
+    r1_gradient_penalty, r2_gradient_penalty, sample_wgan_gp_interpolates, wgan_gp_loss_d,
+    wgan_loss_d, wgan_loss_g, ClassicLoss,
 };
 pub use perceptual::{feature_matching_loss, gram_matrix, PerceptualConfig};
 

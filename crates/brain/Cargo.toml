@@ -57,6 +57,10 @@ required-features = ["export"]
 name = "agent_notepad_task"
 path = "../../examples/agent_notepad_task.rs"
 
+[[example]]
+name = "teach_and_test"
+path = "../../examples/teach_and_test.rs"
+
 [dev-dependencies]
 brain-rl = { path = "../brain-rl" }
 brain-utils = { path = "../brain-utils" }

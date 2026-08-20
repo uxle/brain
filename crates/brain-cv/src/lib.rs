@@ -43,12 +43,16 @@ pub mod pooling;
 pub mod segmentation;
 
 // Re-exports
+pub use augmentation::{cutmix, mixup, sample_cutmix_box};
 pub use conv::{
     Conv2d, Conv2dConfig, ConvTranspose2d, DeformableConv2d, DepthwiseSeparableConv2d, GhostModule,
     GroupedConv2d,
 };
-pub use detection::{AnchorGenerator, BBoxFormat, DetectionHead, NmsConfig, RoIAlign};
+pub use detection::{
+    non_max_suppression, AnchorGenerator, BBoxFormat, DetectionHead, NmsConfig, RoIAlign,
+};
 pub use feature::{BackboneZoo, Fpn};
+pub use ops::{box_area, box_giou_matrix, box_iou_matrix};
 pub use pooling::{AvgPool2d, MaxPool2d};
 pub use segmentation::{FcnHead, SegLossConfig, SegMetrics};
 

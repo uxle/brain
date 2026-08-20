@@ -11,7 +11,7 @@ pub mod photo;
 pub use boxes::transform_bounding_boxes;
 pub use color::ColorJitter;
 pub use geom::RandomResizedCrop;
-pub use mix::{cutmix, mixup};
+pub use mix::{cutmix, mixup, sample_cutmix_box};
 pub use photo::solarize;
 
 use brain_core::Tensor;

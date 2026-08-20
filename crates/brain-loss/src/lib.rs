@@ -43,8 +43,8 @@ pub use adversarial::{
     WassersteinConfig, WassersteinLoss,
 };
 pub use classification::{
-    ClassLossConfig, ClassLossKind, ClassificationLoss, CrossEntropyConfig, CrossEntropyLoss,
-    FocalConfig, FocalLoss, HingeLoss, KLDivergenceLoss,
+    CTCConfig, CTCLoss, ClassLossConfig, ClassLossKind, ClassificationLoss, CrossEntropyConfig,
+    CrossEntropyLoss, FocalConfig, FocalLoss, HingeLoss, KLDivergenceLoss,
 };
 pub use combine::{CombineMode, CompositeLoss};
 pub use config::LossConfig;

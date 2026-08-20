@@ -69,6 +69,9 @@ pub mod utils;
 
 // Re-exports
 pub use builder::DistributedBuilder;
+pub use collective::{
+    execute_allreduce, ring_allreduce_simulate, AllReduceAlgorithm, AllReduceConfig,
+};
 pub use config::{BackendKind, DistributedConfig};
 pub use core::{DistributedContext, Rank, WorldSize};
 pub use data_parallel::DataParallel;

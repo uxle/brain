@@ -1,12 +1,13 @@
 //! # Classification Evaluation Metrics
 //!
-//! Accuracy, Top-K Accuracy, Balanced Accuracy, Precision, Recall, and F1 Score (Macro/Micro/Weighted).
+//! Accuracy, Top-K Accuracy, Balanced Accuracy, Precision, Recall, F1 Score,
+//! Matthews Correlation Coefficient (MCC), and Cohen's Kappa.
 #![allow(missing_docs)]
 
 pub mod auc;
 pub mod calibration;
 
-pub use auc::{pr_auc_score, roc_auc_score, AucConfig};
+pub use auc::{multiclass_roc_auc, pr_auc_score, roc_auc_score, AucConfig};
 pub use calibration::{compute_calibration, CalibrationReport};
 
 use crate::config::AverageMode;
@@ -25,6 +26,67 @@ pub fn accuracy_score(preds: &[usize], targets: &[usize]) -> f64 {
         .filter(|(&p, &t)| p == t)
         .count();
     correct as f64 / n as f64
+}
+
+/// Computes binary Matthews Correlation Coefficient (MCC):
+/// MCC = (TP * TN - FP * FN) / sqrt((TP+FP)(TP+FN)(TN+FP)(TN+FN))
+pub fn matthews_corrcoef(preds: &[usize], targets: &[usize]) -> f64 {
+    let n = preds.len().min(targets.len());
+    if n == 0 {
+        return 0.0;
+    }
+
+    let mut tp = 0.0f64;
+    let mut tn = 0.0f64;
+    let mut fp = 0.0f64;
+    let mut fn_ = 0.0f64;
+
+    for i in 0..n {
+        match (preds[i] == 1, targets[i] == 1) {
+            (true, true) => tp += 1.0,
+            (false, false) => tn += 1.0,
+            (true, false) => fp += 1.0,
+            (false, true) => fn_ += 1.0,
+        }
+    }
+
+    let numerator = tp * tn - fp * fn_;
+    let denominator = ((tp + fp) * (tp + fn_) * (tn + fp) * (tn + fn_)).sqrt();
+
+    if denominator == 0.0 {
+        0.0
+    } else {
+        numerator / denominator
+    }
+}
+
+/// Computes Cohen's Kappa statistic measuring inter-annotator or prediction agreement:
+/// Kappa = (P_o - P_e) / (1 - P_e)
+pub fn cohen_kappa(preds: &[usize], targets: &[usize], num_classes: usize) -> f64 {
+    let n = preds.len().min(targets.len());
+    if n == 0 || num_classes == 0 {
+        return 0.0;
+    }
+
+    let cm = confusion_matrix(preds, targets, num_classes);
+    let mut po = 0.0f64;
+    for c in 0..num_classes {
+        po += cm[c][c] as f64;
+    }
+    po /= n as f64;
+
+    let mut pe = 0.0f64;
+    for c in 0..num_classes {
+        let row_sum: usize = cm[c].iter().sum();
+        let col_sum: usize = (0..num_classes).map(|r| cm[r][c]).sum();
+        pe += (row_sum as f64 * col_sum as f64) / ((n * n) as f64);
+    }
+
+    if (1.0 - pe).abs() < 1e-12 {
+        1.0
+    } else {
+        (po - pe) / (1.0 - pe)
+    }
 }
 
 /// Precision, Recall, and F1 score results per class or aggregated.
@@ -111,13 +173,16 @@ pub fn precision_recall_f1(
 
 #[cfg(test)]
 mod tests {
-    #![allow(
-        unused_imports,
-        unused_variables,
-        unused_mut,
-        dead_code,
-        clippy::approx_constant
-    )]
     use super::*;
-    use brain_core::Tensor;
+
+    #[test]
+    fn test_mcc_and_cohen_kappa() {
+        let preds = vec![1, 1, 0, 0];
+        let targets = vec![1, 1, 0, 0];
+        assert_eq!(matthews_corrcoef(&preds, &targets), 1.0);
+        assert_eq!(cohen_kappa(&preds, &targets, 2), 1.0);
+
+        let inv_preds = vec![0, 0, 1, 1];
+        assert_eq!(matthews_corrcoef(&inv_preds, &targets), -1.0);
+    }
 }

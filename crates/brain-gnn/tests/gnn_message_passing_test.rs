@@ -30,3 +30,48 @@ fn test_gcn_layer_forward() {
     let out = layer.forward(&g, &feats);
     assert_eq!(out.shape(), &[3, 2]);
 }
+
+#[test]
+fn test_gat_layer_forward() {
+    let layer = GatLayer::new(4, 2, 2);
+    let src = vec![0, 1, 0, 1, 2];
+    let dst = vec![1, 2, 0, 1, 2];
+    let feats = Tensor::from_slice(
+        &[1.0, 0.0, 0.0, 1.0, 0.0, 1.0, 1.0, 0.0, 1.0, 1.0, 0.0, 0.0],
+        vec![3, 4],
+    );
+
+    let g = Graph::new(3, src, dst, feats.clone()).unwrap();
+    let out = layer.forward(&g, &feats);
+    assert_eq!(out.shape(), &[3, 2]);
+}
+
+#[test]
+fn test_sage_layer_forward() {
+    let layer = SageLayer::new(4, 2);
+    let src = vec![0, 1, 2];
+    let dst = vec![1, 2, 0];
+    let feats = Tensor::from_slice(
+        &[1.0, 0.0, 0.0, 1.0, 0.0, 1.0, 1.0, 0.0, 1.0, 1.0, 0.0, 0.0],
+        vec![3, 4],
+    );
+
+    let g = Graph::new(3, src, dst, feats.clone()).unwrap();
+    let out = layer.forward(&g, &feats);
+    assert_eq!(out.shape(), &[3, 2]);
+}
+
+#[test]
+fn test_gin_layer_forward() {
+    let layer = GinLayer::new(4, 2);
+    let src = vec![0, 1, 2];
+    let dst = vec![1, 2, 0];
+    let feats = Tensor::from_slice(
+        &[1.0, 0.0, 0.0, 1.0, 0.0, 1.0, 1.0, 0.0, 1.0, 1.0, 0.0, 0.0],
+        vec![3, 4],
+    );
+
+    let g = Graph::new(3, src, dst, feats.clone()).unwrap();
+    let out = layer.forward(&g, &feats);
+    assert_eq!(out.shape(), &[3, 2]);
+}

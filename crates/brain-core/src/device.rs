@@ -1694,6 +1694,55 @@ pub enum DeviceMemoryPolicy {
     UnifiedMemory,
 }
 
+/// Resource quota and percentage utilization limits for compute devices (CPU, Vulkan, CUDA, Metal).
+#[derive(Debug, Clone, PartialEq)]
+pub struct DeviceQuota {
+    /// Target compute device.
+    pub device: Device,
+    /// Maximum compute utilization fraction in `[0.01, 1.0]` (e.g., 0.50 for 50%, 0.80 for 80%).
+    pub compute_limit_fraction: f64,
+    /// Maximum memory allocation in bytes (None = unlimited).
+    pub max_memory_bytes: Option<usize>,
+    /// Number of worker threads allowed (for CPU devices).
+    pub num_threads: Option<usize>,
+}
+
+impl DeviceQuota {
+    /// Creates a default unrestricted quota for the given device.
+    pub fn new(device: Device) -> Self {
+        Self {
+            device,
+            compute_limit_fraction: 1.0,
+            max_memory_bytes: None,
+            num_threads: None,
+        }
+    }
+
+    /// Sets compute utilization limit fraction in `[0.01, 1.0]` (e.g., 0.50 for 50%, 0.80 for 80%).
+    pub fn with_compute_limit(mut self, fraction: f64) -> Self {
+        self.compute_limit_fraction = fraction.clamp(0.01, 1.0);
+        self
+    }
+
+    /// Sets maximum memory allocation limit in Megabytes.
+    pub fn with_max_memory_mb(mut self, mb: usize) -> Self {
+        self.max_memory_bytes = Some(mb * 1024 * 1024);
+        self
+    }
+
+    /// Sets CPU thread limit and utilization based on a percentage (e.g., 50.0 for 50%, 80.0 for 80%).
+    pub fn with_cpu_percentage(mut self, percentage: f64) -> Self {
+        let total_cores = std::thread::available_parallelism()
+            .map(|n| n.get())
+            .unwrap_or(4);
+        let fraction = (percentage / 100.0).clamp(0.01, 1.0);
+        let allowed = ((total_cores as f64) * fraction).ceil() as usize;
+        self.num_threads = Some(allowed.max(1));
+        self.compute_limit_fraction = fraction;
+        self
+    }
+}
+
 // =============================================================================
 // Tests
 // =============================================================================
@@ -3474,5 +3523,24 @@ mod tests {
 
         let mem = DeviceMemoryPolicy::default();
         assert_eq!(mem, DeviceMemoryPolicy::GrowOnDemand);
+    }
+
+    #[test]
+    fn test_device_quota_configuration() {
+        let quota = DeviceQuota::new(Device::Cpu)
+            .with_cpu_percentage(50.0)
+            .with_max_memory_mb(2048);
+
+        assert_eq!(quota.device, Device::Cpu);
+        assert!((quota.compute_limit_fraction - 0.50).abs() < 1e-6);
+        assert_eq!(quota.max_memory_bytes, Some(2048 * 1024 * 1024));
+        assert!(quota.num_threads.unwrap() >= 1);
+
+        let gpu_quota = DeviceQuota::new(Device::vulkan(0))
+            .with_compute_limit(0.80)
+            .with_max_memory_mb(4096);
+        assert_eq!(gpu_quota.device, Device::vulkan(0));
+        assert!((gpu_quota.compute_limit_fraction - 0.80).abs() < 1e-6);
+        assert_eq!(gpu_quota.max_memory_bytes, Some(4096 * 1024 * 1024));
     }
 }

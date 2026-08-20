@@ -85,14 +85,22 @@ impl CrossEntropyLoss {
         let cols = if shape.len() > 1 { shape[1] } else { 1 };
 
         let lsm = brain_autograd::ops::log_softmax(logits);
-        let mut mask = vec![0.0f64; rows * cols];
+        let mut target_probs = vec![0.0f64; rows * cols];
+        let eps = self.config.label_smoothing;
+        let smooth_uniform = if cols > 0 { eps / (cols as f64) } else { 0.0 };
+
         for (r, &target) in targets.iter().enumerate().take(rows) {
-            if target < cols {
-                mask[r * cols + target] = 1.0;
+            for c in 0..cols {
+                let idx = r * cols + c;
+                if c == target {
+                    target_probs[idx] = (1.0 - eps) + smooth_uniform;
+                } else {
+                    target_probs[idx] = smooth_uniform;
+                }
             }
         }
-        let mask_val = brain_autograd::Value::from_slice(&mask, vec![rows, cols]);
-        let selected = &lsm * &mask_val;
+        let target_val = brain_autograd::Value::from_slice(&target_probs, vec![rows, cols]);
+        let selected = &lsm * &target_val;
 
         let loss_sum = selected.sum().neg();
         let final_loss = match self.config.reduction {
@@ -124,13 +132,20 @@ impl ClassificationLoss for CrossEntropyLoss {
 
 #[cfg(test)]
 mod tests {
-    #![allow(
-        unused_imports,
-        unused_variables,
-        unused_mut,
-        dead_code,
-        clippy::approx_constant
-    )]
     use super::*;
-    use brain_core::Tensor;
+
+    #[test]
+    fn test_cross_entropy_label_smoothing() {
+        let mut config = CrossEntropyConfig::default();
+        config.label_smoothing = 0.1;
+        let ce = CrossEntropyLoss::new(config);
+
+        let logits =
+            brain_autograd::Value::new(Tensor::from_slice(&[2.0, 1.0, 0.1], vec![1, 3]), true);
+        let targets = vec![0];
+        let loss = ce.forward_value(&logits, &targets).unwrap();
+        assert!(loss.data().item() > 0.0);
+        loss.backward().unwrap();
+        assert!(logits.grad().is_some());
+    }
 }

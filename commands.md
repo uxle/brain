@@ -44,7 +44,7 @@ cargo run -p brain -- <command> [flags]
 **When to Use**:
 - When creating a newborn biological mind from scratch.
 - When initializing a neural mind of a specific dimension ($N 	imes N 	imes N$).
-- When pre-teaching a structured knowledge base (e.g., `science.txt`, `mathematics.txt`, `data.txt`) into a saved `.bn` file.
+- When pre-teaching a structured knowledge base (e.g., `.agent/science.txt`, `.agent/mathematics.txt`, `.agent/data.txt`) into a saved `.bn` file.
 
 #### Synopsis:
 ```bash
@@ -64,10 +64,10 @@ brain new <brain.bn> [--neurons <N> | --cube <D>] [--teach <file.txt>] [--chat]
 brain new tiny_brain.bn --cube 5
 
 # Create a 1,000-neuron brain and immediately teach it science knowledge
-brain new science_mind.bn --neurons 1000 --teach science.txt
+brain new science_mind.bn --neurons 1000 --teach .agent/science.txt
 
 # Create, teach, and enter conversation immediately
-brain new scholar.bn --teach data.txt --chat
+brain new scholar.bn --teach .agent/data.txt --chat
 ```
 
 ---
@@ -127,7 +127,7 @@ Brain: A catalyst is a substance that speeds up a chemical reaction without bein
 
 #### Synopsis:
 ```bash
-brain make <output.brain> --data <data.txt> [options]
+brain make <output.brain> --data <.agent/data.txt> [options]
 ```
 
 #### Flags & Options:
@@ -412,7 +412,7 @@ brain dataset <inspect|stats|split|cache> [dataset.csv]
 #### Concrete Examples:
 ```bash
 # Inspect dataset sample and class counts
-brain dataset inspect data.txt
+brain dataset inspect .agent/data.txt
 
 # Partition dataset into train and test splits
 brain dataset split dataset.csv

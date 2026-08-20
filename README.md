@@ -203,7 +203,7 @@ cargo build -p brain --release -j 2
 
 ```bash
 # 1. Train and checkpoint a model directly from dataset
-brain make my_model.brain --data sample_data.csv --arch convnet --epochs 20 --lr 0.1
+brain make my_model.brain --data .agent/sample_data.csv --arch convnet --epochs 20 --lr 0.1
 
 # 2. Inspect checkpoint parameters and verify health
 brain check my_model.brain

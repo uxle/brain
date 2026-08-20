@@ -3,10 +3,10 @@
 use crate::core::{ExitCode, OutputSink};
 use brain_train::ModelState;
 
-/// Handles `brain check <model.brain>`.
+/// Handles `brain check <model.bn|model.brain>`.
 pub fn run_check_command(args: &[String], sink: &OutputSink) -> ExitCode {
     if args.is_empty() {
-        sink.println("Usage: brain check <model.brain>");
+        sink.println("Usage: brain check <model.bn|model.brain>");
         return ExitCode::INVALID_USAGE;
     }
 

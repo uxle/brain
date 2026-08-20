@@ -74,9 +74,14 @@ pub mod streaming;
 pub mod utils;
 
 // Re-exports
+pub use collate::{
+    default_collate, pad_and_stack_sequences, pad_collate, stack_samples_to_tensor, CollateFn,
+};
 pub use core::{DataReader, DataSource, Sample, SampleBatch};
 pub use pipeline::Pipeline;
+pub use prefetch::PrefetchIter;
 pub use r#impl::PipelineRunner;
+pub use samplers::{DistributedSampler, Sampler, SequentialSampler};
 
 /// Package version string.
 pub const VERSION: &str = "0.2.0";

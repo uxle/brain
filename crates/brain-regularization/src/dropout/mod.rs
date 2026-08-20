@@ -15,6 +15,9 @@
 pub mod adaptive;
 pub mod alpha;
 
+pub use adaptive::{AdaptiveDropoutConfig, ConcreteDropout};
+pub use alpha::{AlphaDropout, AlphaDropoutConfig};
+
 use super::core::{RegError, RegKind, RegResult, Regularization};
 use super::utils::XorShift64;
 use brain_core::Tensor;

@@ -4,6 +4,7 @@
 #![allow(missing_docs)]
 
 use crate::module::{Module, ModuleResult};
+use brain_autograd::Value;
 use brain_core::Tensor;
 
 /// Configuration for RMSNorm.
@@ -18,7 +19,7 @@ pub struct RMSNormConfig {
 pub struct RMSNorm {
     pub dim: usize,
     pub eps: f64,
-    pub weight: Tensor,
+    pub weight: Value,
 }
 
 impl RMSNorm {
@@ -26,55 +27,72 @@ impl RMSNorm {
         Self {
             dim,
             eps,
-            weight: Tensor::from_vec(vec![1.0; dim], vec![dim]),
+            weight: Value::new(Tensor::from_vec(vec![1.0; dim], vec![dim]), true),
         }
     }
 
-    pub fn forward(&self, input: &Tensor) -> Tensor {
+    pub fn forward(&self, input: &Value) -> ModuleResult<Value> {
         let shape = input.shape();
-        let total: usize = shape.iter().product();
-        let batch_items = total / self.dim.max(1);
-
-        let data = input.to_vec();
-        let w_data = self.weight.to_vec();
-        let mut out = vec![0.0f64; total];
-
-        for b in 0..batch_items {
-            let slice = &data[b * self.dim..(b + 1) * self.dim];
-            let mean_sq: f64 = slice.iter().map(|&x| x * x).sum::<f64>() / self.dim as f64;
-            let rms = 1.0 / (mean_sq + self.eps).sqrt();
-
-            for i in 0..self.dim {
-                out[b * self.dim + i] = slice[i] * rms * w_data[i];
-            }
+        let last_dim = *shape.last().unwrap_or(&0);
+        if last_dim != self.dim {
+            return Err(crate::module::ModuleError::ShapeMismatch {
+                expected: vec![self.dim],
+                got: vec![last_dim],
+            });
         }
 
-        Tensor::from_vec(out, shape.to_vec())
+        let n = shape.iter().take(shape.len() - 1).product::<usize>().max(1);
+        let x_2d = input.reshape(vec![n, self.dim]);
+
+        // x^2
+        let x_sq = &x_2d * &x_2d;
+        // mean(x^2) across feature dim via matmul with [dim, 1] vector of 1/dim
+        let scale_vec = Value::new(
+            Tensor::from_vec(vec![1.0 / (self.dim as f64); self.dim], vec![self.dim, 1]),
+            false,
+        );
+        let mean_sq = x_sq.matmul(&scale_vec);
+        // rms = (mean_sq + eps)^(-0.5)
+        let eps_val = Value::scalar(self.eps);
+        let rsqrt_rms = (&mean_sq + &eps_val).pow(&Value::scalar(-0.5));
+
+        // x * rsqrt_rms
+        let normalized = &x_2d * &rsqrt_rms;
+        // normalized * weight
+        let out_2d = &normalized * &self.weight;
+
+        Ok(out_2d.reshape(shape.to_vec()))
     }
 }
 
-use brain_autograd::Value;
-
 impl Module for RMSNorm {
     fn forward(&self, input: &Value) -> ModuleResult<Value> {
-        let t_out = self.forward(input.data());
-        Ok(Value::new(t_out, input.requires_grad()))
+        self.forward(input)
     }
 
     fn parameters(&self) -> Vec<Value> {
-        vec![Value::new(self.weight.clone(), true)]
+        vec![self.weight.clone()]
     }
 }
 
 #[cfg(test)]
 mod tests {
-    #![allow(
-        unused_imports,
-        unused_variables,
-        unused_mut,
-        dead_code,
-        clippy::approx_constant
-    )]
     use super::*;
     use brain_core::Tensor;
+
+    #[test]
+    fn test_rmsnorm_forward_and_backward() {
+        let norm = RMSNorm::new(4, 1e-5);
+        let x = Value::new(
+            Tensor::from_slice(&[1.0, 2.0, 3.0, 4.0, 2.0, 4.0, 6.0, 8.0], vec![2, 4]),
+            true,
+        );
+        let y = norm.forward(&x).unwrap();
+        assert_eq!(y.shape(), &[2, 4]);
+
+        let loss = y.sum();
+        loss.backward().unwrap();
+        assert!(x.grad().is_some());
+        assert!(norm.weight.grad().is_some());
+    }
 }

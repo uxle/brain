@@ -62,3 +62,57 @@ fn test_bn_crc_tamper_detection() {
         "Tampered .bn file must fail CRC validation"
     );
 }
+
+#[test]
+fn test_safetensors_bytes_roundtrip() {
+    use brain_export::safetensors::SafetensorsArchive;
+
+    let mut archive = SafetensorsArchive::new();
+    archive.insert(
+        "layer1.weight",
+        Tensor::from_slice(&[1.5, 2.5, 3.5, 4.5], vec![2, 2]),
+    );
+    archive.insert("layer1.bias", Tensor::from_slice(&[0.1, 0.2], vec![2]));
+
+    let bytes = archive.to_bytes();
+    assert!(bytes.len() > 8);
+
+    let loaded = SafetensorsArchive::from_bytes(&bytes).expect("deserialize safetensors");
+    let w = loaded.get("layer1.weight").expect("weight");
+    assert_eq!(w.shape(), &[2, 2]);
+    assert!((w.data()[0] - 1.5).abs() < 1e-6);
+    assert!((w.data()[3] - 4.5).abs() < 1e-6);
+
+    let b = loaded.get("layer1.bias").expect("bias");
+    assert_eq!(b.shape(), &[2]);
+    assert!((b.data()[0] - 0.1).abs() < 1e-6);
+}
+
+#[test]
+fn test_bn_and_safetensors_bidirectional_conversion() {
+    use brain_export::convert::{convert_bn_to_safetensors, convert_safetensors_to_bn};
+
+    let mut bn_model = BrainModelFile::new("mobile_convnet")
+        .with_meta("target_runtime", "edge")
+        .with_meta("version", "1.0");
+    bn_model.add_tensor(
+        "conv.weight",
+        Tensor::from_slice(&[1.0, 2.0, 3.0, 4.0], vec![1, 1, 2, 2]),
+        None,
+    );
+
+    let (st_archive, report) = convert_bn_to_safetensors(&bn_model);
+    assert_eq!(report.num_tensors_converted, 1);
+    assert_eq!(
+        st_archive.get("conv.weight").unwrap().shape(),
+        &[1, 1, 2, 2]
+    );
+
+    let (restored_bn, _) = convert_safetensors_to_bn(&st_archive, "restored_mobile_convnet");
+    assert_eq!(restored_bn.name, "restored_mobile_convnet");
+    assert_eq!(restored_bn.metadata.get("target_runtime").unwrap(), "edge");
+    assert_eq!(
+        restored_bn.archive.get("conv.weight").unwrap().data(),
+        &[1.0, 2.0, 3.0, 4.0]
+    );
+}

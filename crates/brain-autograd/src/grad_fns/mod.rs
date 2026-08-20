@@ -64,6 +64,7 @@ pub enum GradFn {
         bias: Option<Arc<Value>>,
         stride: (usize, usize),
         padding: (usize, usize),
+        dilation: (usize, usize),
     },
     ConvTranspose2d {
         input: Arc<Value>,
@@ -83,6 +84,14 @@ pub enum GradFn {
         kernel_size: (usize, usize),
         stride: (usize, usize),
         padding: (usize, usize),
+    },
+    AdaptiveAvgPool2d {
+        input: Arc<Value>,
+        out_size: (usize, usize),
+    },
+    AdaptiveMaxPool2d {
+        input: Arc<Value>,
+        out_size: (usize, usize),
     },
     Embedding {
         weight: Arc<Value>,
@@ -128,7 +137,9 @@ impl GradFn {
             | Permute(a, _)
             | BroadcastTo(a, _)
             | MaxPool2d { input: a, .. }
-            | AvgPool2d { input: a, .. } => vec![a],
+            | AvgPool2d { input: a, .. }
+            | AdaptiveAvgPool2d { input: a, .. }
+            | AdaptiveMaxPool2d { input: a, .. } => vec![a],
             Clamp { input: a, .. } => vec![a],
             MinElem(a, b) | MaxElem(a, b) => vec![a, b],
             Where { cond, a, b } => vec![cond, a, b],
@@ -184,7 +195,9 @@ impl GradFn {
             | Permute(a, _)
             | BroadcastTo(a, _)
             | MaxPool2d { input: a, .. }
-            | AvgPool2d { input: a, .. } => vec![a],
+            | AvgPool2d { input: a, .. }
+            | AdaptiveAvgPool2d { input: a, .. }
+            | AdaptiveMaxPool2d { input: a, .. } => vec![a],
             Clamp { input: a, .. } => vec![a],
             MinElem(a, b) | MaxElem(a, b) => vec![a, b],
             Where { cond, a, b } => vec![cond, a, b],
@@ -250,6 +263,8 @@ impl GradFn {
             ConvTranspose2d { .. } => "conv_transpose2d",
             MaxPool2d { .. } => "max_pool2d",
             AvgPool2d { .. } => "avg_pool2d",
+            AdaptiveAvgPool2d { .. } => "adaptive_avg_pool2d",
+            AdaptiveMaxPool2d { .. } => "adaptive_max_pool2d",
             Embedding { .. } => "embedding",
         }
     }
@@ -550,6 +565,7 @@ impl GradFn {
                 bias,
                 stride,
                 padding,
+                dilation,
             } => {
                 let (di, dw, db) = crate::ops::conv_grad::grad_conv2d(
                     input.data(),
@@ -557,6 +573,7 @@ impl GradFn {
                     out_grad,
                     *stride,
                     *padding,
+                    *dilation,
                 )?;
                 let mut grads = vec![di, dw];
                 if bias.is_some() {
@@ -611,6 +628,24 @@ impl GradFn {
                     *kernel_size,
                     *stride,
                     *padding,
+                )?;
+                Ok(vec![di])
+            }
+            AdaptiveAvgPool2d { input, out_size } => {
+                let di = crate::ops::pool_grad::grad_adaptive_avg_pool2d(
+                    input.shape(),
+                    out_grad,
+                    out_size.0,
+                    out_size.1,
+                )?;
+                Ok(vec![di])
+            }
+            AdaptiveMaxPool2d { input, out_size } => {
+                let di = crate::ops::pool_grad::grad_adaptive_max_pool2d(
+                    input.data(),
+                    out_grad,
+                    out_size.0,
+                    out_size.1,
                 )?;
                 Ok(vec![di])
             }

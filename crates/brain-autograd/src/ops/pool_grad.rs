@@ -55,6 +55,38 @@ pub fn avg_pool2d(
     Value::from_op(out_tensor, grad_fn, requires_grad)
 }
 
+/// Differentiable 2D Adaptive Average Pooling forward operation.
+pub fn adaptive_avg_pool2d(input: &Value, out_h: usize, out_w: usize) -> Value {
+    let out_tensor = brain_core::tensor::pool::adaptive_avg_pool2d(input.data(), out_h, out_w);
+    let requires_grad = input.requires_grad();
+    let grad_fn = if requires_grad {
+        GradFn::AdaptiveAvgPool2d {
+            input: Arc::new(input.clone()),
+            out_size: (out_h, out_w),
+        }
+    } else {
+        GradFn::None
+    };
+
+    Value::from_op(out_tensor, grad_fn, requires_grad)
+}
+
+/// Differentiable 2D Adaptive Max Pooling forward operation.
+pub fn adaptive_max_pool2d(input: &Value, out_h: usize, out_w: usize) -> Value {
+    let out_tensor = brain_core::tensor::pool::adaptive_max_pool2d(input.data(), out_h, out_w);
+    let requires_grad = input.requires_grad();
+    let grad_fn = if requires_grad {
+        GradFn::AdaptiveMaxPool2d {
+            input: Arc::new(input.clone()),
+            out_size: (out_h, out_w),
+        }
+    } else {
+        GradFn::None
+    };
+
+    Value::from_op(out_tensor, grad_fn, requires_grad)
+}
+
 /// Backward pass for 2D Average Pooling with stride and padding.
 pub fn grad_avg_pool2d_ext(
     input_shape: &[usize],
@@ -204,6 +236,149 @@ pub fn grad_max_pool2d(
                                         max_pos = Some((ih, iw));
                                     }
                                 }
+                            }
+                        }
+                    }
+
+                    if let Some((max_h, max_w)) = max_pos {
+                        let cur = dinput.get_4d(b, ch, max_h, max_w);
+                        dinput.set_4d(b, ch, max_h, max_w, cur + go);
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(dinput)
+}
+
+/// Backward pass for 2D Adaptive Average Pooling.
+pub fn grad_adaptive_avg_pool2d(
+    input_shape: &[usize],
+    grad_output: &Tensor,
+    out_h: usize,
+    out_w: usize,
+) -> BrainResult<Tensor> {
+    assert_eq!(
+        input_shape.len(),
+        4,
+        "adaptive_avg_pool2d input must be 4D (N, C, H, W)"
+    );
+    assert_eq!(
+        grad_output.ndim(),
+        4,
+        "adaptive_avg_pool2d grad_output must be 4D (N, C, H_out, W_out)"
+    );
+
+    let (n, c, in_h, in_w) = (
+        input_shape[0],
+        input_shape[1],
+        input_shape[2],
+        input_shape[3],
+    );
+    let (out_n, out_c, gh, gw) = (
+        grad_output.shape()[0],
+        grad_output.shape()[1],
+        grad_output.shape()[2],
+        grad_output.shape()[3],
+    );
+    assert_eq!(n, out_n, "Batch size mismatch");
+    assert_eq!(c, out_c, "Channel count mismatch");
+    assert_eq!(out_h, gh, "Height mismatch");
+    assert_eq!(out_w, gw, "Width mismatch");
+
+    let mut dinput = Tensor::zeros(input_shape.to_vec());
+
+    for b in 0..n {
+        for ch in 0..c {
+            for oh in 0..out_h {
+                let h_start = (oh * in_h) / out_h;
+                let h_end = (((oh + 1) * in_h) + out_h - 1) / out_h;
+                for ow in 0..out_w {
+                    let w_start = (ow * in_w) / out_w;
+                    let w_end = (((ow + 1) * in_w) + out_w - 1) / out_w;
+                    let go = grad_output.get_4d(b, ch, oh, ow);
+                    if go == 0.0 {
+                        continue;
+                    }
+                    let count = (h_end - h_start) * (w_end - w_start);
+                    if count == 0 {
+                        continue;
+                    }
+                    let scale = go / (count as f64);
+                    for ih in h_start..h_end {
+                        for iw in w_start..w_end {
+                            let cur = dinput.get_4d(b, ch, ih, iw);
+                            dinput.set_4d(b, ch, ih, iw, cur + scale);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(dinput)
+}
+
+/// Backward pass for 2D Adaptive Max Pooling.
+pub fn grad_adaptive_max_pool2d(
+    input: &Tensor,
+    grad_output: &Tensor,
+    out_h: usize,
+    out_w: usize,
+) -> BrainResult<Tensor> {
+    assert_eq!(
+        input.ndim(),
+        4,
+        "adaptive_max_pool2d input must be 4D (N, C, H, W)"
+    );
+    assert_eq!(
+        grad_output.ndim(),
+        4,
+        "adaptive_max_pool2d grad_output must be 4D (N, C, H_out, W_out)"
+    );
+
+    let (n, c, in_h, in_w) = (
+        input.shape()[0],
+        input.shape()[1],
+        input.shape()[2],
+        input.shape()[3],
+    );
+    let (out_n, out_c, gh, gw) = (
+        grad_output.shape()[0],
+        grad_output.shape()[1],
+        grad_output.shape()[2],
+        grad_output.shape()[3],
+    );
+    assert_eq!(n, out_n, "Batch size mismatch");
+    assert_eq!(c, out_c, "Channel count mismatch");
+    assert_eq!(out_h, gh, "Height mismatch");
+    assert_eq!(out_w, gw, "Width mismatch");
+
+    let mut dinput = Tensor::zeros(vec![n, c, in_h, in_w]);
+
+    for b in 0..n {
+        for ch in 0..c {
+            for oh in 0..out_h {
+                let h_start = (oh * in_h) / out_h;
+                let h_end = (((oh + 1) * in_h) + out_h - 1) / out_h;
+                for ow in 0..out_w {
+                    let w_start = (ow * in_w) / out_w;
+                    let w_end = (((ow + 1) * in_w) + out_w - 1) / out_w;
+                    let go = grad_output.get_4d(b, ch, oh, ow);
+                    if go == 0.0 {
+                        continue;
+                    }
+
+                    let mut max_val = f64::NEG_INFINITY;
+                    let mut max_pos = None;
+
+                    for ih in h_start..h_end {
+                        for iw in w_start..w_end {
+                            let val = input.get_4d(b, ch, ih, iw);
+                            if val > max_val {
+                                max_val = val;
+                                max_pos = Some((ih, iw));
                             }
                         }
                     }
