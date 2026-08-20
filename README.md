@@ -1,6 +1,10 @@
 # 🧠 Brain: Next-Generation Pure-Rust Deep Learning Framework
 
 <p align="center">
+  <img src="ads.png" alt="Brain" width="640">
+</p>
+
+<p align="center">
   <a href="https://github.com/uxle/brain"><img src="https://img.shields.io/badge/language-Rust_2027-orange.svg" alt="Language"></a>
   <a href="https://github.com/uxle/brain"><img src="https://img.shields.io/badge/memory_safety-100%25_Safe_Rust-green.svg" alt="Memory Safety"></a>
   <a href="https://github.com/uxle/brain"><img src="https://img.shields.io/badge/dependencies-Zero_C%2FC%2B%2B%2FBLAS-blue.svg" alt="Zero Dependencies"></a>
