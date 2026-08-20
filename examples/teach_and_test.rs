@@ -298,7 +298,9 @@ fn main() {
     // ------------------------------------------------------------------
     // 7. Save the trained brain as ONE file (.bn format)
     // ------------------------------------------------------------------
-    brain.save_bn(".agent/brain_knowledge.bn").expect("save brain");
+    brain
+        .save_bn(".agent/brain_knowledge.bn")
+        .expect("save brain");
     println!(
         "[7] Saved the trained brain to ONE file: .agent/brain_knowledge.bn ({} bytes)",
         std::fs::metadata(".agent/brain_knowledge.bn")
