@@ -106,7 +106,9 @@ impl CsvReader {
         }
 
         if in_quotes {
-            return Err(UtilsError::CsvError("Unterminated quoted CSV field".to_string()));
+            return Err(UtilsError::CsvError(
+                "Unterminated quoted CSV field".to_string(),
+            ));
         }
 
         if !cur_field.is_empty() || !cur_record.is_empty() {
@@ -165,9 +167,15 @@ impl CsvWriter {
             if i > 0 {
                 line.push(self.config.delimiter);
             }
-            if f.contains(self.config.delimiter) || f.contains(self.config.quote_char) || f.contains('\n') {
+            if f.contains(self.config.delimiter)
+                || f.contains(self.config.quote_char)
+                || f.contains('\n')
+            {
                 line.push(self.config.quote_char);
-                line.push_str(&f.replace(self.config.quote_char, &format!("{}{}", self.config.quote_char, self.config.quote_char)));
+                line.push_str(&f.replace(
+                    self.config.quote_char,
+                    &format!("{}{}", self.config.quote_char, self.config.quote_char),
+                ));
                 line.push(self.config.quote_char);
             } else {
                 line.push_str(f);
@@ -192,13 +200,13 @@ mod tests {
     fn test_csv_parser_and_writer_1() {
         let csv_data = "name,age,city\nAlice,30,New York\nBob,25,\"San Francisco, CA\"\n";
         let reader = CsvReader::parse_str(csv_data, CsvConfig::default()).unwrap();
-        
+
         assert_eq!(reader.headers().unwrap(), &["name", "age", "city"]);
         assert_eq!(reader.records().len(), 2);
         assert_eq!(reader.records()[0].get(0), Some("Alice"));
         assert_eq!(reader.records()[1].get(2), Some("San Francisco, CA"));
         assert_eq!(reader.config().delimiter, ',');
-    
+
         let mut writer = CsvWriter::new(CsvConfig::default());
         writer.write_record(&["epoch", "loss", "accuracy"]);
         writer.write_record(&["1", "0.45", "0.88"]);

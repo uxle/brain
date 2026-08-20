@@ -1,13 +1,24 @@
 //! # Gated Recurrent Unit (GRU) Cell
 //!
 //! Compact 3-gate GRU cell (reset $r_t$, update $z_t$, and candidate $n_t$).
-#![allow(missing_docs, clippy::excessive_precision, clippy::approx_constant, clippy::needless_range_loop, clippy::too_many_arguments, clippy::manual_is_multiple_of, clippy::manual_div_ceil, clippy::doc_markdown, clippy::module_inception, clippy::manual_memcpy)]
+#![allow(
+    missing_docs,
+    clippy::excessive_precision,
+    clippy::approx_constant,
+    clippy::needless_range_loop,
+    clippy::too_many_arguments,
+    clippy::manual_is_multiple_of,
+    clippy::manual_div_ceil,
+    clippy::doc_markdown,
+    clippy::module_inception,
+    clippy::manual_memcpy
+)]
 
-use brain_core::Tensor;
 use super::super::core::{CellState, RnnError, RnnResult};
 use super::super::ops::gate_linear;
 use super::super::utils::{init_orthogonal, init_uniform, sigmoid};
 use super::RnnCell;
+use brain_core::Tensor;
 
 /// Gated Recurrent Unit (GRU) Cell.
 #[derive(Debug, Clone)]
@@ -75,7 +86,10 @@ impl RnnCell for GruCell {
     }
 
     fn init_state(&self, batch_size: usize) -> CellState {
-        let h = Tensor::from_slice(&vec![0.0; batch_size * self.hidden_dim], vec![batch_size, self.hidden_dim]);
+        let h = Tensor::from_slice(
+            &vec![0.0; batch_size * self.hidden_dim],
+            vec![batch_size, self.hidden_dim],
+        );
         CellState::new_single(h)
     }
 
@@ -90,20 +104,32 @@ impl RnnCell for GruCell {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant, clippy::needless_range_loop, clippy::manual_div_ceil, clippy::manual_is_multiple_of, clippy::too_many_arguments, clippy::doc_markdown, clippy::excessive_precision)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant,
+        clippy::needless_range_loop,
+        clippy::manual_div_ceil,
+        clippy::manual_is_multiple_of,
+        clippy::too_many_arguments,
+        clippy::doc_markdown,
+        clippy::excessive_precision
+    )]
     use super::*;
-    use crate::core::*;
-    use crate::config::*;
-    use crate::utils::*;
-    use crate::ops::*;
-    use crate::cells::*;
-    use crate::seq::*;
-    use crate::init_rnn::*;
-    use crate::reg_ops::*;
-    use crate::process::*;
     use crate::backward_ops::*;
     use crate::builder::*;
+    use crate::cells::*;
+    use crate::config::*;
+    use crate::core::*;
     use crate::helper::*;
+    use crate::init_rnn::*;
+    use crate::ops::*;
+    use crate::process::*;
+    use crate::reg_ops::*;
+    use crate::seq::*;
+    use crate::utils::*;
     use crate::VERSION;
     use brain_core::Tensor;
 }

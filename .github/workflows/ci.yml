@@ -31,6 +31,7 @@ jobs:
         run: |
           cargo test -p brain-core --test numerical_check -j 2
           cargo test -p brain-autograd --test grad_check --test tape_memory_bounded -j 2
+          cargo test -p brain-nn -j 2
           cargo test -p brain-loss -j 2
           cargo test -p brain-optim --test optim_step_test -j 2
           cargo test -p brain-train --test trainer_regression -j 2

@@ -22,9 +22,9 @@
 
 pub mod variants;
 
-use std::collections::HashMap;
+use crate::optimizer::{OptimResult, Optimizer, OptimizerError, ParamGroup, StepInfo};
 use brain_core::Tensor;
-use crate::optimizer::{Optimizer, OptimizerError, OptimResult, StepInfo, ParamGroup};
+use std::collections::HashMap;
 
 /// Configuration settings for Adam optimizer.
 #[derive(Debug, Clone, PartialEq)]
@@ -97,7 +97,9 @@ impl Optimizer for Adam {
             return Err(OptimizerError::EmptyParamGroup);
         }
         if params.len() != grads.len() {
-            return Err(OptimizerError::InvalidHyperparameter("Length mismatch".into()));
+            return Err(OptimizerError::InvalidHyperparameter(
+                "Length mismatch".into(),
+            ));
         }
 
         self.step_count += 1;
@@ -108,9 +110,21 @@ impl Optimizer for Adam {
 
         for group in &self.param_groups {
             let lr = group.effective_lr();
-            let beta1 = if group.beta1 > 0.0 { group.beta1 } else { self.config.beta1 };
-            let beta2 = if group.beta2 > 0.0 { group.beta2 } else { self.config.beta2 };
-            let eps = if group.eps > 0.0 { group.eps } else { self.config.eps };
+            let beta1 = if group.beta1 > 0.0 {
+                group.beta1
+            } else {
+                self.config.beta1
+            };
+            let beta2 = if group.beta2 > 0.0 {
+                group.beta2
+            } else {
+                self.config.beta2
+            };
+            let eps = if group.eps > 0.0 {
+                group.eps
+            } else {
+                self.config.eps
+            };
             let wd = group.weight_decay.max(self.config.weight_decay);
             let bias_correction1 = 1.0 - beta1.powf(step);
             let bias_correction2 = 1.0 - beta2.powf(step);
@@ -137,7 +151,10 @@ impl Optimizer for Adam {
                 }
 
                 let mut v_max_buf = if self.config.amsgrad {
-                    let entry = self.max_exp_avg_sq.entry(p_idx).or_insert_with(|| vec![0.0; n]);
+                    let entry = self
+                        .max_exp_avg_sq
+                        .entry(p_idx)
+                        .or_insert_with(|| vec![0.0; n]);
                     if entry.len() != n {
                         *entry = vec![0.0; n];
                     }
@@ -149,7 +166,10 @@ impl Optimizer for Adam {
                 for i in 0..n {
                     let mut g_val = g_data[i];
                     if g_val.is_nan() || g_val.is_infinite() {
-                        return Err(OptimizerError::NonFiniteGradient { param_id: p_idx, value: g_val });
+                        return Err(OptimizerError::NonFiniteGradient {
+                            param_id: p_idx,
+                            value: g_val,
+                        });
                     }
                     total_grad_norm_sq += g_val * g_val;
 
@@ -194,7 +214,10 @@ impl Optimizer for Adam {
     }
 
     fn get_lr(&self) -> f64 {
-        self.param_groups.first().map(|g| g.effective_lr()).unwrap_or(self.config.lr)
+        self.param_groups
+            .first()
+            .map(|g| g.effective_lr())
+            .unwrap_or(self.config.lr)
     }
 
     fn set_lr(&mut self, lr: f64) {
@@ -228,10 +251,16 @@ impl Optimizer for Adam {
     fn state_dict(&self) -> HashMap<String, Tensor> {
         let mut map = HashMap::new();
         for (idx, buf) in &self.exp_avg {
-            map.insert(format!("adam_m_{}", idx), Tensor::from_slice(buf, vec![buf.len()]));
+            map.insert(
+                format!("adam_m_{}", idx),
+                Tensor::from_slice(buf, vec![buf.len()]),
+            );
         }
         for (idx, buf) in &self.exp_avg_sq {
-            map.insert(format!("adam_v_{}", idx), Tensor::from_slice(buf, vec![buf.len()]));
+            map.insert(
+                format!("adam_v_{}", idx),
+                Tensor::from_slice(buf, vec![buf.len()]),
+            );
         }
         map
     }
@@ -256,7 +285,13 @@ impl Optimizer for Adam {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

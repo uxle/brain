@@ -39,18 +39,18 @@ pub mod utils;
 
 // ── Convenience re-exports ──────────────────────────────────────────────────
 pub use adversarial::{
-    AdvLossConfig, AdvLossKind, AdversarialLoss, HingeAdversarialLoss, LSGANLoss,
-    RelativisticLoss, WassersteinConfig, WassersteinLoss,
+    AdvLossConfig, AdvLossKind, AdversarialLoss, HingeAdversarialLoss, LSGANLoss, RelativisticLoss,
+    WassersteinConfig, WassersteinLoss,
 };
 pub use classification::{
-    ClassLossConfig, ClassLossKind, ClassificationLoss, CrossEntropyConfig,
-    CrossEntropyLoss, FocalConfig, FocalLoss, HingeLoss, KLDivergenceLoss,
+    ClassLossConfig, ClassLossKind, ClassificationLoss, CrossEntropyConfig, CrossEntropyLoss,
+    FocalConfig, FocalLoss, HingeLoss, KLDivergenceLoss,
 };
 pub use combine::{CombineMode, CompositeLoss};
 pub use config::LossConfig;
 pub use contrastive::{
-    ContrastiveConfig, ContrastiveLoss, InfoNCELoss, InfoNceConfig, SimCLRLoss,
-    SimclrConfig, TripletConfig, TripletMarginLoss,
+    ContrastiveConfig, ContrastiveLoss, InfoNCELoss, InfoNceConfig, SimCLRLoss, SimclrConfig,
+    TripletConfig, TripletMarginLoss,
 };
 pub use core::{Loss, LossError, LossKind, LossResult, LossValue, Reduction};
 pub use distillation::{DistillConfig, KnowledgeDistillationLoss};

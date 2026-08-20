@@ -14,11 +14,15 @@ pub struct AucConfig {
 /// Computes binary ROC-AUC using trapezoidal numerical integration over sorted threshold pairs.
 pub fn roc_auc_score(probs: &[f64], targets: &[usize]) -> f64 {
     let n = probs.len().min(targets.len());
-    if n == 0 { return 0.5; }
+    if n == 0 {
+        return 0.5;
+    }
 
     let total_pos = targets.iter().take(n).filter(|&&t| t == 1).count();
     let total_neg = n - total_pos;
-    if total_pos == 0 || total_neg == 0 { return 0.5; }
+    if total_pos == 0 || total_neg == 0 {
+        return 0.5;
+    }
 
     let sorted = sort_descending_by_value(&probs[..n]);
 
@@ -50,10 +54,14 @@ pub fn roc_auc_score(probs: &[f64], targets: &[usize]) -> f64 {
 /// Computes Precision-Recall Area Under the Curve (PR-AUC).
 pub fn pr_auc_score(probs: &[f64], targets: &[usize]) -> f64 {
     let n = probs.len().min(targets.len());
-    if n == 0 { return 0.0; }
+    if n == 0 {
+        return 0.0;
+    }
 
     let total_pos = targets.iter().take(n).filter(|&&t| t == 1).count();
-    if total_pos == 0 { return 0.0; }
+    if total_pos == 0 {
+        return 0.0;
+    }
 
     let sorted = sort_descending_by_value(&probs[..n]);
 
@@ -63,7 +71,11 @@ pub fn pr_auc_score(probs: &[f64], targets: &[usize]) -> f64 {
     let mut auc = 0.0f64;
 
     for &(_, idx) in &sorted {
-        if targets[idx] == 1 { tp += 1; } else { fp += 1; }
+        if targets[idx] == 1 {
+            tp += 1;
+        } else {
+            fp += 1;
+        }
         let recall = tp as f64 / total_pos as f64;
         let precision = stable_divide(tp as f64, (tp + fp) as f64, 1.0);
 
@@ -76,7 +88,13 @@ pub fn pr_auc_score(probs: &[f64], targets: &[usize]) -> f64 {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

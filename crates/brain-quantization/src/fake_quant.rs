@@ -3,10 +3,10 @@
 //! Simulates quantization noise in the forward pass using Straight-Through Estimator (STE) gradient propagation.
 #![allow(missing_docs)]
 
-use brain_core::Tensor;
 use super::config::FakeQuantConfig;
 use super::core::QuantResult;
-use super::utils::{compute_scale_zero_point, minmax, quantize_val, dequantize_val};
+use super::utils::{compute_scale_zero_point, dequantize_val, minmax, quantize_val};
+use brain_core::Tensor;
 
 /// Fake Quantization Module for QAT.
 #[derive(Debug, Clone)]
@@ -30,7 +30,8 @@ impl FakeQuantize {
     /// Initializes fake quant parameters from sample tensor min/max.
     pub fn init_from_tensor(&mut self, tensor: &Tensor) -> QuantResult<()> {
         let (min_v, max_v) = minmax(tensor.data())?;
-        let (scale, zp) = compute_scale_zero_point(min_v, max_v, self.config.dtype, self.config.symmetric)?;
+        let (scale, zp) =
+            compute_scale_zero_point(min_v, max_v, self.config.dtype, self.config.symmetric)?;
         self.scale = scale;
         self.zero_point = zp;
         Ok(())
@@ -87,7 +88,13 @@ impl FakeQuantize {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

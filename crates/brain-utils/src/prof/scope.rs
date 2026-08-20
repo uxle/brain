@@ -72,7 +72,7 @@ mod tests {
     fn test_scope_guard_raii_1() {
         let mut recorded_name = String::new();
         let mut recorded_dur = Duration::ZERO;
-    
+
         {
             let _guard = ScopeGuard::new("matrix_multiply", |name, dur| {
                 recorded_name = name.to_string();
@@ -81,14 +81,14 @@ mod tests {
             assert_eq!(_guard.name, "matrix_multiply");
             let _ = _guard.elapsed();
         }
-    
+
         assert_eq!(recorded_name, "matrix_multiply");
         let _ = recorded_dur;
-    
+
         let mut report = ScopeReport::new("epoch_1", Duration::from_millis(500));
         report.add_child(ScopeReport::new("dataloader", Duration::from_millis(100)));
         report.add_child(ScopeReport::new("backward", Duration::from_millis(400)));
-    
+
         assert_eq!(report.children.len(), 2);
         assert_eq!(report.children[0].name, "dataloader");
     }

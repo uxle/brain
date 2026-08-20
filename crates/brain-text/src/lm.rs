@@ -1,7 +1,15 @@
 //! # Language Modeling Preprocessing & Attention Mask Utilities
 //!
 //! Causal LM target shifting, Masked LM token replacement, packing, and sliding window chunking.
-#![allow(missing_docs, unused_imports, unused_variables, dead_code, unused_mut, unused_comparisons, clippy::all)]
+#![allow(
+    missing_docs,
+    unused_imports,
+    unused_variables,
+    dead_code,
+    unused_mut,
+    unused_comparisons,
+    clippy::all
+)]
 
 use crate::core::TokenId;
 use crate::ops::mask_tokens;
@@ -171,37 +179,51 @@ impl LmPreprocessor {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant, clippy::needless_range_loop, clippy::manual_div_ceil, clippy::manual_is_multiple_of, clippy::too_many_arguments, clippy::doc_markdown, clippy::excessive_precision, clippy::float_cmp, clippy::len_zero)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant,
+        clippy::needless_range_loop,
+        clippy::manual_div_ceil,
+        clippy::manual_is_multiple_of,
+        clippy::too_many_arguments,
+        clippy::doc_markdown,
+        clippy::excessive_precision,
+        clippy::float_cmp,
+        clippy::len_zero
+    )]
     use super::*;
-    use crate::core::*;
-    use crate::config::*;
-    use crate::utils::*;
-    use crate::ops::*;
-    use crate::vocab::*;
-    use crate::text_ops::*;
-    use crate::features::*;
-    use crate::similarity::*;
-    use crate::lm::*;
-    use crate::process::*;
-    use crate::optimize::*;
     use crate::analyze::*;
-    use crate::compute::*;
-    use crate::helper::*;
-    use crate::transform::*;
     use crate::builder::*;
-    use crate::tokenizer::*;
-    use crate::tokenizer::bpe::*;
-    use crate::tokenizer::sentencepiece::*;
-    use crate::tokenizer::wordpiece::*;
-    use crate::tokenizer::char::*;
-    use crate::tokenizer::trainer::*;
-    use crate::tokenizer::normalizer::*;
-    use crate::tokenizer::pretokenizer::*;
-    use crate::tokenizer::bytelevel::*;
-    use crate::tokenizer::post::*;
-    use crate::embedding::*;
-    use crate::embedding::pretrained::*;
+    use crate::compute::*;
+    use crate::config::*;
+    use crate::core::*;
     use crate::embedding::fasttext::*;
+    use crate::embedding::pretrained::*;
+    use crate::embedding::*;
+    use crate::features::*;
+    use crate::helper::*;
+    use crate::lm::*;
+    use crate::ops::*;
+    use crate::optimize::*;
+    use crate::process::*;
+    use crate::similarity::*;
+    use crate::text_ops::*;
+    use crate::tokenizer::bpe::*;
+    use crate::tokenizer::bytelevel::*;
+    use crate::tokenizer::char::*;
+    use crate::tokenizer::normalizer::*;
+    use crate::tokenizer::post::*;
+    use crate::tokenizer::pretokenizer::*;
+    use crate::tokenizer::sentencepiece::*;
+    use crate::tokenizer::trainer::*;
+    use crate::tokenizer::wordpiece::*;
+    use crate::tokenizer::*;
+    use crate::transform::*;
+    use crate::utils::*;
+    use crate::vocab::*;
     use crate::VERSION;
     use brain_core::Tensor;
 
@@ -214,8 +236,14 @@ mod tests {
         assert_eq!(mask.len(), 4);
 
         let mut rng = TextRng::new(1 as u64);
-        let cfg = LmConfig { max_seq_len: 6, mlm_prob: 0.5, mask_token_id: 999, ..Default::default() };
-        let (mlm_in, mlm_lbl, mlm_mask) = LmPreprocessor::prepare_masked_lm(&tokens, &cfg, 1000, &mut rng);
+        let cfg = LmConfig {
+            max_seq_len: 6,
+            mlm_prob: 0.5,
+            mask_token_id: 999,
+            ..Default::default()
+        };
+        let (mlm_in, mlm_lbl, mlm_mask) =
+            LmPreprocessor::prepare_masked_lm(&tokens, &cfg, 1000, &mut rng);
         assert_eq!(mlm_in.len(), 6);
         assert_eq!(mlm_lbl.len(), 6);
         assert_eq!(mlm_mask.len(), 6);

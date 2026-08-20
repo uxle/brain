@@ -76,7 +76,13 @@ pub fn chorus(signal: &[f64], sample_rate: u32, depth_ms: f64, rate_hz: f64) -> 
 }
 
 /// Applies a flanger modulation effect.
-pub fn flanger(signal: &[f64], sample_rate: u32, depth_ms: f64, rate_hz: f64, feedback: f64) -> Vec<f64> {
+pub fn flanger(
+    signal: &[f64],
+    sample_rate: u32,
+    depth_ms: f64,
+    rate_hz: f64,
+    feedback: f64,
+) -> Vec<f64> {
     let sr = sample_rate as f64;
     let max_delay = (depth_ms * 0.001 * sr).round() as usize;
     let mut buffer = vec![0.0; max_delay.max(1)];
@@ -84,7 +90,8 @@ pub fn flanger(signal: &[f64], sample_rate: u32, depth_ms: f64, rate_hz: f64, fe
 
     for i in 0..signal.len() {
         let lfo = (2.0 * PI * rate_hz * i as f64 / sr).sin();
-        let delay_idx = ((0.5 * (1.0 + lfo) * max_delay as f64).round() as usize).min(max_delay.saturating_sub(1));
+        let delay_idx = ((0.5 * (1.0 + lfo) * max_delay as f64).round() as usize)
+            .min(max_delay.saturating_sub(1));
         let delayed = buffer[delay_idx];
         let val = signal[i] + delayed;
         buffer[0] = signal[i] + feedback * delayed;
@@ -124,7 +131,13 @@ pub enum BiquadType {
 }
 
 /// Applies a second-order biquad IIR filter to a 1D audio signal.
-pub fn biquad_filter(signal: &[f64], filter_type: BiquadType, sample_rate: u32, cutoff_hz: f64, q: f64) -> Vec<f64> {
+pub fn biquad_filter(
+    signal: &[f64],
+    filter_type: BiquadType,
+    sample_rate: u32,
+    cutoff_hz: f64,
+    q: f64,
+) -> Vec<f64> {
     let w0 = 2.0 * PI * cutoff_hz / sample_rate as f64;
     let alpha = w0.sin() / (2.0 * q.max(0.1));
     let cos_w0 = w0.cos();

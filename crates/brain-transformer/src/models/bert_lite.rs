@@ -1,7 +1,15 @@
 //! # BERT-Lite: Bidirectional Encoder Transformer Model
 //!
 //! Encoder-only architecture with token, positional, and segment embeddings, stacked bidirectional encoder layers, and `[CLS]` pooling.
-#![allow(missing_docs, unused_imports, unused_variables, dead_code, unused_mut, unused_comparisons, clippy::all)]
+#![allow(
+    missing_docs,
+    unused_imports,
+    unused_variables,
+    dead_code,
+    unused_mut,
+    unused_comparisons,
+    clippy::all
+)]
 
 use crate::config::{ActivationType, NormPosition, NormType, PositionEncodingType};
 use crate::core::{AttentionMask, TransformerResult};
@@ -137,7 +145,9 @@ impl BertLite {
         token_type_ids: Option<&[usize]>,
         padding_mask: Option<&Tensor>,
     ) -> TransformerResult<BertOutput> {
-        let emb = self.embeddings.forward(input_ids, batch_size, seq_len, token_type_ids, 0)?;
+        let emb = self
+            .embeddings
+            .forward(input_ids, batch_size, seq_len, token_type_ids, 0)?;
 
         let mask = if let Some(pad) = padding_mask {
             AttentionMask::Padding(pad.clone())
@@ -160,40 +170,55 @@ impl BertLite {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant, clippy::needless_range_loop, clippy::manual_div_ceil, clippy::manual_is_multiple_of, clippy::too_many_arguments, clippy::doc_markdown, clippy::excessive_precision, clippy::float_cmp, clippy::len_zero, clippy::all)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant,
+        clippy::needless_range_loop,
+        clippy::manual_div_ceil,
+        clippy::manual_is_multiple_of,
+        clippy::too_many_arguments,
+        clippy::doc_markdown,
+        clippy::excessive_precision,
+        clippy::float_cmp,
+        clippy::len_zero,
+        clippy::all
+    )]
     use super::*;
-    use crate::core::*;
-    use crate::config::*;
-    use crate::utils::*;
-    use crate::ops::*;
-    use crate::attention::*;
-    use crate::attention::scaled::*;
-    use crate::attention::multi_head::*;
-    use crate::attention::relative::*;
     use crate::attention::flash_lite::*;
+    use crate::attention::multi_head::*;
     use crate::attention::multi_query::*;
+    use crate::attention::relative::*;
+    use crate::attention::scaled::*;
     use crate::attention::xformers_lite::*;
-    use crate::position::*;
-    use crate::position::rope::*;
-    use crate::position::alibi::*;
-    use crate::position::learned::*;
+    use crate::attention::*;
+    use crate::builder::*;
+    use crate::config::*;
+    use crate::core::*;
+    use crate::decoder::cross::*;
+    use crate::decoder::layer::*;
+    use crate::decoder::*;
     use crate::embedding_layers::*;
-    use crate::ffn::*;
-    use crate::encoder::*;
     use crate::encoder::block::*;
     use crate::encoder::layer::*;
-    use crate::decoder::*;
-    use crate::decoder::layer::*;
-    use crate::decoder::cross::*;
+    use crate::encoder::*;
+    use crate::ffn::*;
+    use crate::generate::*;
     use crate::head::*;
     use crate::kv_cache::*;
-    use crate::generate::*;
-    use crate::models::*;
     use crate::models::bert_lite::*;
     use crate::models::gpt_lite::*;
-    use crate::models::t5_lite::*;
     use crate::models::llama_lite::*;
-    use crate::builder::*;
+    use crate::models::t5_lite::*;
+    use crate::models::*;
+    use crate::ops::*;
+    use crate::position::alibi::*;
+    use crate::position::learned::*;
+    use crate::position::rope::*;
+    use crate::position::*;
+    use crate::utils::*;
     use brain_core::Tensor;
 
     #[test]

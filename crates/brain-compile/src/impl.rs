@@ -7,7 +7,10 @@ use crate::ir::IrGraph;
 use crate::passes::PassManager;
 
 /// Compiles and optimizes an IR graph according to the given compilation options.
-pub fn compile_graph(graph: &IrGraph, options: &CompileOptions) -> Result<IrGraph, CompilationError> {
+pub fn compile_graph(
+    graph: &IrGraph,
+    options: &CompileOptions,
+) -> Result<IrGraph, CompilationError> {
     // 1. Verify initial IR
     crate::ir::verify::verify_graph(graph)?;
 

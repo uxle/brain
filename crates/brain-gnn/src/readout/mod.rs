@@ -4,7 +4,7 @@
 #![allow(missing_docs)]
 
 pub mod jumping;
-pub use jumping::{JumpingKnowledge, JkConfig, JkMode};
+pub use jumping::{JkConfig, JkMode, JumpingKnowledge};
 
 use brain_core::Tensor;
 
@@ -92,7 +92,13 @@ pub fn global_max_pool(x: &Tensor, batch_indices: &[usize], num_graphs: usize) -
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

@@ -3,8 +3,8 @@
 //! Bilinear transformation y = x1 * W * x2^T + b and parameter-free Identity pass-through.
 #![allow(missing_docs)]
 
-use brain_core::Tensor;
 use crate::module::{Module, ModuleResult};
+use brain_core::Tensor;
 
 use brain_autograd::Value;
 
@@ -37,7 +37,11 @@ pub struct Bilinear {
 impl Bilinear {
     pub fn new(in1: usize, in2: usize, out: usize, has_bias: bool) -> Self {
         let weight = Tensor::zeros(vec![out, in1, in2]);
-        let bias = if has_bias { Some(Tensor::zeros(vec![out])) } else { None };
+        let bias = if has_bias {
+            Some(Tensor::zeros(vec![out]))
+        } else {
+            None
+        };
         Self {
             in1_features: in1,
             in2_features: in2,
@@ -50,7 +54,13 @@ impl Bilinear {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

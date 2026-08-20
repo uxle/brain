@@ -3,8 +3,8 @@
 //! Reduction application, shape validation, numerical clamping, and weighted averages.
 #![allow(missing_docs)]
 
+use crate::core::{LossError, LossResult, Reduction};
 use brain_core::Tensor;
-use crate::core::{Reduction, LossError, LossResult};
 
 /// Applies reduction (Mean, Sum, None) to a vector of per-sample losses.
 pub fn reduction_apply(losses: &[f64], reduction: Reduction) -> Tensor {
@@ -20,9 +20,7 @@ pub fn reduction_apply(losses: &[f64], reduction: Reduction) -> Tensor {
             let sum: f64 = losses.iter().sum();
             Tensor::from_vec(vec![sum], vec![1])
         }
-        Reduction::None => {
-            Tensor::from_vec(losses.to_vec(), vec![losses.len()])
-        }
+        Reduction::None => Tensor::from_vec(losses.to_vec(), vec![losses.len()]),
     }
 }
 
@@ -45,19 +43,31 @@ pub fn clamp_eps(val: f64, eps: f64) -> f64 {
 /// Computes weighted average of sample losses.
 pub fn weighted_average(losses: &[f64], weights: &[f64]) -> f64 {
     let n = losses.len().min(weights.len());
-    if n == 0 { return 0.0; }
+    if n == 0 {
+        return 0.0;
+    }
     let mut total_loss = 0.0;
     let mut total_weight = 0.0;
     for i in 0..n {
         total_loss += losses[i] * weights[i];
         total_weight += weights[i];
     }
-    if total_weight > 0.0 { total_loss / total_weight } else { 0.0 }
+    if total_weight > 0.0 {
+        total_loss / total_weight
+    } else {
+        0.0
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

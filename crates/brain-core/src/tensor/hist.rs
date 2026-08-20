@@ -42,7 +42,10 @@ pub fn bincount(input: &Tensor, minlength: usize) -> Tensor {
     }
     let mut max_val = 0usize;
     for &x in input.data() {
-        assert!(x >= 0.0, "bincount: input values must be non-negative integers");
+        assert!(
+            x >= 0.0,
+            "bincount: input values must be non-negative integers"
+        );
         max_val = max_val.max(x as usize);
     }
     let len = (max_val + 1).max(minlength);

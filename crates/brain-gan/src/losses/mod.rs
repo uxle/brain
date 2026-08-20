@@ -6,9 +6,11 @@
 pub mod classic;
 pub mod perceptual;
 
-pub use classic::{ClassicLoss, hinge_loss_d, hinge_loss_g, wgan_loss_d, wgan_loss_g,
-                  lsgan_loss_d, lsgan_loss_g, bce_loss_d, bce_loss_g};
-pub use perceptual::{PerceptualConfig, gram_matrix, feature_matching_loss};
+pub use classic::{
+    bce_loss_d, bce_loss_g, hinge_loss_d, hinge_loss_g, lsgan_loss_d, lsgan_loss_g, wgan_loss_d,
+    wgan_loss_g, ClassicLoss,
+};
+pub use perceptual::{feature_matching_loss, gram_matrix, PerceptualConfig};
 
 /// Trait for GAN loss functions.
 pub trait GanLoss {
@@ -25,7 +27,13 @@ pub struct GanLossConfig {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

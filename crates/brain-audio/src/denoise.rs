@@ -5,12 +5,17 @@
 //! * Wiener filtering with a priori SNR estimation (Decision-Directed approach)
 //! * Stationary noise floor estimation via minimum statistics
 
-use brain_core::BrainResult;
 use crate::config::STFTConfig;
 use crate::feature::stft::STFTProcessor;
+use brain_core::BrainResult;
 
 /// Denoises a 1D audio signal using Spectral Subtraction with oversubtraction and spectral floor.
-pub fn spectral_subtraction(signal: &[f64], config: &STFTConfig, oversubtraction: f64, spectral_floor: f64) -> BrainResult<Vec<f64>> {
+pub fn spectral_subtraction(
+    signal: &[f64],
+    config: &STFTConfig,
+    oversubtraction: f64,
+    spectral_floor: f64,
+) -> BrainResult<Vec<f64>> {
     let processor = STFTProcessor::new(config.clone())?;
     let (re, im) = processor.stft_1d(signal)?;
     let num_bins = re.shape()[0];

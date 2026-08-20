@@ -447,7 +447,7 @@ impl Device {
     /// GPU support depends on the compute capability.
     pub fn supports_f16(&self) -> bool {
         match self {
-            Device::Cpu => false, // software emulation, not native
+            Device::Cpu => false,    // software emulation, not native
             Device::Cuda(_) => true, // most modern CUDA GPUs support f16
             Device::Vulkan(_) => true,
             Device::Metal(_) => true,
@@ -622,7 +622,9 @@ impl Device {
 
         let index: usize = if index_str.ends_with(')') {
             let inner = &index_str[..index_str.len() - 1];
-            inner.parse::<usize>().map_err(|e| format!("invalid index '{}': {}", inner, e))?
+            inner
+                .parse::<usize>()
+                .map_err(|e| format!("invalid index '{}': {}", inner, e))?
         } else {
             return Err(format!("expected format 'TypeName(index)', got '{}'", s));
         };
@@ -817,27 +819,47 @@ impl DeviceList {
 
     /// Returns all CUDA devices in the list.
     pub fn cuda_devices(&self) -> Vec<Device> {
-        self.devices.iter().filter(|d| d.is_cuda()).copied().collect()
+        self.devices
+            .iter()
+            .filter(|d| d.is_cuda())
+            .copied()
+            .collect()
     }
 
     /// Returns all Vulkan devices in the list.
     pub fn vulkan_devices(&self) -> Vec<Device> {
-        self.devices.iter().filter(|d| d.is_vulkan()).copied().collect()
+        self.devices
+            .iter()
+            .filter(|d| d.is_vulkan())
+            .copied()
+            .collect()
     }
 
     /// Returns all Metal devices in the list.
     pub fn metal_devices(&self) -> Vec<Device> {
-        self.devices.iter().filter(|d| d.is_metal()).copied().collect()
+        self.devices
+            .iter()
+            .filter(|d| d.is_metal())
+            .copied()
+            .collect()
     }
 
     /// Returns all TPU devices in the list.
     pub fn tpu_devices(&self) -> Vec<Device> {
-        self.devices.iter().filter(|d| d.is_tpu()).copied().collect()
+        self.devices
+            .iter()
+            .filter(|d| d.is_tpu())
+            .copied()
+            .collect()
     }
 
     /// Returns all accelerator devices (non-CPU).
     pub fn accelerators(&self) -> Vec<Device> {
-        self.devices.iter().filter(|d| d.is_accelerator()).copied().collect()
+        self.devices
+            .iter()
+            .filter(|d| d.is_accelerator())
+            .copied()
+            .collect()
     }
 
     /// Returns the number of available devices.
@@ -1074,15 +1096,21 @@ impl DeviceProperties {
     /// Returns whether this device supports BF16 operations natively.
     pub fn supports_bf16(&self) -> bool {
         self.compute_capability.as_ref().map_or(false, |cap| {
-            cap.starts_with("sm_8") || cap.starts_with("sm_9") || cap.contains("metal") || cap.contains("tpu")
+            cap.starts_with("sm_8")
+                || cap.starts_with("sm_9")
+                || cap.contains("metal")
+                || cap.contains("tpu")
         })
     }
 
     /// Returns whether this device supports tensor cores / matrix units.
     pub fn supports_tensor_cores(&self) -> bool {
         self.compute_capability.as_ref().map_or(false, |cap| {
-            cap.starts_with("sm_7") || cap.starts_with("sm_8") || cap.starts_with("sm_9")
-                || cap.contains("metal") || cap.contains("tpu")
+            cap.starts_with("sm_7")
+                || cap.starts_with("sm_8")
+                || cap.starts_with("sm_9")
+                || cap.contains("metal")
+                || cap.contains("tpu")
         })
     }
 
@@ -1102,8 +1130,14 @@ impl DeviceProperties {
             lines.push(format!("  Compute: {}", cap));
         }
         lines.push(format!("  SMs: {}", self.num_sms));
-        lines.push(format!("  Max threads/block: {}", self.max_threads_per_block));
-        lines.push(format!("  Shared mem/block: {} KB", self.max_shared_memory_per_block / 1024));
+        lines.push(format!(
+            "  Max threads/block: {}",
+            self.max_threads_per_block
+        ));
+        lines.push(format!(
+            "  Shared mem/block: {} KB",
+            self.max_shared_memory_per_block / 1024
+        ));
         if let Some(clk) = self.clock_speed_mhz {
             lines.push(format!("  Clock: {:.0} MHz", clk));
         }
@@ -1244,7 +1278,9 @@ impl DeviceGuard {
     pub fn set(device: Device) -> Result<Self, String> {
         let previous = current_device();
         set_device(device)?;
-        Ok(DeviceGuard { _previous: previous })
+        Ok(DeviceGuard {
+            _previous: previous,
+        })
     }
 }
 
@@ -1342,7 +1378,9 @@ impl DeviceSet {
             return true;
         }
         let first_type = self.devices[0].device_type();
-        self.devices[1..].iter().all(|d| d.device_type() == first_type)
+        self.devices[1..]
+            .iter()
+            .all(|d| d.device_type() == first_type)
     }
 
     /// Returns the world size (number of devices).
@@ -1961,7 +1999,10 @@ mod tests {
     #[test]
     fn test_ord_eq() {
         assert_eq!(Device::Cpu.cmp(&Device::Cpu), std::cmp::Ordering::Equal);
-        assert_eq!(Device::cuda(3).cmp(&Device::cuda(3)), std::cmp::Ordering::Equal);
+        assert_eq!(
+            Device::cuda(3).cmp(&Device::cuda(3)),
+            std::cmp::Ordering::Equal
+        );
     }
 
     // =========================================================================
@@ -2680,7 +2721,13 @@ mod tests {
 
     #[test]
     fn test_device_type_ord_total() {
-        let sorted = [DeviceType::Cpu, DeviceType::Cuda, DeviceType::Vulkan, DeviceType::Metal, DeviceType::Tpu];
+        let sorted = [
+            DeviceType::Cpu,
+            DeviceType::Cuda,
+            DeviceType::Vulkan,
+            DeviceType::Metal,
+            DeviceType::Tpu,
+        ];
         let mut all = DeviceType::ALL;
         all.sort();
         assert_eq!(all, sorted);
@@ -2733,8 +2780,12 @@ mod tests {
     #[test]
     fn test_device_list_from_devices_various() {
         let list = DeviceList::from_devices(vec![
-            Device::Cpu, Device::cuda(0), Device::cuda(1),
-            Device::vulkan(0), Device::metal(0), Device::tpu(0),
+            Device::Cpu,
+            Device::cuda(0),
+            Device::cuda(1),
+            Device::vulkan(0),
+            Device::metal(0),
+            Device::tpu(0),
         ]);
         assert_eq!(list.len(), 6);
         assert_eq!(list.cuda_count(), 2);
@@ -2773,7 +2824,10 @@ mod tests {
     #[test]
     fn test_device_list_summary_various() {
         let list = DeviceList::from_devices(vec![
-            Device::Cpu, Device::cuda(0), Device::cuda(1), Device::tpu(0),
+            Device::Cpu,
+            Device::cuda(0),
+            Device::cuda(1),
+            Device::tpu(0),
         ]);
         let summary = list.summary();
         assert!(summary.contains("CPU"));
@@ -3040,7 +3094,6 @@ mod tests {
         assert!(Device::tpu(0) < Device::tpu(1));
     }
 
-
     // =========================================================================
     // Device Type Method Delegation Tests
     // =========================================================================
@@ -3065,7 +3118,12 @@ mod tests {
     #[test]
     fn test_device_compute_capability_non_cpu() {
         // All non-CPU devices should return Some
-        for d in [Device::cuda(0), Device::vulkan(0), Device::metal(0), Device::tpu(0)] {
+        for d in [
+            Device::cuda(0),
+            Device::vulkan(0),
+            Device::metal(0),
+            Device::tpu(0),
+        ] {
             assert!(d.compute_capability().is_some());
         }
     }
@@ -3124,7 +3182,11 @@ mod tests {
         let mut sorted = all_devices.clone();
         sorted.sort();
         for i in 0..all_devices.len() {
-            assert_eq!(sorted[i], all_devices[i], "ordering failed at position {}", i);
+            assert_eq!(
+                sorted[i], all_devices[i],
+                "ordering failed at position {}",
+                i
+            );
         }
     }
 
@@ -3178,8 +3240,11 @@ mod tests {
     fn test_device_list_mixed_types() {
         let devices = vec![
             Device::Cpu,
-            Device::cuda(0), Device::cuda(1), Device::cuda(2),
-            Device::vulkan(0), Device::vulkan(1),
+            Device::cuda(0),
+            Device::cuda(1),
+            Device::cuda(2),
+            Device::vulkan(0),
+            Device::vulkan(1),
             Device::metal(0),
             Device::tpu(0),
         ];
@@ -3196,7 +3261,9 @@ mod tests {
     fn test_device_list_summary_mixed() {
         let list = DeviceList::from_devices(vec![
             Device::Cpu,
-            Device::cuda(0), Device::cuda(1), Device::cuda(2),
+            Device::cuda(0),
+            Device::cuda(1),
+            Device::cuda(2),
             Device::metal(0),
         ]);
         let summary = list.summary();
@@ -3304,7 +3371,6 @@ mod tests {
         assert_eq!(format!("{}", Device::metal(3)), "Metal(3)");
         assert_eq!(format!("{}", Device::tpu(7)), "Tpu(7)");
     }
-
 
     // =========================================================================
     // Device Clone Copy Consistency

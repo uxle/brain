@@ -1,11 +1,20 @@
 //! # Atari-Lite Feature & Pixel Environments
 //!
 //! Compact, pure-Rust Atari-style simulation environments: PongLite and BreakoutLite.
-#![allow(missing_docs, clippy::excessive_precision, clippy::approx_constant, clippy::needless_range_loop, clippy::too_many_arguments, clippy::manual_is_multiple_of, clippy::manual_div_ceil, clippy::doc_markdown)]
+#![allow(
+    missing_docs,
+    clippy::excessive_precision,
+    clippy::approx_constant,
+    clippy::needless_range_loop,
+    clippy::too_many_arguments,
+    clippy::manual_is_multiple_of,
+    clippy::manual_div_ceil,
+    clippy::doc_markdown
+)]
 
-use brain_core::Tensor;
 use super::super::core::{RlError, RlResult, Space};
 use super::{Env, EnvStep};
+use brain_core::Tensor;
 
 /// Pong-Lite 2D paddle and ball simulation.
 #[derive(Debug, Clone)]
@@ -39,7 +48,16 @@ impl PongLiteEnv {
     }
 
     fn state(&self) -> Tensor {
-        Tensor::from_slice(&[self.paddle_y, self.ball_x, self.ball_y, self.ball_vx, self.ball_vy], vec![5])
+        Tensor::from_slice(
+            &[
+                self.paddle_y,
+                self.ball_x,
+                self.ball_y,
+                self.ball_vx,
+                self.ball_vy,
+            ],
+            vec![5],
+        )
     }
 }
 
@@ -56,7 +74,7 @@ impl Env for PongLiteEnv {
 
     fn step(&mut self, action: usize) -> RlResult<EnvStep> {
         match action {
-            0 => {},
+            0 => {}
             1 => self.paddle_y = (self.paddle_y - 0.05).max(0.0),
             2 => self.paddle_y = (self.paddle_y + 0.05).min(1.0),
             _ => return Err(RlError::InvalidAction(action)),
@@ -93,7 +111,11 @@ impl Env for PongLiteEnv {
     }
 
     fn observation_space(&self) -> Space {
-        Space::Continuous { shape: vec![5], low: 0.0, high: 1.0 }
+        Space::Continuous {
+            shape: vec![5],
+            low: 0.0,
+            high: 1.0,
+        }
     }
 
     fn action_space(&self) -> Space {
@@ -142,12 +164,15 @@ impl Env for BreakoutLiteEnv {
         self.ball_vy = 0.04;
         self.bricks_left = 20;
         self.step_count = 0;
-        Ok(Tensor::from_slice(&[self.paddle_x, self.ball_x, self.ball_y], vec![3]))
+        Ok(Tensor::from_slice(
+            &[self.paddle_x, self.ball_x, self.ball_y],
+            vec![3],
+        ))
     }
 
     fn step(&mut self, action: usize) -> RlResult<EnvStep> {
         match action {
-            0 => {},
+            0 => {}
             1 => self.paddle_x = (self.paddle_x - 0.05).max(0.0),
             2 => self.paddle_x = (self.paddle_x + 0.05).min(1.0),
             _ => return Err(RlError::InvalidAction(action)),
@@ -188,7 +213,11 @@ impl Env for BreakoutLiteEnv {
     }
 
     fn observation_space(&self) -> Space {
-        Space::Continuous { shape: vec![3], low: 0.0, high: 1.0 }
+        Space::Continuous {
+            shape: vec![3],
+            low: 0.0,
+            high: 1.0,
+        }
     }
 
     fn action_space(&self) -> Space {
@@ -198,23 +227,35 @@ impl Env for BreakoutLiteEnv {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant, clippy::needless_range_loop, clippy::manual_div_ceil, clippy::manual_is_multiple_of, clippy::too_many_arguments, clippy::doc_markdown, clippy::excessive_precision)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant,
+        clippy::needless_range_loop,
+        clippy::manual_div_ceil,
+        clippy::manual_is_multiple_of,
+        clippy::too_many_arguments,
+        clippy::doc_markdown,
+        clippy::excessive_precision
+    )]
     use super::*;
-    use crate::core::*;
-    use crate::env::*;
-    use crate::policy::*;
-    use crate::value::*;
-    use crate::buffer::*;
-    use crate::dqn::*;
-    use crate::ppo::*;
     use crate::a2c::*;
     use crate::actor_critic::*;
-    use crate::sac::*;
     use crate::agents::*;
-    use crate::trainer::*;
-    use crate::eval::*;
+    use crate::buffer::*;
     use crate::checkpoint::*;
+    use crate::core::*;
+    use crate::dqn::*;
+    use crate::env::*;
+    use crate::eval::*;
+    use crate::policy::*;
+    use crate::ppo::*;
+    use crate::sac::*;
+    use crate::trainer::*;
     use crate::utils::*;
+    use crate::value::*;
     use crate::VERSION;
     use brain_core::Tensor;
 }

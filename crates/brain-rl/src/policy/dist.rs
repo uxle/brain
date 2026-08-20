@@ -1,7 +1,16 @@
 //! # Policy Probability Distributions
 //!
 //! Discrete Categorical and Continuous Diagonal Gaussian action distributions with log-probability and entropy.
-#![allow(missing_docs, clippy::excessive_precision, clippy::approx_constant, clippy::needless_range_loop, clippy::too_many_arguments, clippy::manual_is_multiple_of, clippy::manual_div_ceil, clippy::doc_markdown)]
+#![allow(
+    missing_docs,
+    clippy::excessive_precision,
+    clippy::approx_constant,
+    clippy::needless_range_loop,
+    clippy::too_many_arguments,
+    clippy::manual_is_multiple_of,
+    clippy::manual_div_ceil,
+    clippy::doc_markdown
+)]
 
 /// Discrete Categorical Distribution parameterized by unnormalized logits.
 #[derive(Debug, Clone, PartialEq)]
@@ -14,7 +23,9 @@ impl CategoricalDist {
     pub fn from_logits(logits: &[f64]) -> Self {
         let mut max_l = f64::NEG_INFINITY;
         for &l in logits {
-            if l > max_l { max_l = l; }
+            if l > max_l {
+                max_l = l;
+            }
         }
 
         let mut sum_exp = 0.0;
@@ -90,23 +101,35 @@ impl DiagonalGaussianDist {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant, clippy::needless_range_loop, clippy::manual_div_ceil, clippy::manual_is_multiple_of, clippy::too_many_arguments, clippy::doc_markdown, clippy::excessive_precision)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant,
+        clippy::needless_range_loop,
+        clippy::manual_div_ceil,
+        clippy::manual_is_multiple_of,
+        clippy::too_many_arguments,
+        clippy::doc_markdown,
+        clippy::excessive_precision
+    )]
     use super::*;
-    use crate::core::*;
-    use crate::env::*;
-    use crate::policy::*;
-    use crate::value::*;
-    use crate::buffer::*;
-    use crate::dqn::*;
-    use crate::ppo::*;
     use crate::a2c::*;
     use crate::actor_critic::*;
-    use crate::sac::*;
     use crate::agents::*;
-    use crate::trainer::*;
-    use crate::eval::*;
+    use crate::buffer::*;
     use crate::checkpoint::*;
+    use crate::core::*;
+    use crate::dqn::*;
+    use crate::env::*;
+    use crate::eval::*;
+    use crate::policy::*;
+    use crate::ppo::*;
+    use crate::sac::*;
+    use crate::trainer::*;
     use crate::utils::*;
+    use crate::value::*;
     use crate::VERSION;
     use brain_core::Tensor;
 }

@@ -3,10 +3,10 @@
 //! Multi-layer GIN model with batch-norm / MLPs between layers.
 #![allow(missing_docs)]
 
-use brain_core::Tensor;
 use crate::graph::Graph;
 use crate::layers::{GinLayer, GnnLayer};
 use crate::readout::global_add_pool;
+use brain_core::Tensor;
 
 /// Multi-layer GIN Model.
 pub struct GinModel {
@@ -41,7 +41,13 @@ impl GinModel {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

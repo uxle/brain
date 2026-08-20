@@ -3,11 +3,11 @@
 //! Convenient unified loss dispatcher: `compute_loss`, `loss_name`, `default_config`.
 #![allow(missing_docs)]
 
-use brain_core::Tensor;
-use crate::core::{LossKind, LossResult};
 use crate::config::LossConfig;
+use crate::core::{LossKind, LossResult};
 use crate::ops::{log_softmax, nll_loss};
 use crate::utils::reduction_apply;
+use brain_core::Tensor;
 
 /// Computes a loss dynamically by `LossKind`.
 pub fn compute_loss(
@@ -69,12 +69,21 @@ pub fn loss_name(kind: LossKind) -> &'static str {
 
 /// Generates a default `LossConfig` for a given `LossKind`.
 pub fn default_config(kind: LossKind) -> LossConfig {
-    LossConfig { kind, ..Default::default() }
+    LossConfig {
+        kind,
+        ..Default::default()
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

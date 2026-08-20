@@ -60,23 +60,20 @@ pub use imbalance::{g_mean_score, matthews_correlation_coefficient};
 pub use impl_::{compute_metric, default_config, metric_names};
 pub use multilabel::{exact_match_ratio, hamming_loss};
 pub use nlp::{
-    edit_distance_levenshtein, meteor_score_lite, perplexity_score, sentence_bleu,
-    NlpMetricConfig,
+    edit_distance_levenshtein, meteor_score_lite, perplexity_score, sentence_bleu, NlpMetricConfig,
 };
 pub use ops::{binarize_probs, confusion_matrix, logits_to_predictions, threshold_sweep_roc};
 pub use ranking::{mean_reciprocal_rank, ndcg_at_k, RankingConfig};
 pub use regression::{
-    huber_metric, mae_score, mape_score, median_absolute_error, mse_score, r2_score,
-    rmse_score, RobustMetricConfig,
+    huber_metric, mae_score, mape_score, median_absolute_error, mse_score, r2_score, rmse_score,
+    RobustMetricConfig,
 };
 pub use report::{format_csv_report, format_markdown_report, ReportFormat};
 pub use segmentation::{miou_and_pixel_accuracy, SegMetricConfig};
 pub use stats::{pearson_correlation, StatsConfig};
 pub use time_series::{forecast_bias, mase_score, TsConfig};
 pub use track::MetricTracker;
-pub use utils::{
-    bin_values_uniform, sort_descending_by_value, stable_divide, topk_indices,
-};
+pub use utils::{bin_values_uniform, sort_descending_by_value, stable_divide, topk_indices};
 
 /// Framework version string.
 pub const VERSION: &str = "0.2.0";

@@ -20,9 +20,9 @@
 
 pub mod nesterov;
 
-use std::collections::HashMap;
+use crate::optimizer::{OptimResult, Optimizer, OptimizerError, ParamGroup, StepInfo};
 use brain_core::Tensor;
-use crate::optimizer::{Optimizer, OptimizerError, OptimResult, StepInfo, ParamGroup};
+use std::collections::HashMap;
 
 /// Configuration parameters for SGD optimizer.
 #[derive(Debug, Clone, PartialEq)]
@@ -84,7 +84,9 @@ impl Optimizer for Sgd {
             return Err(OptimizerError::EmptyParamGroup);
         }
         if params.len() != grads.len() {
-            return Err(OptimizerError::InvalidHyperparameter("Params and grads length mismatch".into()));
+            return Err(OptimizerError::InvalidHyperparameter(
+                "Params and grads length mismatch".into(),
+            ));
         }
 
         self.step_count += 1;
@@ -116,7 +118,10 @@ impl Optimizer for Sgd {
                 let g_data = grad.data();
                 let n = p_data.len();
 
-                let buf = self.momentum_buffers.entry(p_idx).or_insert_with(|| vec![0.0; n]);
+                let buf = self
+                    .momentum_buffers
+                    .entry(p_idx)
+                    .or_insert_with(|| vec![0.0; n]);
                 if buf.len() != n {
                     *buf = vec![0.0; n];
                 }
@@ -124,7 +129,10 @@ impl Optimizer for Sgd {
                 for i in 0..n {
                     let g_val = g_data[i];
                     if g_val.is_nan() || g_val.is_infinite() {
-                        return Err(OptimizerError::NonFiniteGradient { param_id: p_idx, value: g_val });
+                        return Err(OptimizerError::NonFiniteGradient {
+                            param_id: p_idx,
+                            value: g_val,
+                        });
                     }
                     total_grad_norm_sq += g_val * g_val;
 
@@ -169,7 +177,10 @@ impl Optimizer for Sgd {
     }
 
     fn get_lr(&self) -> f64 {
-        self.param_groups.first().map(|g| g.effective_lr()).unwrap_or(self.config.lr)
+        self.param_groups
+            .first()
+            .map(|g| g.effective_lr())
+            .unwrap_or(self.config.lr)
     }
 
     fn set_lr(&mut self, lr: f64) {
@@ -203,7 +214,10 @@ impl Optimizer for Sgd {
     fn state_dict(&self) -> HashMap<String, Tensor> {
         let mut map = HashMap::new();
         for (idx, buf) in &self.momentum_buffers {
-            map.insert(format!("momentum_{}", idx), Tensor::from_slice(buf, vec![buf.len()]));
+            map.insert(
+                format!("momentum_{}", idx),
+                Tensor::from_slice(buf, vec![buf.len()]),
+            );
         }
         map
     }
@@ -223,7 +237,13 @@ impl Optimizer for Sgd {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

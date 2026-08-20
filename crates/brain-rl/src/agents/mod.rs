@@ -1,11 +1,20 @@
 //! # Unified Agent Registry & Interfaces
 //!
 //! Standard `Agent` trait, `AgentKind` enum identifier, and factory constructors.
-#![allow(missing_docs, clippy::excessive_precision, clippy::approx_constant, clippy::needless_range_loop, clippy::too_many_arguments, clippy::manual_is_multiple_of, clippy::manual_div_ceil, clippy::doc_markdown)]
+#![allow(
+    missing_docs,
+    clippy::excessive_precision,
+    clippy::approx_constant,
+    clippy::needless_range_loop,
+    clippy::too_many_arguments,
+    clippy::manual_is_multiple_of,
+    clippy::manual_div_ceil,
+    clippy::doc_markdown
+)]
 
-use brain_core::Tensor;
 use super::core::{RlResult, Transition};
 use super::dqn::{DqnAgent, DqnConfig};
+use brain_core::Tensor;
 
 /// Distinct classes of RL agent algorithms.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -54,23 +63,35 @@ pub fn make_agent(_kind: AgentKind, input_dim: usize, num_actions: usize) -> Dqn
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant, clippy::needless_range_loop, clippy::manual_div_ceil, clippy::manual_is_multiple_of, clippy::too_many_arguments, clippy::doc_markdown, clippy::excessive_precision)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant,
+        clippy::needless_range_loop,
+        clippy::manual_div_ceil,
+        clippy::manual_is_multiple_of,
+        clippy::too_many_arguments,
+        clippy::doc_markdown,
+        clippy::excessive_precision
+    )]
     use super::*;
-    use crate::core::*;
-    use crate::env::*;
-    use crate::policy::*;
-    use crate::value::*;
-    use crate::buffer::*;
-    use crate::dqn::*;
-    use crate::ppo::*;
     use crate::a2c::*;
     use crate::actor_critic::*;
-    use crate::sac::*;
     use crate::agents::*;
-    use crate::trainer::*;
-    use crate::eval::*;
+    use crate::buffer::*;
     use crate::checkpoint::*;
+    use crate::core::*;
+    use crate::dqn::*;
+    use crate::env::*;
+    use crate::eval::*;
+    use crate::policy::*;
+    use crate::ppo::*;
+    use crate::sac::*;
+    use crate::trainer::*;
     use crate::utils::*;
+    use crate::value::*;
     use crate::VERSION;
     use brain_core::Tensor;
 }

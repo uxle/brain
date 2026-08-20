@@ -5,8 +5,8 @@
 
 use brain_core::Tensor;
 use brain_train::{
-    Batch, CallbackAction, EarlyStopping, Linear, MetricHistoryLogger,
-    ModelState, ReLU, Sequential, Trainer, TrainingCallback,
+    Batch, CallbackAction, EarlyStopping, Linear, MetricHistoryLogger, ModelState, ReLU,
+    Sequential, Trainer, TrainingCallback,
 };
 
 // -----------------------------------------------------------------------------
@@ -14,15 +14,7 @@ use brain_train::{
 // -----------------------------------------------------------------------------
 #[test]
 fn test_multistep_convergence_optimization() {
-    let inputs = Tensor::from_vec(
-        vec![
-            0.5, 0.5,
-            -0.5, -0.5,
-            0.8, 0.2,
-            -0.8, -0.2,
-        ],
-        vec![4, 2],
-    );
+    let inputs = Tensor::from_vec(vec![0.5, 0.5, -0.5, -0.5, 0.8, 0.2, -0.8, -0.2], vec![4, 2]);
     let targets = vec![0, 1, 0, 1];
     let batch = Batch::new(inputs, targets).unwrap();
     let batches = vec![batch];
@@ -47,7 +39,11 @@ fn test_multistep_convergence_optimization() {
         initial.loss,
         trained.loss
     );
-    assert!(trained.accuracy >= 0.75, "Model accuracy should be >= 0.75, got {}", trained.accuracy);
+    assert!(
+        trained.accuracy >= 0.75,
+        "Model accuracy should be >= 0.75, got {}",
+        trained.accuracy
+    );
 }
 
 // -----------------------------------------------------------------------------
@@ -67,9 +63,18 @@ fn test_early_stopping_and_metric_logging() {
     logger.on_epoch_end(1, 0.9, Some(0.4));
 
     // Step 2, 3, 4: no improvement -> patience 3 exhausted at epoch 4
-    assert_eq!(es.on_epoch_end(2, 0.9005, Some(0.4005)), CallbackAction::Continue);
-    assert_eq!(es.on_epoch_end(3, 0.9002, Some(0.4002)), CallbackAction::Continue);
-    assert_eq!(es.on_epoch_end(4, 0.9001, Some(0.4001)), CallbackAction::Stop);
+    assert_eq!(
+        es.on_epoch_end(2, 0.9005, Some(0.4005)),
+        CallbackAction::Continue
+    );
+    assert_eq!(
+        es.on_epoch_end(3, 0.9002, Some(0.4002)),
+        CallbackAction::Continue
+    );
+    assert_eq!(
+        es.on_epoch_end(4, 0.9001, Some(0.4001)),
+        CallbackAction::Stop
+    );
 
     assert_eq!(logger.train_losses.len(), 2);
 }

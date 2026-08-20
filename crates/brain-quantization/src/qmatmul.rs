@@ -1,7 +1,14 @@
 //! # Quantized Matrix Multiplication Engine
 //!
 //! Micro-kernels for high-performance 8-bit integer matrix multiplication with 32-bit accumulation and saturation.
-#![allow(missing_docs, clippy::needless_range_loop, clippy::too_many_arguments, clippy::manual_is_multiple_of, clippy::manual_div_ceil, clippy::doc_markdown)]
+#![allow(
+    missing_docs,
+    clippy::needless_range_loop,
+    clippy::too_many_arguments,
+    clippy::manual_is_multiple_of,
+    clippy::manual_div_ceil,
+    clippy::doc_markdown
+)]
 
 use super::core::{QuantError, QuantResult};
 
@@ -60,7 +67,13 @@ pub fn q8_matmul(
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

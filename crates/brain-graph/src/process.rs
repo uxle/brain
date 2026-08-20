@@ -4,7 +4,7 @@
 #![allow(missing_docs)]
 
 use crate::core::GraphResult;
-use crate::ir::{GraphIr, verify_graph};
+use crate::ir::{verify_graph, GraphIr};
 
 /// Runs a custom graph transform with safety verification pre- and post-transform.
 pub fn process_with_verification<F>(graph: &mut GraphIr, transform: F) -> GraphResult<()>
@@ -19,7 +19,13 @@ where
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

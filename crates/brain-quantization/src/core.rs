@@ -2,10 +2,17 @@
 //!
 //! Fundamental data types, quantization schemes, scale/zero-point parameter containers,
 //! error representations, and quantized tensor abstractions.
-#![allow(missing_docs, clippy::needless_range_loop, clippy::too_many_arguments, clippy::manual_is_multiple_of, clippy::manual_div_ceil, clippy::doc_markdown)]
+#![allow(
+    missing_docs,
+    clippy::needless_range_loop,
+    clippy::too_many_arguments,
+    clippy::manual_is_multiple_of,
+    clippy::manual_div_ceil,
+    clippy::doc_markdown
+)]
 
-use std::fmt;
 use brain_core::Tensor;
+use std::fmt;
 
 /// Supported target quantized data types.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -29,7 +36,9 @@ impl QuantDType {
         match self {
             QuantDType::Int4 | QuantDType::UInt4 => 4,
             QuantDType::Int8 | QuantDType::UInt8 | QuantDType::FP8E4M3 | QuantDType::FP8E5M2 => 8,
-            QuantDType::Int16 | QuantDType::UInt16 | QuantDType::BFloat16 | QuantDType::Float16 => 16,
+            QuantDType::Int16 | QuantDType::UInt16 | QuantDType::BFloat16 | QuantDType::Float16 => {
+                16
+            }
         }
     }
 
@@ -68,7 +77,9 @@ pub enum QuantScheme {
     SymmetricPerTensor,
     AffinePerChannel,
     SymmetricPerChannel,
-    GroupWise { group_size: usize },
+    GroupWise {
+        group_size: usize,
+    },
 }
 
 /// Quantization parameters container (scale and zero-point).
@@ -132,7 +143,11 @@ pub struct QuantTensor {
 impl QuantTensor {
     /// Creates a new QuantTensor from integer data, shape, and quantization parameters.
     pub fn new(data: Vec<i32>, shape: Vec<usize>, params: QParams) -> Self {
-        Self { data, shape, params }
+        Self {
+            data,
+            shape,
+            params,
+        }
     }
 
     /// Dequantizes the tensor back to high-precision floating point tensor.
@@ -201,8 +216,14 @@ pub enum QuantError {
     EmptyTensor,
     InvalidScale(f64),
     InvalidZeroPoint(i32),
-    ShapeMismatch { expected: Vec<usize>, found: Vec<usize> },
-    ChannelCountMismatch { expected: usize, found: usize },
+    ShapeMismatch {
+        expected: Vec<usize>,
+        found: Vec<usize>,
+    },
+    ChannelCountMismatch {
+        expected: usize,
+        found: usize,
+    },
     CalibrationError(String),
     UnsupportedDType(QuantDType),
     SparsityError(String),
@@ -215,13 +236,23 @@ impl fmt::Display for QuantError {
             QuantError::InvalidScale(s) => write!(f, "Invalid quantization scale factor: {}", s),
             QuantError::InvalidZeroPoint(zp) => write!(f, "Invalid zero point offset: {}", zp),
             QuantError::ShapeMismatch { expected, found } => {
-                write!(f, "Shape mismatch: expected {:?}, found {:?}", expected, found)
+                write!(
+                    f,
+                    "Shape mismatch: expected {:?}, found {:?}",
+                    expected, found
+                )
             }
             QuantError::ChannelCountMismatch { expected, found } => {
-                write!(f, "Channel count mismatch: expected {}, found {}", expected, found)
+                write!(
+                    f,
+                    "Channel count mismatch: expected {}, found {}",
+                    expected, found
+                )
             }
             QuantError::CalibrationError(msg) => write!(f, "Calibration error: {}", msg),
-            QuantError::UnsupportedDType(dt) => write!(f, "Unsupported quantized data type: {:?}", dt),
+            QuantError::UnsupportedDType(dt) => {
+                write!(f, "Unsupported quantized data type: {:?}", dt)
+            }
             QuantError::SparsityError(msg) => write!(f, "Sparse representation error: {}", msg),
         }
     }
@@ -233,31 +264,40 @@ pub type QuantResult<T> = Result<T, QuantError>;
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant, clippy::needless_range_loop, clippy::manual_div_ceil, clippy::manual_is_multiple_of)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant,
+        clippy::needless_range_loop,
+        clippy::manual_div_ceil,
+        clippy::manual_is_multiple_of
+    )]
     use super::*;
-    use crate::core::*;
-    use crate::config::*;
-    use crate::calibration::*;
-    use crate::quantizer::*;
-    use crate::prune::*;
-    use crate::sparse::*;
+    use crate::act_quant::*;
+    use crate::bench_quant::*;
+    use crate::block_quant::*;
     use crate::builder::*;
-    use crate::ops::*;
-    use crate::utils::*;
+    use crate::calibration::*;
+    use crate::config::*;
+    use crate::core::*;
     use crate::dtype_map::*;
     use crate::error_analysis::*;
-    use crate::bench_quant::*;
-    use crate::runtime::*;
-    use crate::helper::*;
-    use crate::r#impl::*;
-    use crate::act_quant::*;
-    use crate::block_quant::*;
-    use crate::mixed::*;
-    use crate::graph_quant::*;
     use crate::fake_quant::*;
-    use crate::qlinear::*;
+    use crate::graph_quant::*;
+    use crate::helper::*;
+    use crate::mixed::*;
+    use crate::ops::*;
+    use crate::prune::*;
     use crate::qconv::*;
+    use crate::qlinear::*;
     use crate::qmatmul::*;
+    use crate::quantizer::*;
+    use crate::r#impl::*;
+    use crate::runtime::*;
+    use crate::sparse::*;
+    use crate::utils::*;
     use crate::VERSION;
     use brain_core::Tensor;
 }

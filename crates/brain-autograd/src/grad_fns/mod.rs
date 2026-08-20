@@ -3,9 +3,9 @@
 //! Defines the [`GradFn`] graph links, parent tracking, and VJP calculation rules.
 
 pub mod arith;
-pub mod nnops;
 pub mod composite;
 pub mod loss_grad;
+pub mod nnops;
 
 use crate::value::Value;
 use brain_core::tensor::arithmetic as arith_t;
@@ -132,8 +132,18 @@ impl GradFn {
             Clamp { input: a, .. } => vec![a],
             MinElem(a, b) | MaxElem(a, b) => vec![a, b],
             Where { cond, a, b } => vec![cond, a, b],
-            Conv2d { input, weight, bias, .. }
-            | ConvTranspose2d { input, weight, bias, .. } => {
+            Conv2d {
+                input,
+                weight,
+                bias,
+                ..
+            }
+            | ConvTranspose2d {
+                input,
+                weight,
+                bias,
+                ..
+            } => {
                 let mut p = vec![input, weight];
                 if let Some(ref b) = bias {
                     p.push(b);
@@ -178,8 +188,18 @@ impl GradFn {
             Clamp { input: a, .. } => vec![a],
             MinElem(a, b) | MaxElem(a, b) => vec![a, b],
             Where { cond, a, b } => vec![cond, a, b],
-            Conv2d { input, weight, bias, .. }
-            | ConvTranspose2d { input, weight, bias, .. } => {
+            Conv2d {
+                input,
+                weight,
+                bias,
+                ..
+            }
+            | ConvTranspose2d {
+                input,
+                weight,
+                bias,
+                ..
+            } => {
                 let mut p = vec![input, weight];
                 if let Some(b) = bias {
                     p.push(b);
@@ -389,7 +409,11 @@ impl GradFn {
                 let ga = arith_t::mul(out_grad, &sign_a);
                 Ok(vec![ga])
             }
-            Clamp { input: a, min_val, max_val } => {
+            Clamp {
+                input: a,
+                min_val,
+                max_val,
+            } => {
                 // Gradient flows only where min < x < max
                 let data = a.data().data();
                 let mut mask = vec![0.0; a.numel()];
@@ -520,7 +544,13 @@ impl GradFn {
                 let ga = util::sum_to_shape(out_grad, a.shape())?;
                 Ok(vec![ga])
             }
-            Conv2d { input, weight, bias, stride, padding } => {
+            Conv2d {
+                input,
+                weight,
+                bias,
+                stride,
+                padding,
+            } => {
                 let (di, dw, db) = crate::ops::conv_grad::grad_conv2d(
                     input.data(),
                     weight.data(),
@@ -534,7 +564,13 @@ impl GradFn {
                 }
                 Ok(grads)
             }
-            ConvTranspose2d { input, weight, bias, stride, padding } => {
+            ConvTranspose2d {
+                input,
+                weight,
+                bias,
+                stride,
+                padding,
+            } => {
                 let (di, dw, db) = crate::ops::conv_grad::grad_conv_transpose2d(
                     input.data(),
                     weight.data(),
@@ -548,7 +584,12 @@ impl GradFn {
                 }
                 Ok(grads)
             }
-            MaxPool2d { input, kernel_size, stride, padding } => {
+            MaxPool2d {
+                input,
+                kernel_size,
+                stride,
+                padding,
+            } => {
                 let di = crate::ops::pool_grad::grad_max_pool2d(
                     input.data(),
                     out_grad,
@@ -558,7 +599,12 @@ impl GradFn {
                 )?;
                 Ok(vec![di])
             }
-            AvgPool2d { input, kernel_size, stride, padding } => {
+            AvgPool2d {
+                input,
+                kernel_size,
+                stride,
+                padding,
+            } => {
                 let di = crate::ops::pool_grad::grad_avg_pool2d_ext(
                     input.shape(),
                     out_grad,
@@ -568,11 +614,18 @@ impl GradFn {
                 )?;
                 Ok(vec![di])
             }
-            Embedding { weight, indices, .. } => {
+            Embedding {
+                weight, indices, ..
+            } => {
                 let w_shape = weight.shape();
                 let num_embeddings = if !w_shape.is_empty() { w_shape[0] } else { 0 };
                 let embedding_dim = if w_shape.len() > 1 { w_shape[1] } else { 1 };
-                let dw = crate::ops::index_grad::grad_embedding(out_grad, num_embeddings, embedding_dim, indices)?;
+                let dw = crate::ops::index_grad::grad_embedding(
+                    out_grad,
+                    num_embeddings,
+                    embedding_dim,
+                    indices,
+                )?;
                 Ok(vec![dw])
             }
         }
@@ -632,9 +685,9 @@ mod tests {
     #[allow(unused_imports)]
     use super::*;
     #[allow(unused_imports)]
+    use crate::tape::OpRecord;
+    #[allow(unused_imports)]
     use crate::value::Value;
     #[allow(unused_imports)]
     use brain_core::Tensor;
-    #[allow(unused_imports)]
-    use crate::tape::OpRecord;
 }

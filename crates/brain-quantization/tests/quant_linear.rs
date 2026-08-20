@@ -1,19 +1,15 @@
 //! # Quantized Linear & Quantization Roundtrip Verification Tests
 
-use brain_core::Tensor;
 use brain_core::tensor::arithmetic::matmul;
+use brain_core::Tensor;
 use brain_quantization::{
-    apply_magnitude_prune, dequantize_tensor, quantize_tensor,
-    QuantConfig, QuantDType,
+    apply_magnitude_prune, dequantize_tensor, quantize_tensor, QuantConfig, QuantDType,
 };
 
 #[test]
 fn test_linear_weight_quantize_dequantize_error() {
     let weight = Tensor::from_vec(
-        vec![
-            0.12, -0.45, 0.78, -0.23,
-            0.91, -0.05, 0.33, -0.88,
-        ],
+        vec![0.12, -0.45, 0.78, -0.23, 0.91, -0.05, 0.33, -0.88],
         vec![2, 4],
     );
     let x = Tensor::from_vec(vec![1.0, 0.5, -0.5, 2.0], vec![1, 4]);
@@ -47,10 +43,7 @@ fn test_linear_weight_quantize_dequantize_error() {
 
 #[test]
 fn test_magnitude_pruning_linear() {
-    let mut weight = Tensor::from_vec(
-        vec![0.01, -0.9, 0.8, 0.02],
-        vec![2, 2],
-    );
+    let mut weight = Tensor::from_vec(vec![0.01, -0.9, 0.8, 0.02], vec![2, 2]);
     let result = apply_magnitude_prune(&mut weight, 0.5).unwrap();
     assert_eq!(result.pruned_elements, 2);
     assert_eq!(result.total_elements, 4);

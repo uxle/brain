@@ -97,15 +97,25 @@ impl GraphConfig {
     pub fn summary(&self) -> String {
         format!(
             "GraphConfig[opt={:?} cse={} fusion={} fold={} dce={} inplace={}]",
-            self.opt_level, self.enable_cse, self.enable_fusion,
-            self.enable_const_fold, self.enable_dce, self.enable_inplace
+            self.opt_level,
+            self.enable_cse,
+            self.enable_fusion,
+            self.enable_const_fold,
+            self.enable_dce,
+            self.enable_inplace
         )
     }
 }
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

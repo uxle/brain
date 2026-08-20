@@ -1,11 +1,18 @@
 //! # Activation Quantization & SmoothQuant Scaling
 //!
 //! Per-token dynamic activation quantization and SmoothQuant outlier migration transforms.
-#![allow(missing_docs, clippy::needless_range_loop, clippy::too_many_arguments, clippy::manual_is_multiple_of, clippy::manual_div_ceil, clippy::doc_markdown)]
+#![allow(
+    missing_docs,
+    clippy::needless_range_loop,
+    clippy::too_many_arguments,
+    clippy::manual_is_multiple_of,
+    clippy::manual_div_ceil,
+    clippy::doc_markdown
+)]
 
-use brain_core::Tensor;
 use super::core::{QParams, QuantDType, QuantError, QuantResult, QuantTensor};
 use super::utils::{compute_scale_zero_point, minmax, quantize_val};
+use brain_core::Tensor;
 
 /// Configuration settings for activation quantization.
 #[derive(Debug, Clone, PartialEq)]
@@ -107,7 +114,13 @@ impl ActQuantizer {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

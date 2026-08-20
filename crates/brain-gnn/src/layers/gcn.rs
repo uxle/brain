@@ -3,11 +3,11 @@
 //! GCN convolution layer: H^(l+1) = sigma( D^-1/2 A D^-1/2 H^(l) W^(l) ).
 #![allow(missing_docs)]
 
-use brain_core::Tensor;
 use super::GnnLayer;
 use crate::graph::Graph;
-use crate::ops::aggregate_mean;
 use crate::impl_::transform_node_features;
+use crate::ops::aggregate_mean;
+use brain_core::Tensor;
 
 /// GCN Layer struct.
 #[derive(Debug, Clone)]
@@ -22,7 +22,12 @@ impl GcnLayer {
     pub fn new(in_dim: usize, out_dim: usize) -> Self {
         let weight = Tensor::zeros(vec![out_dim, in_dim]);
         let bias = Some(Tensor::zeros(vec![out_dim]));
-        Self { in_dim, out_dim, weight, bias }
+        Self {
+            in_dim,
+            out_dim,
+            weight,
+            bias,
+        }
     }
 }
 
@@ -37,13 +42,23 @@ impl GnnLayer for GcnLayer {
         Tensor::from_vec(data, aggregated.shape().to_vec())
     }
 
-    fn in_dim(&self) -> usize { self.in_dim }
-    fn out_dim(&self) -> usize { self.out_dim }
+    fn in_dim(&self) -> usize {
+        self.in_dim
+    }
+    fn out_dim(&self) -> usize {
+        self.out_dim
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

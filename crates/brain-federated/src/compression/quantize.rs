@@ -12,18 +12,29 @@ pub struct QuantConfig {
 }
 
 impl Default for QuantConfig {
-    fn default() -> Self { Self { bits: 8 } }
+    fn default() -> Self {
+        Self { bits: 8 }
+    }
 }
 
 /// Quantizes a tensor to `bits`-bit integers mapped to [min, max].
 pub fn quantize_tensor(t: &Tensor, bits: u8) -> (Vec<i32>, f64, f64) {
     let data = t.to_vec();
-    if data.is_empty() { return (vec![], 0.0, 0.0); }
+    if data.is_empty() {
+        return (vec![], 0.0, 0.0);
+    }
     let min = data.iter().copied().fold(f64::INFINITY, f64::min);
     let max = data.iter().copied().fold(f64::NEG_INFINITY, f64::max);
     let levels = ((1u64 << bits) - 1) as f64;
-    let scale = if (max - min).abs() < 1e-12 { 1.0 } else { levels / (max - min) };
-    let q: Vec<i32> = data.iter().map(|v| ((v - min) * scale).round() as i32).collect();
+    let scale = if (max - min).abs() < 1e-12 {
+        1.0
+    } else {
+        levels / (max - min)
+    };
+    let q: Vec<i32> = data
+        .iter()
+        .map(|v| ((v - min) * scale).round() as i32)
+        .collect();
     (q, min, max)
 }
 

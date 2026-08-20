@@ -2,7 +2,7 @@
 //!
 //! Eliminates per-call `std::thread::scope` overhead for tensor operations, GEMM, and parallel map/reductions.
 
-use std::sync::{Arc, Mutex, Condvar, OnceLock};
+use std::sync::{Arc, Condvar, Mutex, OnceLock};
 use std::thread::{self, JoinHandle};
 
 type Task = Box<dyn FnOnce() + Send + 'static>;
@@ -97,7 +97,9 @@ impl ThreadPool {
             return;
         }
 
-        let num_chunks = self.num_threads.min((len + min_chunk_size - 1) / min_chunk_size);
+        let num_chunks = self
+            .num_threads
+            .min((len + min_chunk_size - 1) / min_chunk_size);
         if num_chunks <= 1 {
             f(0, len);
             return;

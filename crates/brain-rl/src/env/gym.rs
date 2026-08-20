@@ -1,11 +1,20 @@
 //! # Classic Control Gym Environments
 //!
 //! Hand-implemented deterministic physics simulations: CartPole, MountainCar, and Pendulum.
-#![allow(missing_docs, clippy::excessive_precision, clippy::approx_constant, clippy::needless_range_loop, clippy::too_many_arguments, clippy::manual_is_multiple_of, clippy::manual_div_ceil, clippy::doc_markdown)]
+#![allow(
+    missing_docs,
+    clippy::excessive_precision,
+    clippy::approx_constant,
+    clippy::needless_range_loop,
+    clippy::too_many_arguments,
+    clippy::manual_is_multiple_of,
+    clippy::manual_div_ceil,
+    clippy::doc_markdown
+)]
 
-use brain_core::Tensor;
 use super::super::core::{RlError, RlResult, Space};
 use super::{Env, EnvStep};
+use brain_core::Tensor;
 
 /// Classic CartPole-v1 balancing environment.
 #[derive(Debug, Clone)]
@@ -72,13 +81,18 @@ impl Env for CartPoleEnv {
             return Err(RlError::InvalidAction(action));
         }
 
-        let force = if action == 1 { self.force_mag } else { -self.force_mag };
+        let force = if action == 1 {
+            self.force_mag
+        } else {
+            -self.force_mag
+        };
         let costheta = self.theta.cos();
         let sintheta = self.theta.sin();
         let total_mass = self.masscart + self.masspole;
         let polemass_length = self.masspole * self.length;
 
-        let temp = (force + polemass_length * self.theta_dot * self.theta_dot * sintheta) / total_mass;
+        let temp =
+            (force + polemass_length * self.theta_dot * self.theta_dot * sintheta) / total_mass;
         let thetaacc = (self.gravity * sintheta - costheta * temp)
             / (self.length * (4.0 / 3.0 - self.masspole * costheta * costheta / total_mass));
         let xacc = temp - polemass_length * thetaacc * costheta / total_mass;
@@ -102,7 +116,11 @@ impl Env for CartPoleEnv {
     }
 
     fn observation_space(&self) -> Space {
-        Space::Continuous { shape: vec![4], low: -4.8, high: 4.8 }
+        Space::Continuous {
+            shape: vec![4],
+            low: -4.8,
+            high: 4.8,
+        }
     }
 
     fn action_space(&self) -> Space {
@@ -173,7 +191,11 @@ impl Env for MountainCarEnv {
     }
 
     fn observation_space(&self) -> Space {
-        Space::Continuous { shape: vec![2], low: -1.2, high: 0.6 }
+        Space::Continuous {
+            shape: vec![2],
+            low: -1.2,
+            high: 0.6,
+        }
     }
 
     fn action_space(&self) -> Space {
@@ -212,7 +234,10 @@ impl Env for PendulumEnv {
         self.th = 0.0;
         self.thdot = 0.0;
         self.step_count = 0;
-        Ok(Tensor::from_slice(&[self.th.cos(), self.th.sin(), self.thdot], vec![3]))
+        Ok(Tensor::from_slice(
+            &[self.th.cos(), self.th.sin(), self.thdot],
+            vec![3],
+        ))
     }
 
     fn step(&mut self, action: usize) -> RlResult<EnvStep> {
@@ -222,7 +247,10 @@ impl Env for PendulumEnv {
         let l = 1.0;
         let dt = 0.05;
 
-        let newthdot = self.thdot + (-3.0 * g / (2.0 * l) * (self.th + std::f64::consts::PI).sin() + 3.0 / (m * l * l) * u) * dt;
+        let newthdot = self.thdot
+            + (-3.0 * g / (2.0 * l) * (self.th + std::f64::consts::PI).sin()
+                + 3.0 / (m * l * l) * u)
+                * dt;
         self.thdot = newthdot.clamp(-8.0, 8.0);
         self.th += self.thdot * dt;
         self.step_count += 1;
@@ -241,7 +269,11 @@ impl Env for PendulumEnv {
     }
 
     fn observation_space(&self) -> Space {
-        Space::Continuous { shape: vec![3], low: -8.0, high: 8.0 }
+        Space::Continuous {
+            shape: vec![3],
+            low: -8.0,
+            high: 8.0,
+        }
     }
 
     fn action_space(&self) -> Space {
@@ -251,23 +283,35 @@ impl Env for PendulumEnv {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant, clippy::needless_range_loop, clippy::manual_div_ceil, clippy::manual_is_multiple_of, clippy::too_many_arguments, clippy::doc_markdown, clippy::excessive_precision)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant,
+        clippy::needless_range_loop,
+        clippy::manual_div_ceil,
+        clippy::manual_is_multiple_of,
+        clippy::too_many_arguments,
+        clippy::doc_markdown,
+        clippy::excessive_precision
+    )]
     use super::*;
-    use crate::core::*;
-    use crate::env::*;
-    use crate::policy::*;
-    use crate::value::*;
-    use crate::buffer::*;
-    use crate::dqn::*;
-    use crate::ppo::*;
     use crate::a2c::*;
     use crate::actor_critic::*;
-    use crate::sac::*;
     use crate::agents::*;
-    use crate::trainer::*;
-    use crate::eval::*;
+    use crate::buffer::*;
     use crate::checkpoint::*;
+    use crate::core::*;
+    use crate::dqn::*;
+    use crate::env::*;
+    use crate::eval::*;
+    use crate::policy::*;
+    use crate::ppo::*;
+    use crate::sac::*;
+    use crate::trainer::*;
     use crate::utils::*;
+    use crate::value::*;
     use crate::VERSION;
     use brain_core::Tensor;
 }

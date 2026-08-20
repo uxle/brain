@@ -3,10 +3,10 @@
 //! End-to-end orchestration: `train_step`, `train_epoch`, `sample_batch`, `evaluate`.
 #![allow(missing_docs)]
 
-use brain_core::Tensor;
-use crate::core::{GanMetrics, GanState, EpochSummary};
-use crate::utils::sample_gaussian;
+use crate::core::{EpochSummary, GanMetrics, GanState};
 use crate::losses::classic::hinge_loss_d;
+use crate::utils::sample_gaussian;
+use brain_core::Tensor;
 
 /// Performs a single discriminator update step.
 /// Returns D loss components (real, fake).
@@ -16,21 +16,23 @@ pub fn discriminator_step(
     d_weights: &[Tensor],
     lr: f64,
 ) -> (f64, f64) {
-    let d_real = real.to_vec().iter().map(|v| v.tanh().abs()).sum::<f64>() / real.to_vec().len() as f64;
-    let d_fake = fake.to_vec().iter().map(|v| v.tanh().abs()).sum::<f64>() / fake.to_vec().len() as f64;
+    let d_real =
+        real.to_vec().iter().map(|v| v.tanh().abs()).sum::<f64>() / real.to_vec().len() as f64;
+    let d_fake =
+        fake.to_vec().iter().map(|v| v.tanh().abs()).sum::<f64>() / fake.to_vec().len() as f64;
     let _ = (d_weights, lr);
     (d_real, d_fake)
 }
 
 /// Performs a single generator update step.
 /// Returns G loss (scalar).
-pub fn generator_step(
-    fake: &Tensor,
-    g_weights: &[Tensor],
-    lr: f64,
-) -> f64 {
+pub fn generator_step(fake: &Tensor, g_weights: &[Tensor], lr: f64) -> f64 {
     let _ = (g_weights, lr);
-    fake.to_vec().iter().map(|v| 1.0 - v.tanh().abs()).sum::<f64>() / fake.to_vec().len() as f64
+    fake.to_vec()
+        .iter()
+        .map(|v| 1.0 - v.tanh().abs())
+        .sum::<f64>()
+        / fake.to_vec().len() as f64
 }
 
 /// Runs one training step: D update n_critic times, then G update once.
@@ -90,15 +92,23 @@ pub fn train_epoch(
 
 /// Samples a batch of fake images from the generator.
 pub fn sample_batch(latent_dim: usize, batch_size: usize, seed: u64) -> Vec<Tensor> {
-    (0..batch_size).map(|i| {
-        let z = sample_gaussian(latent_dim, seed.wrapping_add(i as u64));
-        Tensor::from_vec(z, vec![latent_dim])
-    }).collect()
+    (0..batch_size)
+        .map(|i| {
+            let z = sample_gaussian(latent_dim, seed.wrapping_add(i as u64));
+            Tensor::from_vec(z, vec![latent_dim])
+        })
+        .collect()
 }
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

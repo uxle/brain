@@ -3,9 +3,9 @@
 //! Standard real-parameter black-box optimization via full covariance matrix adaptation.
 #![allow(missing_docs)]
 
+use super::EsResult;
 use crate::fitness::FitnessFn;
 use crate::utils::FastRng;
-use super::EsResult;
 
 /// Configuration for CMA-ES optimizer.
 #[derive(Debug, Clone)]
@@ -80,7 +80,11 @@ impl Cmaes {
 
             // Rank candidates
             let mut indices: Vec<usize> = (0..lambda).collect();
-            indices.sort_by(|&a, &b| fits[b].partial_cmp(&fits[a]).unwrap_or(std::cmp::Ordering::Equal));
+            indices.sort_by(|&a, &b| {
+                fits[b]
+                    .partial_cmp(&fits[a])
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            });
 
             // Update mean from top mu candidates
             for d in 0..dim {
@@ -105,7 +109,13 @@ impl Cmaes {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

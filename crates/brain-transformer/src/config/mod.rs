@@ -1,7 +1,15 @@
 //! # Transformer Architecture Configurations & Hyperparameters
 //!
 //! Comprehensive configuration structs for encoders, decoders, attention mechanisms, normalizations, activations, and unified transformers.
-#![allow(missing_docs, unused_imports, unused_variables, dead_code, unused_mut, unused_comparisons, clippy::all)]
+#![allow(
+    missing_docs,
+    unused_imports,
+    unused_variables,
+    dead_code,
+    unused_mut,
+    unused_comparisons,
+    clippy::all
+)]
 
 use crate::core::{TransformerError, TransformerResult};
 
@@ -120,7 +128,9 @@ impl AttentionConfig {
     /// Validates attention parameters and checks head dimension divisibility.
     pub fn validate(&self) -> TransformerResult<()> {
         if self.hidden_dim == 0 || self.num_heads == 0 {
-            return Err(TransformerError::InvalidConfig("hidden_dim and num_heads must be > 0".into()));
+            return Err(TransformerError::InvalidConfig(
+                "hidden_dim and num_heads must be > 0".into(),
+            ));
         }
         if self.hidden_dim % self.num_heads != 0 {
             return Err(TransformerError::InvalidHeadDim {
@@ -335,13 +345,19 @@ impl TransformerConfig {
     /// Validates all configuration parameters and dimensional consistencies.
     pub fn validate(&self) -> TransformerResult<()> {
         if self.vocab_size == 0 {
-            return Err(TransformerError::InvalidConfig("vocab_size must be > 0".into()));
+            return Err(TransformerError::InvalidConfig(
+                "vocab_size must be > 0".into(),
+            ));
         }
         if self.hidden_dim == 0 {
-            return Err(TransformerError::InvalidConfig("hidden_dim must be > 0".into()));
+            return Err(TransformerError::InvalidConfig(
+                "hidden_dim must be > 0".into(),
+            ));
         }
         if self.num_layers == 0 {
-            return Err(TransformerError::InvalidConfig("num_layers must be > 0".into()));
+            return Err(TransformerError::InvalidConfig(
+                "num_layers must be > 0".into(),
+            ));
         }
         if self.hidden_dim != self.attention.hidden_dim || self.hidden_dim != self.ffn.hidden_dim {
             return Err(TransformerError::InvalidConfig(
@@ -355,10 +371,13 @@ impl TransformerConfig {
     /// Returns a multi-line formatted summary of model architecture parameters and estimated weight counts.
     pub fn summary(&self) -> String {
         let emb_params = self.vocab_size * self.hidden_dim;
-        let attn_qkv = self.hidden_dim * (self.hidden_dim + 2 * self.attention.num_kv_heads * self.attention.head_dim);
+        let attn_qkv = self.hidden_dim
+            * (self.hidden_dim + 2 * self.attention.num_kv_heads * self.attention.head_dim);
         let attn_out = self.hidden_dim * self.hidden_dim;
         let ffn_params = match self.ffn.activation {
-            ActivationType::Swiglu | ActivationType::Geglu => 3 * self.hidden_dim * self.ffn.intermediate_dim,
+            ActivationType::Swiglu | ActivationType::Geglu => {
+                3 * self.hidden_dim * self.ffn.intermediate_dim
+            }
             _ => 2 * self.hidden_dim * self.ffn.intermediate_dim,
         };
         let per_layer_params = attn_qkv + attn_out + ffn_params + 2 * self.hidden_dim;
@@ -384,40 +403,55 @@ impl TransformerConfig {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant, clippy::needless_range_loop, clippy::manual_div_ceil, clippy::manual_is_multiple_of, clippy::too_many_arguments, clippy::doc_markdown, clippy::excessive_precision, clippy::float_cmp, clippy::len_zero, clippy::all)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant,
+        clippy::needless_range_loop,
+        clippy::manual_div_ceil,
+        clippy::manual_is_multiple_of,
+        clippy::too_many_arguments,
+        clippy::doc_markdown,
+        clippy::excessive_precision,
+        clippy::float_cmp,
+        clippy::len_zero,
+        clippy::all
+    )]
     use super::*;
-    use crate::core::*;
-    use crate::config::*;
-    use crate::utils::*;
-    use crate::ops::*;
-    use crate::attention::*;
-    use crate::attention::scaled::*;
-    use crate::attention::multi_head::*;
-    use crate::attention::relative::*;
     use crate::attention::flash_lite::*;
+    use crate::attention::multi_head::*;
     use crate::attention::multi_query::*;
+    use crate::attention::relative::*;
+    use crate::attention::scaled::*;
     use crate::attention::xformers_lite::*;
-    use crate::position::*;
-    use crate::position::rope::*;
-    use crate::position::alibi::*;
-    use crate::position::learned::*;
+    use crate::attention::*;
+    use crate::builder::*;
+    use crate::config::*;
+    use crate::core::*;
+    use crate::decoder::cross::*;
+    use crate::decoder::layer::*;
+    use crate::decoder::*;
     use crate::embedding_layers::*;
-    use crate::ffn::*;
-    use crate::encoder::*;
     use crate::encoder::block::*;
     use crate::encoder::layer::*;
-    use crate::decoder::*;
-    use crate::decoder::layer::*;
-    use crate::decoder::cross::*;
+    use crate::encoder::*;
+    use crate::ffn::*;
+    use crate::generate::*;
     use crate::head::*;
     use crate::kv_cache::*;
-    use crate::generate::*;
-    use crate::models::*;
     use crate::models::bert_lite::*;
     use crate::models::gpt_lite::*;
-    use crate::models::t5_lite::*;
     use crate::models::llama_lite::*;
-    use crate::builder::*;
+    use crate::models::t5_lite::*;
+    use crate::models::*;
+    use crate::ops::*;
+    use crate::position::alibi::*;
+    use crate::position::learned::*;
+    use crate::position::rope::*;
+    use crate::position::*;
+    use crate::utils::*;
     use brain_core::Tensor;
 
     #[test]

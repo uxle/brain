@@ -84,16 +84,16 @@ mod tests {
         let t = trace_record("mod", "trace msg", "foo.rs", 1);
         assert_eq!(t.level, LogLevel::Trace);
         assert_eq!(t.line, Some(1));
-    
+
         let d = debug_record("mod", "dbg msg", "foo.rs", 1);
         assert_eq!(d.level, LogLevel::Debug);
-    
+
         let info = info_record("mod", "inf msg", "foo.rs", 1);
         assert_eq!(info.level, LogLevel::Info);
-    
+
         let w = warn_record("mod", "warn msg", "foo.rs", 1);
         assert_eq!(w.level, LogLevel::Warn);
-    
+
         let e = error_record("mod", "err msg", "foo.rs", 1);
         assert_eq!(e.level, LogLevel::Error);
     }

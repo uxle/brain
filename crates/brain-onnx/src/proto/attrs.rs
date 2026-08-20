@@ -37,11 +37,19 @@ pub struct AttributeProto {
 
 impl AttributeProto {
     pub fn get_int(&self, default: i64) -> i64 {
-        if self.attr_type == AttributeType::Int { self.i } else { default }
+        if self.attr_type == AttributeType::Int {
+            self.i
+        } else {
+            default
+        }
     }
 
     pub fn get_float(&self, default: f64) -> f64 {
-        if self.attr_type == AttributeType::Float { self.f as f64 } else { default }
+        if self.attr_type == AttributeType::Float {
+            self.f as f64
+        } else {
+            default
+        }
     }
 
     pub fn get_ints(&self) -> &[i64] {
@@ -51,7 +59,13 @@ impl AttributeProto {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

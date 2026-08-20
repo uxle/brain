@@ -147,19 +147,19 @@ mod tests {
         c.inc();
         c.add(9);
         assert_eq!(c.get(), 10);
-    
+
         let g = set.get_gauge("active_connections");
         g.set(5);
         g.inc();
         g.dec();
         assert_eq!(g.get(), 5);
-    
+
         let c_snap = set.snapshot_counters();
         assert_eq!(c_snap.get("http_requests"), Some(&10));
-    
+
         let g_snap = set.snapshot_gauges();
         assert_eq!(g_snap.get("active_connections"), Some(&5));
-    
+
         set.reset_all();
         assert_eq!(c.get(), 0);
         assert_eq!(g.get(), 0);

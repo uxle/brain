@@ -3,10 +3,10 @@
 //! Mean Squared Error (MSE), Mean Absolute Error (MAE), Huber Loss, Log-Cosh, and Smooth L1.
 #![allow(missing_docs)]
 
-use brain_core::Tensor;
-use crate::core::{LossResult, Reduction};
-use crate::utils::{reduction_apply, check_shapes};
 use super::RegressionLoss;
+use crate::core::{LossResult, Reduction};
+use crate::utils::{check_shapes, reduction_apply};
+use brain_core::Tensor;
 
 /// Mean Squared Error (L2 loss).
 #[derive(Debug, Clone, Default)]
@@ -47,7 +47,10 @@ pub struct HuberLoss {
 
 impl Default for HuberLoss {
     fn default() -> Self {
-        Self { delta: 1.0, reduction: Reduction::Mean }
+        Self {
+            delta: 1.0,
+            reduction: Reduction::Mean,
+        }
     }
 }
 
@@ -56,14 +59,18 @@ impl RegressionLoss for HuberLoss {
         check_shapes(pred, target)?;
         let diff = pred - target;
         let d = self.delta;
-        let losses: Vec<f64> = diff.to_vec().iter().map(|&x| {
-            let abs_x = x.abs();
-            if abs_x <= d {
-                0.5 * abs_x * abs_x
-            } else {
-                d * (abs_x - 0.5 * d)
-            }
-        }).collect();
+        let losses: Vec<f64> = diff
+            .to_vec()
+            .iter()
+            .map(|&x| {
+                let abs_x = x.abs();
+                if abs_x <= d {
+                    0.5 * abs_x * abs_x
+                } else {
+                    d * (abs_x - 0.5 * d)
+                }
+            })
+            .collect();
 
         Ok(reduction_apply(&losses, self.reduction))
     }
@@ -74,7 +81,13 @@ pub type SmoothL1Loss = HuberLoss;
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

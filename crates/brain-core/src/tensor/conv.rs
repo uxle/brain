@@ -137,8 +137,16 @@ pub fn conv_transpose2d(
     stride: (usize, usize),
     padding: (usize, usize),
 ) -> Tensor {
-    assert_eq!(input.ndim(), 4, "conv_transpose2d input must be 4D (N, C_in, H, W)");
-    assert_eq!(weight.ndim(), 4, "conv_transpose2d weight must be 4D (C_in, C_out, KH, KW)");
+    assert_eq!(
+        input.ndim(),
+        4,
+        "conv_transpose2d input must be 4D (N, C_in, H, W)"
+    );
+    assert_eq!(
+        weight.ndim(),
+        4,
+        "conv_transpose2d weight must be 4D (C_in, C_out, KH, KW)"
+    );
     let (n, in_c, in_h, in_w) = (
         input.shape()[0],
         input.shape()[1],
@@ -156,8 +164,16 @@ pub fn conv_transpose2d(
     let (sh, sw) = stride;
     let (ph, pw) = padding;
 
-    let out_h = if in_h == 0 { 0 } else { ((in_h - 1) * sh + kh).saturating_sub(2 * ph) };
-    let out_w = if in_w == 0 { 0 } else { ((in_w - 1) * sw + kw).saturating_sub(2 * pw) };
+    let out_h = if in_h == 0 {
+        0
+    } else {
+        ((in_h - 1) * sh + kh).saturating_sub(2 * ph)
+    };
+    let out_w = if in_w == 0 {
+        0
+    } else {
+        ((in_w - 1) * sw + kw).saturating_sub(2 * pw)
+    };
 
     let mut out = Tensor::zeros(vec![n, out_c, out_h, out_w]);
 
@@ -247,7 +263,7 @@ mod tests {
     fn test_conv2d_ext_dilated_and_strided() {
         let input = Tensor::ones(vec![1, 1, 5, 5]);
         let weight = Tensor::ones(vec![1, 1, 3, 3]);
-        
+
         let out_dil = conv2d_ext(&input, &weight, None, (1, 1), (0, 0), (2, 2));
         assert_eq!(out_dil.shape(), &[1, 1, 1, 1]);
         assert_eq!(out_dil.to_vec(), vec![9.0]);

@@ -22,7 +22,11 @@ impl TensorBackend {
     }
 
     /// Executes the graph with the tensor backend.
-    pub fn execute(&self, _graph: &IrGraph, _inputs: &[Tensor]) -> Result<Vec<Tensor>, CompilationError> {
+    pub fn execute(
+        &self,
+        _graph: &IrGraph,
+        _inputs: &[Tensor],
+    ) -> Result<Vec<Tensor>, CompilationError> {
         Ok(Vec::new())
     }
 }

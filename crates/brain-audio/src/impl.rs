@@ -34,7 +34,9 @@ impl AudioFeatureExtractor {
         let num_bins = n_fft / 2 + 1;
 
         if num_samples < win_len {
-            return Err(BrainError::invalid_value("audio length shorter than window size"));
+            return Err(BrainError::invalid_value(
+                "audio length shorter than window size",
+            ));
         }
         let num_frames = (num_samples - win_len) / hop + 1;
         let mut out_data = Vec::with_capacity(channels * num_bins * num_frames);
@@ -60,7 +62,10 @@ impl AudioFeatureExtractor {
             }
         }
 
-        Ok(Tensor::from_slice(&out_data, vec![channels, num_bins, num_frames]))
+        Ok(Tensor::from_slice(
+            &out_data,
+            vec![channels, num_bins, num_frames],
+        ))
     }
 }
 

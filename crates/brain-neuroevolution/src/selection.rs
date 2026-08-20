@@ -29,7 +29,9 @@ pub fn tournament_select<'a>(
 
     for _ in 1..tournament_size {
         let candidate_idx = (rng.next_u64() as usize) % n;
-        let candidate_fit = population[candidate_idx].fitness.unwrap_or(f64::NEG_INFINITY);
+        let candidate_fit = population[candidate_idx]
+            .fitness
+            .unwrap_or(f64::NEG_INFINITY);
         if candidate_fit > best_fit {
             best_fit = candidate_fit;
             best_idx = candidate_idx;
@@ -41,7 +43,13 @@ pub fn tournament_select<'a>(
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

@@ -12,7 +12,9 @@ pub struct FedMonitor {
 }
 
 impl FedMonitor {
-    pub fn new() -> Self { Self::default() }
+    pub fn new() -> Self {
+        Self::default()
+    }
 
     pub fn record(&mut self, stats: RoundStats) {
         self.history.push(stats);
@@ -23,7 +25,9 @@ impl FedMonitor {
     }
 
     pub fn has_converged(&self, patience: usize, tolerance: f64) -> bool {
-        if self.history.len() < patience { return false; }
+        if self.history.len() < patience {
+            return false;
+        }
         let n = self.history.len();
         let recent = &self.history[n - patience..];
         let losses: Vec<f64> = recent.iter().map(|s| s.avg_loss).collect();

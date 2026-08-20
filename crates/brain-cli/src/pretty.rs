@@ -29,7 +29,11 @@ pub fn format_tensor_summary(t: &Tensor, max_elements: usize) -> String {
 pub fn format_module_tree(name: &str, children: &[(&str, &str)]) -> String {
     let mut out = format!("Module: {}\n", name);
     for (i, (child_name, child_type)) in children.iter().enumerate() {
-        let prefix = if i == children.len() - 1 { "└── " } else { "├── " };
+        let prefix = if i == children.len() - 1 {
+            "└── "
+        } else {
+            "├── "
+        };
         out.push_str(&format!("  {}{}: {}\n", prefix, child_name, child_type));
     }
     out

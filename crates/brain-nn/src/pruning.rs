@@ -18,9 +18,16 @@ impl PruningMask {
         abs_vals.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
 
         let k = ((abs_vals.len() as f64) * sparsity).floor() as usize;
-        let threshold = if k < abs_vals.len() { abs_vals[k] } else { f64::INFINITY };
+        let threshold = if k < abs_vals.len() {
+            abs_vals[k]
+        } else {
+            f64::INFINITY
+        };
 
-        let mask_data: Vec<f64> = data.iter().map(|&x| if x.abs() >= threshold { 1.0 } else { 0.0 }).collect();
+        let mask_data: Vec<f64> = data
+            .iter()
+            .map(|&x| if x.abs() >= threshold { 1.0 } else { 0.0 })
+            .collect();
         Self {
             mask: Tensor::from_vec(mask_data, weight.shape().to_vec()),
         }
@@ -33,7 +40,13 @@ impl PruningMask {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

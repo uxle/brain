@@ -24,9 +24,9 @@
 //! change specifically.
 #![allow(missing_docs)]
 
+use crate::init::normal_init;
 use brain_autograd::Value;
 use brain_core::Tensor;
-use crate::init::normal_init;
 
 /// Token lookup embedding table: [num_embeddings, embedding_dim].
 #[derive(Debug, Clone)]
@@ -91,7 +91,13 @@ pub fn sinusoidal_positional_encoding(seq_len: usize, embedding_dim: usize) -> T
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 
@@ -119,8 +125,14 @@ mod tests {
         // Row 2 (embedding_dim=2, so indices 4,5) received gradient from
         // TWO lookups summing to 1.0 each element (d(sum)/d(each output
         // element) = 1.0), row 0 (indices 0,1) from ONE lookup.
-        assert_eq!(grad[4], 2.0, "row 2, col 0 should accumulate from both lookups");
-        assert_eq!(grad[5], 2.0, "row 2, col 1 should accumulate from both lookups");
+        assert_eq!(
+            grad[4], 2.0,
+            "row 2, col 0 should accumulate from both lookups"
+        );
+        assert_eq!(
+            grad[5], 2.0,
+            "row 2, col 1 should accumulate from both lookups"
+        );
         assert_eq!(grad[0], 1.0, "row 0, col 0 should reflect a single lookup");
         assert_eq!(grad[1], 1.0, "row 0, col 1 should reflect a single lookup");
         // Row 1, 3, 4 were never looked up -- should have zero (or no)

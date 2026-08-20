@@ -72,7 +72,11 @@ impl ArgParser {
                 if let Some(eq_pos) = name.find('=') {
                     let opt_name = &name[..eq_pos];
                     let opt_val = &name[eq_pos + 1..];
-                    matches.options.entry(opt_name.to_string()).or_default().push(opt_val.to_string());
+                    matches
+                        .options
+                        .entry(opt_name.to_string())
+                        .or_default()
+                        .push(opt_val.to_string());
                 } else if let Some(stripped) = name.strip_prefix("no-") {
                     matches.flags.remove(stripped);
                 } else if self.allowed_options.contains(name) {
@@ -83,7 +87,11 @@ impl ArgParser {
                     };
                     if next_is_value {
                         i += 1;
-                        matches.options.entry(name.to_string()).or_default().push(args[i].clone());
+                        matches
+                            .options
+                            .entry(name.to_string())
+                            .or_default()
+                            .push(args[i].clone());
                     } else {
                         return Err(format!("Option '--{}' requires a value", name));
                     }

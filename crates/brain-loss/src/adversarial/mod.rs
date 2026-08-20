@@ -3,14 +3,14 @@
 //! Minimax, Wasserstein (WGAN), Hinge, Least Squares (LSGAN), and Relativistic GAN losses.
 #![allow(missing_docs)]
 
-pub mod wasserstein;
 pub mod other;
+pub mod wasserstein;
 
-pub use wasserstein::{WassersteinLoss, WassersteinConfig};
-pub use other::{HingeAdversarialLoss, LSGANLoss, RelativisticLoss, AdvLossKind};
+pub use other::{AdvLossKind, HingeAdversarialLoss, LSGANLoss, RelativisticLoss};
+pub use wasserstein::{WassersteinConfig, WassersteinLoss};
 
-use brain_core::Tensor;
 use crate::core::LossResult;
+use brain_core::Tensor;
 
 /// Configuration for adversarial loss objectives.
 #[derive(Debug, Clone, Default)]
@@ -29,7 +29,13 @@ pub trait AdversarialLoss: Send + Sync {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

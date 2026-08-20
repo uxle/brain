@@ -87,7 +87,9 @@ pub fn version_string() -> String {
 pub mod prelude {
     pub use crate::backward::grad::{backward_from, backward_with_grad, zero_grad_from};
     pub use crate::grad_fns::GradFn;
-    pub use crate::graph_closure::{grad, grad_and_hess, hessian, jacobian, jvp, value_and_grad, vjp};
+    pub use crate::graph_closure::{
+        grad, grad_and_hess, hessian, jacobian, jvp, value_and_grad, vjp,
+    };
     pub use crate::ops;
     pub use crate::tape::{start_recording, stop_recording, with_tape, Tape};
     pub use crate::value::{values_close, Value};
@@ -98,9 +100,9 @@ mod tests {
     #[allow(unused_imports)]
     use super::*;
     #[allow(unused_imports)]
+    use crate::tape::OpRecord;
+    #[allow(unused_imports)]
     use crate::value::Value;
     #[allow(unused_imports)]
     use brain_core::Tensor;
-    #[allow(unused_imports)]
-    use crate::tape::OpRecord;
 }

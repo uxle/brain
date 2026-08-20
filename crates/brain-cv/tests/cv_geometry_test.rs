@@ -1,6 +1,6 @@
 //! Tests for Computer Vision bounding boxes, IoU, and NMS
-use brain_cv::*;
 use brain_core::Tensor;
+use brain_cv::*;
 
 #[test]
 fn test_cv_conv2d_and_pooling() {

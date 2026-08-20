@@ -3,8 +3,8 @@
 //! Pathak et al., 2017: "Curiosity-driven Exploration by Self-supervised Prediction".
 //! Generates intrinsic reward from forward-model prediction error in a feature space learned via inverse dynamics.
 
-use brain_core::Tensor;
 use crate::core::{RlError, RlResult};
+use brain_core::Tensor;
 
 /// Intrinsic Curiosity Module (ICM).
 #[derive(Debug, Clone)]
@@ -49,7 +49,10 @@ impl IntrinsicCuriosityModule {
     pub fn encode_state(&self, state: &Tensor) -> RlResult<Tensor> {
         let s_data = state.data();
         if s_data.len() != self.state_dim {
-            return Err(RlError::InvalidStateShape { expected: vec![self.state_dim], found: state.shape().to_vec() });
+            return Err(RlError::InvalidStateShape {
+                expected: vec![self.state_dim],
+                found: state.shape().to_vec(),
+            });
         }
 
         let mut phi = vec![0.0f64; self.feature_dim];
@@ -68,13 +71,21 @@ impl IntrinsicCuriosityModule {
     }
 
     /// Computes intrinsic curiosity reward: $r_i = \frac{\eta}{2} \|\hat{\phi}(s_{t+1}) - \phi(s_{t+1})\|^2$.
-    pub fn compute_intrinsic_reward(&self, state: &Tensor, action: &Tensor, next_state: &Tensor) -> RlResult<f64> {
+    pub fn compute_intrinsic_reward(
+        &self,
+        state: &Tensor,
+        action: &Tensor,
+        next_state: &Tensor,
+    ) -> RlResult<f64> {
         let phi_s = self.encode_state(state)?;
         let phi_next = self.encode_state(next_state)?;
 
         let a_data = action.data();
         if a_data.len() != self.action_dim {
-            return Err(RlError::InvalidStateShape { expected: vec![self.action_dim], found: action.shape().to_vec() });
+            return Err(RlError::InvalidStateShape {
+                expected: vec![self.action_dim],
+                found: action.shape().to_vec(),
+            });
         }
 
         // Input to forward dynamics: [phi_s, action]

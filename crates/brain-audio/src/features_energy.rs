@@ -24,7 +24,12 @@ pub fn rms_frames(signal: &[f64], frame_size: usize, hop_size: usize) -> Vec<f64
 }
 
 /// Attack/Release peak envelope follower.
-pub fn envelope_follower(signal: &[f64], sample_rate: u32, attack_ms: f64, release_ms: f64) -> Vec<f64> {
+pub fn envelope_follower(
+    signal: &[f64],
+    sample_rate: u32,
+    attack_ms: f64,
+    release_ms: f64,
+) -> Vec<f64> {
     let sr = sample_rate as f64;
     let ga = (-1.0 / (attack_ms * 0.001 * sr).max(1.0)).exp();
     let gr = (-1.0 / (release_ms * 0.001 * sr).max(1.0)).exp();

@@ -3,24 +3,24 @@
 //! [`GnnLayer`] trait, GCN, GAT, GraphSAGE, GIN, GGCN, EdgeConv, GraphTransformer.
 #![allow(missing_docs)]
 
-pub mod gcn;
-pub mod gat;
-pub mod sage;
-pub mod gin;
-pub mod gated;
 pub mod edge_conv;
+pub mod gat;
+pub mod gated;
+pub mod gcn;
+pub mod gin;
+pub mod sage;
 pub mod transformer;
 
-pub use gcn::GcnLayer;
-pub use gat::GatLayer;
-pub use sage::SageLayer;
-pub use gin::GinLayer;
-pub use gated::GatedConv;
 pub use edge_conv::EdgeConv;
+pub use gat::GatLayer;
+pub use gated::GatedConv;
+pub use gcn::GcnLayer;
+pub use gin::GinLayer;
+pub use sage::SageLayer;
 pub use transformer::GraphTransformerLayer;
 
-use brain_core::Tensor;
 use crate::graph::Graph;
+use brain_core::Tensor;
 
 /// Core trait implemented by all GNN message-passing layers.
 pub trait GnnLayer: Send + Sync {
@@ -34,7 +34,13 @@ pub trait GnnLayer: Send + Sync {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

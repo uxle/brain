@@ -35,9 +35,12 @@ pub fn bench_mlp(config: &ModelBenchConfig) -> BrainResult<BenchResult> {
     let w1 = Tensor::ones(vec![config.input_dim, config.hidden_dim]);
     let w2 = Tensor::ones(vec![config.hidden_dim, config.hidden_dim]);
 
-    let bench_cfg = BenchConfig::new(format!("mlp_b{}_h{}_l{}", config.batch_size, config.hidden_dim, config.num_layers))
-        .with_tag("model")
-        .with_tag("mlp");
+    let bench_cfg = BenchConfig::new(format!(
+        "mlp_b{}_h{}_l{}",
+        config.batch_size, config.hidden_dim, config.num_layers
+    ))
+    .with_tag("model")
+    .with_tag("mlp");
 
     Runner::run_benchmark(&bench_cfg, || {
         let mut h = math_t::relu(&arith_t::matmul(&x, &w1));
@@ -49,14 +52,21 @@ pub fn bench_mlp(config: &ModelBenchConfig) -> BrainResult<BenchResult> {
 }
 
 /// Benchmarks a Transformer Encoder forward block: `Q @ K^T -> Softmax -> @ V -> Linear -> Add`.
-pub fn bench_transformer_layer(batch_size: usize, seq_len: usize, d_model: usize) -> BrainResult<BenchResult> {
+pub fn bench_transformer_layer(
+    batch_size: usize,
+    seq_len: usize,
+    d_model: usize,
+) -> BrainResult<BenchResult> {
     let q = Tensor::ones(vec![batch_size * seq_len, d_model]);
     let k = Tensor::ones(vec![batch_size * seq_len, d_model]);
     let v = Tensor::ones(vec![batch_size * seq_len, d_model]);
 
-    let bench_cfg = BenchConfig::new(format!("transformer_b{}_s{}_d{}", batch_size, seq_len, d_model))
-        .with_tag("model")
-        .with_tag("transformer");
+    let bench_cfg = BenchConfig::new(format!(
+        "transformer_b{}_s{}_d{}",
+        batch_size, seq_len, d_model
+    ))
+    .with_tag("model")
+    .with_tag("transformer");
 
     Runner::run_benchmark(&bench_cfg, || {
         let kt = k.transpose(0, 1);

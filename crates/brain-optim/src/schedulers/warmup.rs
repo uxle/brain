@@ -3,9 +3,9 @@
 //! Linear, constant, and exponential learning rate warmup wrappers preventing divergence during early training.
 #![allow(missing_docs)]
 
-use std::collections::HashMap;
-use crate::optimizer::{Optimizer, OptimResult};
 use super::LrScheduler;
+use crate::optimizer::{OptimResult, Optimizer};
+use std::collections::HashMap;
 
 /// Configuration parameters for warmup schedules.
 #[derive(Debug, Clone, PartialEq)]
@@ -226,7 +226,13 @@ impl LrScheduler for ExponentialWarmup {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

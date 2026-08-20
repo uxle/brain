@@ -4,8 +4,8 @@
 
 use super::hid::{HidAction, KeyAction, MouseAction};
 use std::collections::HashSet;
-use std::time::{Duration, Instant};
 use std::sync::Mutex;
+use std::time::{Duration, Instant};
 
 /// Safety Guardrail configuration.
 #[derive(Debug, Clone)]
@@ -58,7 +58,8 @@ impl SafetyGuard {
         {
             let mut last = self.last_action_time.lock().unwrap();
             let now = Instant::now();
-            let min_interval = Duration::from_micros(1_000_000 / self.config.max_actions_per_second.max(1) as u64);
+            let min_interval =
+                Duration::from_micros(1_000_000 / self.config.max_actions_per_second.max(1) as u64);
             if now.duration_since(*last) < min_interval {
                 // Rate limited but not forbidden
             }
@@ -70,7 +71,10 @@ impl SafetyGuard {
                 let lower = s.to_lowercase();
                 for pat in &self.forbidden_patterns {
                     if lower.contains(pat) {
-                        return Err(format!("SafetyGuard: Action blocked by pattern match '{}'", pat));
+                        return Err(format!(
+                            "SafetyGuard: Action blocked by pattern match '{}'",
+                            pat
+                        ));
                     }
                 }
             }

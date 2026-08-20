@@ -1,7 +1,15 @@
 //! # NLP Pipeline Helpers, Data Collators, and Text Augmenters
 //!
 //! T5-style span corruption, batch collators for seq2seq and language modeling, and text perturbation tools.
-#![allow(missing_docs, unused_imports, unused_variables, dead_code, unused_mut, unused_comparisons, clippy::all)]
+#![allow(
+    missing_docs,
+    unused_imports,
+    unused_variables,
+    dead_code,
+    unused_mut,
+    unused_comparisons,
+    clippy::all
+)]
 
 use crate::core::{TextBatch, TokenId, TokenizedOutput};
 use crate::ops::{mask_tokens, pad_sequences};
@@ -147,7 +155,9 @@ impl SpanCorruptionHelper {
         }
 
         let num_noise_tokens = ((tokens.len() as f32) * noise_density).round() as usize;
-        let num_spans = (num_noise_tokens as f32 / mean_noise_span_length.max(1.0)).round().max(1.0) as usize;
+        let num_spans = (num_noise_tokens as f32 / mean_noise_span_length.max(1.0))
+            .round()
+            .max(1.0) as usize;
 
         let mut input_tokens = Vec::new();
         let mut target_tokens = Vec::new();
@@ -228,37 +238,51 @@ impl TextAugmenter {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant, clippy::needless_range_loop, clippy::manual_div_ceil, clippy::manual_is_multiple_of, clippy::too_many_arguments, clippy::doc_markdown, clippy::excessive_precision, clippy::float_cmp, clippy::len_zero)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant,
+        clippy::needless_range_loop,
+        clippy::manual_div_ceil,
+        clippy::manual_is_multiple_of,
+        clippy::too_many_arguments,
+        clippy::doc_markdown,
+        clippy::excessive_precision,
+        clippy::float_cmp,
+        clippy::len_zero
+    )]
     use super::*;
-    use crate::core::*;
-    use crate::config::*;
-    use crate::utils::*;
-    use crate::ops::*;
-    use crate::vocab::*;
-    use crate::text_ops::*;
-    use crate::features::*;
-    use crate::similarity::*;
-    use crate::lm::*;
-    use crate::process::*;
-    use crate::optimize::*;
     use crate::analyze::*;
-    use crate::compute::*;
-    use crate::helper::*;
-    use crate::transform::*;
     use crate::builder::*;
-    use crate::tokenizer::*;
-    use crate::tokenizer::bpe::*;
-    use crate::tokenizer::sentencepiece::*;
-    use crate::tokenizer::wordpiece::*;
-    use crate::tokenizer::char::*;
-    use crate::tokenizer::trainer::*;
-    use crate::tokenizer::normalizer::*;
-    use crate::tokenizer::pretokenizer::*;
-    use crate::tokenizer::bytelevel::*;
-    use crate::tokenizer::post::*;
-    use crate::embedding::*;
-    use crate::embedding::pretrained::*;
+    use crate::compute::*;
+    use crate::config::*;
+    use crate::core::*;
     use crate::embedding::fasttext::*;
+    use crate::embedding::pretrained::*;
+    use crate::embedding::*;
+    use crate::features::*;
+    use crate::helper::*;
+    use crate::lm::*;
+    use crate::ops::*;
+    use crate::optimize::*;
+    use crate::process::*;
+    use crate::similarity::*;
+    use crate::text_ops::*;
+    use crate::tokenizer::bpe::*;
+    use crate::tokenizer::bytelevel::*;
+    use crate::tokenizer::char::*;
+    use crate::tokenizer::normalizer::*;
+    use crate::tokenizer::post::*;
+    use crate::tokenizer::pretokenizer::*;
+    use crate::tokenizer::sentencepiece::*;
+    use crate::tokenizer::trainer::*;
+    use crate::tokenizer::wordpiece::*;
+    use crate::tokenizer::*;
+    use crate::transform::*;
+    use crate::utils::*;
+    use crate::vocab::*;
     use crate::VERSION;
     use brain_core::Tensor;
 
@@ -283,7 +307,8 @@ mod tests {
         let (lmi, lml, lmm) = lm_collator.collate(&inps, &mut rng);
         assert_eq!(lmi.len(), 2);
 
-        let (cin, ctgt) = SpanCorruptionHelper::corrupt_spans(&[1, 2, 3, 4, 5], 0.3, 2.0, 1000, &mut rng);
+        let (cin, ctgt) =
+            SpanCorruptionHelper::corrupt_spans(&[1, 2, 3, 4, 5], 0.3, 2.0, 1000, &mut rng);
         assert!(!cin.is_empty());
 
         let words = vec!["the".to_string(), "quick".to_string(), "fox_1".to_string()];

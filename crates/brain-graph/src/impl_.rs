@@ -3,10 +3,10 @@
 //! Convenient evaluation, execution runners, and batch evaluation wrappers.
 #![allow(missing_docs)]
 
-use brain_core::Tensor;
 use crate::core::GraphResult;
-use crate::ir::GraphIr;
 use crate::interp::GraphInterpreter;
+use crate::ir::GraphIr;
+use brain_core::Tensor;
 
 /// Runs inference on a `GraphIr` given input tensors.
 pub fn run_graph(graph: &GraphIr, inputs: &[Tensor]) -> GraphResult<Vec<Tensor>> {
@@ -16,12 +16,22 @@ pub fn run_graph(graph: &GraphIr, inputs: &[Tensor]) -> GraphResult<Vec<Tensor>>
 
 /// Computes the total memory allocated by all tensor outputs of the graph.
 pub fn total_output_memory_bytes(graph: &GraphIr) -> usize {
-    graph.values.iter().map(|v| v.shape.num_elements() * 4).sum()
+    graph
+        .values
+        .iter()
+        .map(|v| v.shape.num_elements() * 4)
+        .sum()
 }
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

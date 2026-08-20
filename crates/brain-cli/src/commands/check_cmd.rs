@@ -22,7 +22,10 @@ pub fn run_check_command(args: &[String], sink: &OutputSink) -> ExitCode {
     let state = match ModelState::from_brain_bytes(&bytes) {
         Ok(s) => s,
         Err(err) => {
-            sink.println(&format!("error: invalid model checkpoint '{}': {}", model_path, err));
+            sink.println(&format!(
+                "error: invalid model checkpoint '{}': {}",
+                model_path, err
+            ));
             return ExitCode::ERROR;
         }
     };

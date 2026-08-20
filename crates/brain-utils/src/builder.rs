@@ -69,7 +69,7 @@ mod tests {
             .app_name("custom_brain")
             .env_prefix("MYAPP_")
             .build();
-    
+
         assert_eq!(cfg.log_level, "DEBUG");
         assert_eq!(cfg.log_file_path, Some("/tmp/app.log".to_string()));
         assert!(cfg.profiling_enabled);

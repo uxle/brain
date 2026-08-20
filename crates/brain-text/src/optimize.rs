@@ -1,7 +1,15 @@
 //! # Vocabulary Pruning, Optimization, and Compression
 //!
 //! Vocabulary trimming based on token frequencies, string deduplication, trie prefix lookup, and quantization.
-#![allow(missing_docs, unused_imports, unused_variables, dead_code, unused_mut, unused_comparisons, clippy::all)]
+#![allow(
+    missing_docs,
+    unused_imports,
+    unused_variables,
+    dead_code,
+    unused_mut,
+    unused_comparisons,
+    clippy::all
+)]
 
 use crate::core::TokenId;
 use crate::vocab::Vocab;
@@ -207,37 +215,51 @@ impl VocabTrie {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant, clippy::needless_range_loop, clippy::manual_div_ceil, clippy::manual_is_multiple_of, clippy::too_many_arguments, clippy::doc_markdown, clippy::excessive_precision, clippy::float_cmp, clippy::len_zero)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant,
+        clippy::needless_range_loop,
+        clippy::manual_div_ceil,
+        clippy::manual_is_multiple_of,
+        clippy::too_many_arguments,
+        clippy::doc_markdown,
+        clippy::excessive_precision,
+        clippy::float_cmp,
+        clippy::len_zero
+    )]
     use super::*;
-    use crate::core::*;
-    use crate::config::*;
-    use crate::utils::*;
-    use crate::ops::*;
-    use crate::vocab::*;
-    use crate::text_ops::*;
-    use crate::features::*;
-    use crate::similarity::*;
-    use crate::lm::*;
-    use crate::process::*;
-    use crate::optimize::*;
     use crate::analyze::*;
-    use crate::compute::*;
-    use crate::helper::*;
-    use crate::transform::*;
     use crate::builder::*;
-    use crate::tokenizer::*;
-    use crate::tokenizer::bpe::*;
-    use crate::tokenizer::sentencepiece::*;
-    use crate::tokenizer::wordpiece::*;
-    use crate::tokenizer::char::*;
-    use crate::tokenizer::trainer::*;
-    use crate::tokenizer::normalizer::*;
-    use crate::tokenizer::pretokenizer::*;
-    use crate::tokenizer::bytelevel::*;
-    use crate::tokenizer::post::*;
-    use crate::embedding::*;
-    use crate::embedding::pretrained::*;
+    use crate::compute::*;
+    use crate::config::*;
+    use crate::core::*;
     use crate::embedding::fasttext::*;
+    use crate::embedding::pretrained::*;
+    use crate::embedding::*;
+    use crate::features::*;
+    use crate::helper::*;
+    use crate::lm::*;
+    use crate::ops::*;
+    use crate::optimize::*;
+    use crate::process::*;
+    use crate::similarity::*;
+    use crate::text_ops::*;
+    use crate::tokenizer::bpe::*;
+    use crate::tokenizer::bytelevel::*;
+    use crate::tokenizer::char::*;
+    use crate::tokenizer::normalizer::*;
+    use crate::tokenizer::post::*;
+    use crate::tokenizer::pretokenizer::*;
+    use crate::tokenizer::sentencepiece::*;
+    use crate::tokenizer::trainer::*;
+    use crate::tokenizer::wordpiece::*;
+    use crate::tokenizer::*;
+    use crate::transform::*;
+    use crate::utils::*;
+    use crate::vocab::*;
     use crate::VERSION;
     use brain_core::Tensor;
 
@@ -253,12 +275,17 @@ mod tests {
         freqs.insert(1, 50);
         freqs.insert(2, 1);
 
-        let opt_cfg = OptimizeConfig { min_frequency: 2, prune_singletons: true, ..Default::default() };
+        let opt_cfg = OptimizeConfig {
+            min_frequency: 2,
+            prune_singletons: true,
+            ..Default::default()
+        };
         let pruned = prune_vocab(&vocab, &freqs, &opt_cfg);
         assert!(pruned.contains("common_1"));
         assert!(!pruned.contains("rare_1"));
 
-        let (dedup, map) = merge_identical_tokens(&["a".to_string(), "b".to_string(), "a".to_string()]);
+        let (dedup, map) =
+            merge_identical_tokens(&["a".to_string(), "b".to_string(), "a".to_string()]);
         assert_eq!(dedup.len(), 2);
         assert_eq!(map.len(), 2);
 

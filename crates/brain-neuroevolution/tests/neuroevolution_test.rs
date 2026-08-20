@@ -1,6 +1,6 @@
 //! Tests for neuroevolution, genomes, and genetic operators
-use brain_neuroevolution::*;
 use brain_neuroevolution::utils::FastRng;
+use brain_neuroevolution::*;
 
 #[test]
 fn test_genome_creation_and_mutation() {

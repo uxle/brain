@@ -110,7 +110,9 @@ pub fn run_all() -> brain_core::BrainResult<Vec<BenchResult>> {
 /// assert!(!timer.is_running());
 /// ```
 pub mod prelude {
-    pub use crate::core::{BenchConfig, BenchResult, Benchmark, IterationStrategy, MeasurementUnit, Sample};
+    pub use crate::core::{
+        BenchConfig, BenchResult, Benchmark, IterationStrategy, MeasurementUnit, Sample,
+    };
     pub use crate::r#impl::{FnBenchmark, KernelBenchmark, ModelBenchmark};
     pub use crate::runner::Runner;
     pub use crate::statistics::Statistics;

@@ -37,32 +37,25 @@ pub mod utils;
 
 // ── Convenience re-exports ──────────────────────────────────────────────────
 pub use builder::GnnBuilder;
-pub use config::{
-    AggregatorType, GnnConfig, LayerConfig, LayerType, PoolingType,
-};
+pub use config::{AggregatorType, GnnConfig, LayerConfig, LayerType, PoolingType};
 pub use core::{BatchGraph, EdgeIndex, GnnError, GnnResult, GraphTensor, NodeIndex};
 pub use datasets::{
-    DatasetSplits, GraphBatch, GraphLoader, cycle_graph, random_community_graph,
-    zachary_karate_club,
+    cycle_graph, random_community_graph, zachary_karate_club, DatasetSplits, GraphBatch,
+    GraphLoader,
 };
-pub use explain::{ExplanationReport, saliency_node_importance};
+pub use explain::{saliency_node_importance, ExplanationReport};
 pub use graph::{
-    Graph, GraphConfig, SampledSubgraph, in_degrees, induced_subgraph,
-    normalized_graph_adj, out_degrees, sample_neighbors, to_dense_adj,
+    in_degrees, induced_subgraph, normalized_graph_adj, out_degrees, sample_neighbors,
+    to_dense_adj, Graph, GraphConfig, SampledSubgraph,
 };
 pub use impl_::{embed_nodes, transform_node_features};
 pub use layers::{
-    EdgeConv, GatLayer, GcnLayer, GinLayer, GatedConv, GnnLayer, GraphTransformerLayer,
-    SageLayer,
+    EdgeConv, GatLayer, GatedConv, GcnLayer, GinLayer, GnnLayer, GraphTransformerLayer, SageLayer,
 };
-pub use models::{
-    EdgeClassifier, EdgeRegressor, GatModel, GcnModel, GinModel, SageModel,
-};
-pub use ops::{
-    aggregate_max, aggregate_mean, aggregate_sum, normalize_adj, sparse_softmax,
-};
+pub use models::{EdgeClassifier, EdgeRegressor, GatModel, GcnModel, GinModel, SageModel};
+pub use ops::{aggregate_max, aggregate_mean, aggregate_sum, normalize_adj, sparse_softmax};
 pub use readout::{
-    JkConfig, JkMode, JumpingKnowledge, global_add_pool, global_max_pool, global_mean_pool,
+    global_add_pool, global_max_pool, global_mean_pool, JkConfig, JkMode, JumpingKnowledge,
 };
 pub use train::{GnnTrainConfig, GnnTrainStats, GnnTrainer, TaskType};
 pub use utils::{add_self_loops, knn_graph, radius_graph, random_graph_er};

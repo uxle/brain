@@ -1,7 +1,15 @@
 //! # FastText Subword N-Gram Embeddings
 //!
 //! Subword character n-gram hashing for robust representation of out-of-vocabulary (OOV) and morphology-rich words.
-#![allow(missing_docs, unused_imports, unused_variables, dead_code, unused_mut, unused_comparisons, clippy::all)]
+#![allow(
+    missing_docs,
+    unused_imports,
+    unused_variables,
+    dead_code,
+    unused_mut,
+    unused_comparisons,
+    clippy::all
+)]
 
 use crate::similarity::TextSimilarity;
 use std::collections::HashMap;
@@ -129,7 +137,12 @@ impl FastTextEmbedding {
     }
 
     /// Computes most similar candidate words to a given target word query.
-    pub fn most_similar(&self, word: &str, candidates: &[&str], top_k: usize) -> Vec<(String, f32)> {
+    pub fn most_similar(
+        &self,
+        word: &str,
+        candidates: &[&str],
+        top_k: usize,
+    ) -> Vec<(String, f32)> {
         let target_vec = self.get_word_vector(word);
         let mut scored = Vec::with_capacity(candidates.len());
 
@@ -149,43 +162,62 @@ impl FastTextEmbedding {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant, clippy::needless_range_loop, clippy::manual_div_ceil, clippy::manual_is_multiple_of, clippy::too_many_arguments, clippy::doc_markdown, clippy::excessive_precision, clippy::float_cmp, clippy::len_zero)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant,
+        clippy::needless_range_loop,
+        clippy::manual_div_ceil,
+        clippy::manual_is_multiple_of,
+        clippy::too_many_arguments,
+        clippy::doc_markdown,
+        clippy::excessive_precision,
+        clippy::float_cmp,
+        clippy::len_zero
+    )]
     use super::*;
-    use crate::core::*;
-    use crate::config::*;
-    use crate::utils::*;
-    use crate::ops::*;
-    use crate::vocab::*;
-    use crate::text_ops::*;
-    use crate::features::*;
-    use crate::similarity::*;
-    use crate::lm::*;
-    use crate::process::*;
-    use crate::optimize::*;
     use crate::analyze::*;
-    use crate::compute::*;
-    use crate::helper::*;
-    use crate::transform::*;
     use crate::builder::*;
-    use crate::tokenizer::*;
-    use crate::tokenizer::bpe::*;
-    use crate::tokenizer::sentencepiece::*;
-    use crate::tokenizer::wordpiece::*;
-    use crate::tokenizer::char::*;
-    use crate::tokenizer::trainer::*;
-    use crate::tokenizer::normalizer::*;
-    use crate::tokenizer::pretokenizer::*;
-    use crate::tokenizer::bytelevel::*;
-    use crate::tokenizer::post::*;
-    use crate::embedding::*;
-    use crate::embedding::pretrained::*;
+    use crate::compute::*;
+    use crate::config::*;
+    use crate::core::*;
     use crate::embedding::fasttext::*;
+    use crate::embedding::pretrained::*;
+    use crate::embedding::*;
+    use crate::features::*;
+    use crate::helper::*;
+    use crate::lm::*;
+    use crate::ops::*;
+    use crate::optimize::*;
+    use crate::process::*;
+    use crate::similarity::*;
+    use crate::text_ops::*;
+    use crate::tokenizer::bpe::*;
+    use crate::tokenizer::bytelevel::*;
+    use crate::tokenizer::char::*;
+    use crate::tokenizer::normalizer::*;
+    use crate::tokenizer::post::*;
+    use crate::tokenizer::pretokenizer::*;
+    use crate::tokenizer::sentencepiece::*;
+    use crate::tokenizer::trainer::*;
+    use crate::tokenizer::wordpiece::*;
+    use crate::tokenizer::*;
+    use crate::transform::*;
+    use crate::utils::*;
+    use crate::vocab::*;
     use crate::VERSION;
     use brain_core::Tensor;
 
     #[test]
     fn test_fasttext_embeddings_1() {
-        let cfg = FastTextConfig { dim: 8, bucket_size: 100, min_n: 3, max_n: 4 };
+        let cfg = FastTextConfig {
+            dim: 8,
+            bucket_size: 100,
+            min_n: 3,
+            max_n: 4,
+        };
         let mut ft = FastTextEmbedding::new(cfg);
         ft.insert_word("apple", vec![0.1; 8]);
         ft.insert_word("application_1", vec![0.2; 8]);

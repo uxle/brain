@@ -4,10 +4,10 @@
 #![allow(missing_docs)]
 
 pub mod onnx_passes;
-pub use onnx_passes::{fuse_conv_relu, fuse_matmul_add, fold_constant_nodes};
+pub use onnx_passes::{fold_constant_nodes, fuse_conv_relu, fuse_matmul_add};
 
-use crate::core::OnnxResult;
 use crate::config::OptimizeConfig;
+use crate::core::OnnxResult;
 use crate::ir::OnnxModel;
 
 /// Optimizes an OnnxModel in-place based on OptimizeConfig.
@@ -28,7 +28,13 @@ pub fn optimize_model(model: &OnnxModel, config: &OptimizeConfig) -> OnnxResult<
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

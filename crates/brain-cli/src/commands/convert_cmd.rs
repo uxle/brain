@@ -19,10 +19,16 @@ pub fn run_convert_command(args: &[String], sink: &OutputSink) -> ExitCode {
         match std::fs::read(in_p) {
             Ok(bytes) => {
                 if let Err(err) = std::fs::write(output_path, &bytes) {
-                    sink.println(&format!("error: could not write '{}': {}", output_path, err));
+                    sink.println(&format!(
+                        "error: could not write '{}': {}",
+                        output_path, err
+                    ));
                     return ExitCode::IO_ERROR;
                 }
-                sink.println(&format!("Successfully converted '{}' -> '{}'", input_path, output_path));
+                sink.println(&format!(
+                    "Successfully converted '{}' -> '{}'",
+                    input_path, output_path
+                ));
                 ExitCode::SUCCESS
             }
             Err(err) => {
@@ -32,7 +38,10 @@ pub fn run_convert_command(args: &[String], sink: &OutputSink) -> ExitCode {
         }
     } else {
         if sink.captured().is_some() {
-            sink.println(&format!("Successfully converted '{}' -> '{}'", input_path, output_path));
+            sink.println(&format!(
+                "Successfully converted '{}' -> '{}'",
+                input_path, output_path
+            ));
             ExitCode::SUCCESS
         } else {
             sink.println(&format!("error: input file '{}' not found", input_path));

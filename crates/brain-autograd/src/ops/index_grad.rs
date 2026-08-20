@@ -5,7 +5,12 @@
 use brain_core::{BrainResult, Tensor};
 
 /// Backward for `embedding` lookup table.
-pub fn grad_embedding(g: &Tensor, num_embeddings: usize, embedding_dim: usize, indices: &[usize]) -> BrainResult<Tensor> {
+pub fn grad_embedding(
+    g: &Tensor,
+    num_embeddings: usize,
+    embedding_dim: usize,
+    indices: &[usize],
+) -> BrainResult<Tensor> {
     let mut grad_weights = vec![0.0; num_embeddings * embedding_dim];
     let g_slice = g.data();
 
@@ -17,7 +22,10 @@ pub fn grad_embedding(g: &Tensor, num_embeddings: usize, embedding_dim: usize, i
         }
     }
 
-    Ok(Tensor::from_slice(&grad_weights, vec![num_embeddings, embedding_dim]))
+    Ok(Tensor::from_slice(
+        &grad_weights,
+        vec![num_embeddings, embedding_dim],
+    ))
 }
 
 #[cfg(test)]
@@ -25,9 +33,9 @@ mod tests {
     #[allow(unused_imports)]
     use super::*;
     #[allow(unused_imports)]
+    use crate::tape::OpRecord;
+    #[allow(unused_imports)]
     use crate::value::Value;
     #[allow(unused_imports)]
     use brain_core::Tensor;
-    #[allow(unused_imports)]
-    use crate::tape::OpRecord;
 }

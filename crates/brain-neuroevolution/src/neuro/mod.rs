@@ -4,8 +4,7 @@
 #![allow(missing_docs)]
 
 pub mod weights;
-pub use weights::{LayerWeightDescriptor, flatten_layer_weights, unflatten_layer_weights};
-
+pub use weights::{flatten_layer_weights, unflatten_layer_weights, LayerWeightDescriptor};
 
 /// Configuration for neuroevolution mapping.
 #[derive(Debug, Clone, Default)]
@@ -20,6 +19,12 @@ pub fn total_neuro_parameters(shapes: &[Vec<usize>]) -> usize {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
 }

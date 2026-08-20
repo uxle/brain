@@ -51,7 +51,10 @@ fn test_phase49_50_matrix_power_and_condition_number() {
     assert_eq!(a_cubed.get_2d(1, 1), 27.0);
 
     let cond = linalg::condition_number(&a);
-    assert!(approx(cond, 1.5, 1e-5), "Condition number of diag(2, 3) must be 1.5");
+    assert!(
+        approx(cond, 1.5, 1e-5),
+        "Condition number of diag(2, 3) must be 1.5"
+    );
 }
 
 // -----------------------------------------------------------------------------
@@ -72,12 +75,12 @@ fn test_phase51_matrix_norms_and_trace() {
 #[test]
 fn test_phase52_conv2d_sliding_window() {
     // 1 sample, 1 channel, 4x4 input
-    let input = Tensor::from_slice(&[
-        1.0, 2.0, 3.0, 4.0,
-        5.0, 6.0, 7.0, 8.0,
-        9.0, 1.0, 2.0, 3.0,
-        4.0, 5.0, 6.0, 7.0,
-    ], vec![1, 1, 4, 4]);
+    let input = Tensor::from_slice(
+        &[
+            1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0,
+        ],
+        vec![1, 1, 4, 4],
+    );
 
     // 1 out_channel, 1 in_channel, 2x2 kernel (all 1s)
     let weight = Tensor::ones(vec![1, 1, 2, 2]);
@@ -94,10 +97,7 @@ fn test_phase52_conv2d_sliding_window() {
 // -----------------------------------------------------------------------------
 #[test]
 fn test_phase53_spatial_pooling() {
-    let input = Tensor::from_slice(&[
-        1.0, 3.0, 2.0, 4.0,
-        5.0, 6.0, 7.0, 8.0,
-    ], vec![1, 1, 2, 4]);
+    let input = Tensor::from_slice(&[1.0, 3.0, 2.0, 4.0, 5.0, 6.0, 7.0, 8.0], vec![1, 1, 2, 4]);
 
     let pooled = pool::max_pool2d(&input, (2, 2), (2, 2), (0, 0));
     assert_eq!(pooled.shape(), &[1, 1, 1, 2]);
@@ -127,11 +127,7 @@ fn test_phase55_sparse_coo_spmm() {
     coo.insert(0, 0, 2.0);
     coo.insert(1, 2, 3.0);
 
-    let dense_b = Tensor::from_slice(&[
-        1.0, 2.0,
-        3.0, 4.0,
-        5.0, 6.0,
-    ], vec![3, 2]);
+    let dense_b = Tensor::from_slice(&[1.0, 2.0, 3.0, 4.0, 5.0, 6.0], vec![3, 2]);
 
     let spmm_out = coo.spmm(&dense_b);
     assert_eq!(spmm_out.shape(), &[2, 2]);

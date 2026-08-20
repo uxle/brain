@@ -3,10 +3,10 @@
 //! Level-based batching and parallel region partition for multicore / JIT execution.
 #![allow(missing_docs)]
 
-use std::collections::HashMap;
 use crate::core::NodeId;
 use crate::ir::GraphIr;
 use crate::topology::compute_topological_order;
+use std::collections::HashMap;
 
 /// Execution schedule batch plan.
 #[derive(Debug, Clone, Default)]
@@ -40,14 +40,23 @@ pub fn generate_schedule(graph: &GraphIr) -> SchedulePlan {
     let mut sorted_keys: Vec<usize> = stages_map.keys().copied().collect();
     sorted_keys.sort_unstable();
 
-    let stages = sorted_keys.into_iter().map(|k| stages_map.remove(&k).unwrap()).collect();
+    let stages = sorted_keys
+        .into_iter()
+        .map(|k| stages_map.remove(&k).unwrap())
+        .collect();
 
     SchedulePlan { stages }
 }
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

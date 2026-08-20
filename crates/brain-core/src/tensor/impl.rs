@@ -6,7 +6,9 @@
 
 use std::fmt;
 use std::hash::{Hash, Hasher};
-use std::ops::{Add, AddAssign, Div, DivAssign, Index, IndexMut, Mul, MulAssign, Neg, Sub, SubAssign};
+use std::ops::{
+    Add, AddAssign, Div, DivAssign, Index, IndexMut, Mul, MulAssign, Neg, Sub, SubAssign,
+};
 
 use crate::device::Device;
 use crate::dtype::DType;
@@ -245,7 +247,12 @@ impl Tensor {
 
     /// Extracts the single scalar value of a 1-element tensor.
     pub fn item(&self) -> f64 {
-        assert_eq!(self.data.len(), 1, "item() can only be called on tensors with exactly 1 element, got {}", self.data.len());
+        assert_eq!(
+            self.data.len(),
+            1,
+            "item() can only be called on tensors with exactly 1 element, got {}",
+            self.data.len()
+        );
         self.data[0]
     }
 
@@ -369,7 +376,10 @@ impl Tensor {
     #[inline(always)]
     pub fn get_2d(&self, r: usize, c: usize) -> f64 {
         assert_eq!(self.shape.len(), 2, "get_2d requires a 2D tensor");
-        assert!(r < self.shape[0] && c < self.shape[1], "2D index out of bounds");
+        assert!(
+            r < self.shape[0] && c < self.shape[1],
+            "2D index out of bounds"
+        );
         self.data[r * self.strides[0] + c * self.strides[1]]
     }
 
@@ -377,7 +387,10 @@ impl Tensor {
     #[inline(always)]
     pub fn set_2d(&mut self, r: usize, c: usize, value: f64) {
         assert_eq!(self.shape.len(), 2, "set_2d requires a 2D tensor");
-        assert!(r < self.shape[0] && c < self.shape[1], "2D index out of bounds");
+        assert!(
+            r < self.shape[0] && c < self.shape[1],
+            "2D index out of bounds"
+        );
         let idx = r * self.strides[0] + c * self.strides[1];
         self.data[idx] = value;
     }
@@ -585,7 +598,10 @@ impl Tensor {
 
     /// Transposes two dimensions of the tensor.
     pub fn transpose(&self, dim0: usize, dim1: usize) -> Self {
-        assert!(dim0 < self.ndim() && dim1 < self.ndim(), "Transpose dims out of range");
+        assert!(
+            dim0 < self.ndim() && dim1 < self.ndim(),
+            "Transpose dims out of range"
+        );
         let mut perm: Vec<usize> = (0..self.ndim()).collect();
         perm.swap(dim0, dim1);
         self.permute(&perm)
@@ -625,7 +641,10 @@ impl Tensor {
 
     /// Flattens dimensions from `start_dim` to `end_dim` inclusive into a single dimension.
     pub fn flatten(&self, start_dim: usize, end_dim: usize) -> Self {
-        assert!(start_dim <= end_dim && end_dim < self.ndim(), "flatten: invalid dim range");
+        assert!(
+            start_dim <= end_dim && end_dim < self.ndim(),
+            "flatten: invalid dim range"
+        );
         let mut new_shape = Vec::new();
         for i in 0..start_dim {
             new_shape.push(self.shape[i]);
@@ -892,7 +911,9 @@ impl Tensor {
                 s.spawn(move || {
                     let a_chunk = &a_src[offset..offset + dst_chunk.len()];
                     let b_chunk = &b_src[offset..offset + dst_chunk.len()];
-                    for (dst, (&x, &y)) in dst_chunk.iter_mut().zip(a_chunk.iter().zip(b_chunk.iter())) {
+                    for (dst, (&x, &y)) in
+                        dst_chunk.iter_mut().zip(a_chunk.iter().zip(b_chunk.iter()))
+                    {
                         *dst = f_ref(x, y);
                     }
                 });
@@ -1055,11 +1076,19 @@ impl fmt::Display for Tensor {
         writeln!(f, "Tensor(shape={:?}, dtype={:?}):", self.shape, self.dtype)?;
         if self.ndim() <= 2 {
             let rows = if self.ndim() == 2 { self.shape[0] } else { 1 };
-            let cols = if self.ndim() == 2 { self.shape[1] } else { self.numel() };
+            let cols = if self.ndim() == 2 {
+                self.shape[1]
+            } else {
+                self.numel()
+            };
             for r in 0..rows {
                 write!(f, "  [")?;
                 for c in 0..cols {
-                    let idx = if self.ndim() == 2 { r * self.strides[0] + c * self.strides[1] } else { c };
+                    let idx = if self.ndim() == 2 {
+                        r * self.strides[0] + c * self.strides[1]
+                    } else {
+                        c
+                    };
                     write!(f, " {:8.4}", self.data[idx])?;
                 }
                 writeln!(f, " ]")?;

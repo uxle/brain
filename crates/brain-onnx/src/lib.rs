@@ -51,8 +51,8 @@ pub use model_zoo::create_mlp_zoo_model;
 pub use ops::{is_op_supported, OpSpec, STANDARD_OPS};
 pub use optimize::{fold_constant_nodes, fuse_conv_relu, fuse_matmul_add, optimize_model};
 pub use proto::{
-    parse_model_proto, AttributeProto, AttributeType, DataType, GraphProto, ModelProto,
-    NodeProto, TensorProto, ValueInfoProto,
+    parse_model_proto, AttributeProto, AttributeType, DataType, GraphProto, ModelProto, NodeProto,
+    TensorProto, ValueInfoProto,
 };
 pub use quantize_onnx::{has_quantized_nodes, QuantizeOnnxConfig};
 pub use testdata::generate_test_op_model;

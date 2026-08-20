@@ -92,7 +92,6 @@ pub fn hann_window(n: usize) -> Tensor {
     Tensor::new(data, vec![n])
 }
 
-
 /// In-place Discrete Fourier Transform for arbitrary lengths (DFT / IDFT).
 /// Automatically uses Cooley-Tukey Radix-2 FFT when `n` is a power of two.
 pub fn dft(real: &mut [f64], imag: &mut [f64], inverse: bool) {
@@ -160,7 +159,12 @@ mod tests {
             fft_radix2(&mut real, &mut imag, true);
 
             for i in 0..size {
-                assert!((real[i] - orig_real[i]).abs() < 1e-6, "Power of two FFT roundtrip failed at size {}, idx {}", size, i);
+                assert!(
+                    (real[i] - orig_real[i]).abs() < 1e-6,
+                    "Power of two FFT roundtrip failed at size {}, idx {}",
+                    size,
+                    i
+                );
                 assert!(imag[i].abs() < 1e-6);
             }
         }
@@ -177,7 +181,12 @@ mod tests {
             dft(&mut real, &mut imag, true);
 
             for i in 0..size {
-                assert!((real[i] - orig_real[i]).abs() < 1e-6, "Non-power of two DFT roundtrip failed at size {}, idx {}", size, i);
+                assert!(
+                    (real[i] - orig_real[i]).abs() < 1e-6,
+                    "Non-power of two DFT roundtrip failed at size {}, idx {}",
+                    size,
+                    i
+                );
                 assert!(imag[i].abs() < 1e-6);
             }
         }

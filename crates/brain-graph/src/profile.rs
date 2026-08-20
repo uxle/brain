@@ -3,8 +3,8 @@
 //! Peak memory estimator and node execution profiling.
 #![allow(missing_docs)]
 
-use std::collections::HashSet;
 use crate::ir::GraphIr;
+use std::collections::HashSet;
 
 /// Profiling summary report.
 #[derive(Debug, Clone, Default)]
@@ -52,7 +52,13 @@ pub fn profile_graph(graph: &GraphIr) -> GraphProfile {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

@@ -3,7 +3,7 @@
 //! Shared helper functions: 2D interpolation, attention rollout,
 //! image cropping/resizing, numerical utilities.
 
-use crate::core::{VitError, VitResult, Tensor2D};
+use crate::core::{Tensor2D, VitError, VitResult};
 
 /// Bilinear interpolation of a 2D grid to a new size.
 ///
@@ -26,11 +26,15 @@ pub fn interpolate_2d(
 ) -> VitResult<Vec<f64>> {
     if grid.len() != h * w {
         return Err(VitError::Shape(format!(
-            "interpolate_2d: grid len {} != h*w={}", grid.len(), h * w
+            "interpolate_2d: grid len {} != h*w={}",
+            grid.len(),
+            h * w
         )));
     }
     if new_h == 0 || new_w == 0 {
-        return Err(VitError::Shape("interpolate_2d: new dimensions must be > 0".to_string()));
+        return Err(VitError::Shape(
+            "interpolate_2d: new dimensions must be > 0".to_string(),
+        ));
     }
     let mut out = vec![0.0f64; new_h * new_w];
     for ny in 0..new_h {
@@ -47,8 +51,7 @@ pub fn interpolate_2d(
             let v01 = grid[y0 * w + x1];
             let v10 = grid[y1 * w + x0];
             let v11 = grid[y1 * w + x1];
-            out[ny * new_w + nx] =
-                v00 * (1.0 - ty) * (1.0 - tx)
+            out[ny * new_w + nx] = v00 * (1.0 - ty) * (1.0 - tx)
                 + v01 * (1.0 - ty) * tx
                 + v10 * ty * (1.0 - tx)
                 + v11 * ty * tx;
@@ -72,7 +75,8 @@ pub fn crop_resize(
 ) -> VitResult<Vec<f64>> {
     if h < crop_h || w < crop_w {
         return Err(VitError::Config(format!(
-            "crop_resize: image {}x{} smaller than crop {}x{}", h, w, crop_h, crop_w
+            "crop_resize: image {}x{} smaller than crop {}x{}",
+            h, w, crop_h, crop_w
         )));
     }
     let y0 = (h - crop_h) / 2;
@@ -98,15 +102,13 @@ pub fn crop_resize(
 ///
 /// # Returns
 /// - `[N, N]` rollout matrix.
-pub fn attention_rollout(
-    attns: &[f64],
-    n: usize,
-    num_layers: usize,
-) -> VitResult<Vec<f64>> {
+pub fn attention_rollout(attns: &[f64], n: usize, num_layers: usize) -> VitResult<Vec<f64>> {
     let expected = num_layers * n * n;
     if attns.len() != expected {
         return Err(VitError::Shape(format!(
-            "attention_rollout: expected {} elements, got {}", expected, attns.len()
+            "attention_rollout: expected {} elements, got {}",
+            expected,
+            attns.len()
         )));
     }
     if num_layers == 0 || n == 0 {
@@ -114,15 +116,19 @@ pub fn attention_rollout(
     }
 
     // Identity matrix
-    let identity: Vec<f64> = (0..n * n).map(|i| if i / n == i % n { 1.0 } else { 0.0 }).collect();
+    let identity: Vec<f64> = (0..n * n)
+        .map(|i| if i / n == i % n { 1.0 } else { 0.0 })
+        .collect();
     let mut result = identity.clone();
 
     for layer in 0..num_layers {
         let layer_attn = &attns[layer * n * n..(layer + 1) * n * n];
         // A_hat = 0.5 * attn + 0.5 * I (residual connection approximation)
-        let a_hat: Vec<f64> = layer_attn.iter().enumerate().map(|(i, &a)| {
-            a * 0.5 + if i / n == i % n { 0.5 } else { 0.0 }
-        }).collect();
+        let a_hat: Vec<f64> = layer_attn
+            .iter()
+            .enumerate()
+            .map(|(i, &a)| a * 0.5 + if i / n == i % n { 0.5 } else { 0.0 })
+            .collect();
         // result = a_hat @ result (matrix multiply)
         let a_hat_mat = Tensor2D::from_data(n, n, a_hat)?;
         let result_mat = Tensor2D::from_data(n, n, result)?;
@@ -134,7 +140,9 @@ pub fn attention_rollout(
 /// Compute per-row entropy of an attention matrix `[N, N]`.
 pub fn attention_entropy(attn: &[f64], n: usize) -> VitResult<Vec<f64>> {
     if attn.len() != n * n {
-        return Err(VitError::Shape("attention_entropy: shape mismatch".to_string()));
+        return Err(VitError::Shape(
+            "attention_entropy: shape mismatch".to_string(),
+        ));
     }
     let mut entropies = vec![0.0f64; n];
     for r in 0..n {
@@ -159,19 +167,29 @@ pub fn top_k_accuracy(
     k: usize,
 ) -> VitResult<f64> {
     if logits.len() != batch * num_classes {
-        return Err(VitError::Shape("top_k_accuracy: logits shape mismatch".to_string()));
+        return Err(VitError::Shape(
+            "top_k_accuracy: logits shape mismatch".to_string(),
+        ));
     }
     if labels.len() != batch {
-        return Err(VitError::Shape("top_k_accuracy: labels length mismatch".to_string()));
+        return Err(VitError::Shape(
+            "top_k_accuracy: labels length mismatch".to_string(),
+        ));
     }
     let mut correct = 0usize;
     for b in 0..batch {
         let row = &logits[b * num_classes..(b + 1) * num_classes];
-        let mut indexed: Vec<(f64, usize)> = row.iter().copied().enumerate()
-            .map(|(i, v)| (v, i)).collect();
+        let mut indexed: Vec<(f64, usize)> = row
+            .iter()
+            .copied()
+            .enumerate()
+            .map(|(i, v)| (v, i))
+            .collect();
         indexed.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
         let top_k: Vec<usize> = indexed.iter().take(k).map(|&(_, i)| i).collect();
-        if top_k.contains(&labels[b]) { correct += 1; }
+        if top_k.contains(&labels[b]) {
+            correct += 1;
+        }
     }
     Ok(correct as f64 / batch as f64)
 }
@@ -179,7 +197,9 @@ pub fn top_k_accuracy(
 /// Softmax over last dimension for a flat `[B, C]` logits array.
 pub fn softmax_logits(logits: &[f64], batch: usize, num_classes: usize) -> VitResult<Vec<f64>> {
     if logits.len() != batch * num_classes {
-        return Err(VitError::Shape("softmax_logits: shape mismatch".to_string()));
+        return Err(VitError::Shape(
+            "softmax_logits: shape mismatch".to_string(),
+        ));
     }
     let mut out = logits.to_vec();
     for b in 0..batch {
@@ -218,16 +238,26 @@ pub fn mse_loss(pred: &[f64], target: &[f64]) -> VitResult<f64> {
     if pred.is_empty() {
         return Ok(0.0);
     }
-    let loss = pred.iter().zip(target.iter())
+    let loss = pred
+        .iter()
+        .zip(target.iter())
         .map(|(&p, &t)| (p - t).powi(2))
-        .sum::<f64>() / pred.len() as f64;
+        .sum::<f64>()
+        / pred.len() as f64;
     Ok(loss)
 }
 
 /// Compute cross-entropy loss from logits (log-sum-exp stable).
-pub fn cross_entropy_loss(logits: &[f64], labels: &[usize], batch: usize, num_classes: usize) -> VitResult<f64> {
+pub fn cross_entropy_loss(
+    logits: &[f64],
+    labels: &[usize],
+    batch: usize,
+    num_classes: usize,
+) -> VitResult<f64> {
     if logits.len() != batch * num_classes {
-        return Err(VitError::Shape("cross_entropy_loss: logits shape mismatch".to_string()));
+        return Err(VitError::Shape(
+            "cross_entropy_loss: logits shape mismatch".to_string(),
+        ));
     }
     let mut total = 0.0f64;
     for b in 0..batch {
@@ -236,7 +266,10 @@ pub fn cross_entropy_loss(logits: &[f64], labels: &[usize], batch: usize, num_cl
         let log_sum_exp = max_val + row.iter().map(|&x| (x - max_val).exp()).sum::<f64>().ln();
         let label = labels[b];
         if label >= num_classes {
-            return Err(VitError::Shape(format!("cross_entropy_loss: label {} >= num_classes {}", label, num_classes)));
+            return Err(VitError::Shape(format!(
+                "cross_entropy_loss: label {} >= num_classes {}",
+                label, num_classes
+            )));
         }
         total += log_sum_exp - row[label];
     }
@@ -246,7 +279,9 @@ pub fn cross_entropy_loss(logits: &[f64], labels: &[usize], batch: usize, num_cl
 /// Cosine similarity between two vectors.
 pub fn cosine_similarity(a: &[f64], b: &[f64]) -> VitResult<f64> {
     if a.len() != b.len() {
-        return Err(VitError::Shape("cosine_similarity: length mismatch".to_string()));
+        return Err(VitError::Shape(
+            "cosine_similarity: length mismatch".to_string(),
+        ));
     }
     let dot: f64 = a.iter().zip(b.iter()).map(|(&x, &y)| x * y).sum();
     let na: f64 = a.iter().map(|&x| x * x).sum::<f64>().sqrt();
@@ -258,13 +293,21 @@ pub fn cosine_similarity(a: &[f64], b: &[f64]) -> VitResult<f64> {
 }
 
 /// Format a float as a percentage string.
-pub fn fmt_pct(v: f64) -> String { format!("{:.2}%", v * 100.0) }
+pub fn fmt_pct(v: f64) -> String {
+    format!("{:.2}%", v * 100.0)
+}
 
 /// Compute NT-Xent (contrastive) loss for a batch of embeddings.
 ///
 /// `z1`, `z2`: normalized embeddings, each `[B, D]`.
 /// Returns average NT-Xent loss.
-pub fn nt_xent_loss(z1: &[f64], z2: &[f64], batch: usize, dim: usize, temperature: f64) -> VitResult<f64> {
+pub fn nt_xent_loss(
+    z1: &[f64],
+    z2: &[f64],
+    batch: usize,
+    dim: usize,
+    temperature: f64,
+) -> VitResult<f64> {
     if z1.len() != batch * dim || z2.len() != batch * dim {
         return Err(VitError::Shape("nt_xent_loss: shape mismatch".to_string()));
     }
@@ -286,17 +329,29 @@ pub fn nt_xent_loss(z1: &[f64], z2: &[f64], batch: usize, dim: usize, temperatur
     let mut loss = 0.0f64;
     for i in 0..batch {
         let j = i + batch; // positive pair
-        // i's loss: i vs j
-        let max_i = (0..n).filter(|&k| k != i).map(|k| sim[i * n + k])
+                           // i's loss: i vs j
+        let max_i = (0..n)
+            .filter(|&k| k != i)
+            .map(|k| sim[i * n + k])
             .fold(f64::NEG_INFINITY, f64::max);
-        let log_sum_i = max_i + (0..n).filter(|&k| k != i)
-            .map(|k| (sim[i * n + k] - max_i).exp()).sum::<f64>().ln();
+        let log_sum_i = max_i
+            + (0..n)
+                .filter(|&k| k != i)
+                .map(|k| (sim[i * n + k] - max_i).exp())
+                .sum::<f64>()
+                .ln();
         loss += log_sum_i - sim[i * n + j];
         // j's loss: j vs i
-        let max_j = (0..n).filter(|&k| k != j).map(|k| sim[j * n + k])
+        let max_j = (0..n)
+            .filter(|&k| k != j)
+            .map(|k| sim[j * n + k])
             .fold(f64::NEG_INFINITY, f64::max);
-        let log_sum_j = max_j + (0..n).filter(|&k| k != j)
-            .map(|k| (sim[j * n + k] - max_j).exp()).sum::<f64>().ln();
+        let log_sum_j = max_j
+            + (0..n)
+                .filter(|&k| k != j)
+                .map(|k| (sim[j * n + k] - max_j).exp())
+                .sum::<f64>()
+                .ln();
         loss += log_sum_j - sim[j * n + i];
     }
     Ok(loss / (2.0 * batch as f64))
@@ -356,7 +411,9 @@ mod tests {
     fn test_attention_rollout_identity() {
         // Single identity layer should produce identity rollout
         let n = 3;
-        let attn: Vec<f64> = (0..n*n).map(|i| if i/n == i%n { 1.0 } else { 0.0 }).collect();
+        let attn: Vec<f64> = (0..n * n)
+            .map(|i| if i / n == i % n { 1.0 } else { 0.0 })
+            .collect();
         let rollout = attention_rollout(&attn, n, 1).unwrap();
         assert_eq!(rollout.len(), n * n);
         // Should remain identity-like after residual weighting
@@ -390,8 +447,10 @@ mod tests {
 
     #[test]
     fn test_top_k_accuracy_top1() {
-        let logits = vec![0.1, 0.9, 0.0, 0.0, // sample 0 → class 1 highest
-                          0.0, 0.0, 0.8, 0.2]; // sample 1 → class 2 highest
+        let logits = vec![
+            0.1, 0.9, 0.0, 0.0, // sample 0 → class 1 highest
+            0.0, 0.0, 0.8, 0.2,
+        ]; // sample 1 → class 2 highest
         let labels = vec![1usize, 2];
         let acc = top_k_accuracy(&logits, &labels, 2, 4, 1).unwrap();
         assert!((acc - 1.0).abs() < 1e-10);
@@ -518,7 +577,9 @@ mod tests {
     fn test_interpolate_2d_constant_field() {
         let grid = vec![5.0f64; 9]; // 3x3 all 5s
         let out = interpolate_2d(&grid, 3, 3, 6, 6).unwrap();
-        for &v in &out { assert!((v - 5.0).abs() < 1e-9); }
+        for &v in &out {
+            assert!((v - 5.0).abs() < 1e-9);
+        }
     }
 
     #[test]
@@ -526,9 +587,13 @@ mod tests {
         // Delta distribution → entropy = 0
         let n = 4;
         let mut attn = vec![0.0f64; n * n];
-        for r in 0..n { attn[r * n] = 1.0; } // all weight on token 0
+        for r in 0..n {
+            attn[r * n] = 1.0;
+        } // all weight on token 0
         let entropies = attention_entropy(&attn, n).unwrap();
-        for &e in &entropies { assert!(e.abs() < 1e-9); }
+        for &e in &entropies {
+            assert!(e.abs() < 1e-9);
+        }
     }
 
     #[test]

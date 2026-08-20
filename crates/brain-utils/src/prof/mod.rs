@@ -3,15 +3,15 @@
 //! Production-grade profiling infrastructure providing scoped timers,
 //! call trees, memory counters, flame graph exports, and profiling sessions.
 
-pub mod timer;
-pub mod scope;
 pub mod counters;
+pub mod scope;
+pub mod timer;
 
+use self::counters::CounterSet;
+use self::timer::{TimingStats, TimingTree};
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex, RwLock};
 use std::time::Duration;
-use self::timer::{TimingStats, TimingTree};
-use self::counters::CounterSet;
 
 /// Profiler configuration options.
 #[derive(Debug, Clone, PartialEq)]
@@ -71,7 +71,10 @@ impl Profiler {
 
     /// Gets summary statistics for all spans.
     pub fn get_stats(&self) -> BTreeMap<String, TimingStats> {
-        self.tree.lock().map(|t| t.get_all_stats()).unwrap_or_default()
+        self.tree
+            .lock()
+            .map(|t| t.get_all_stats())
+            .unwrap_or_default()
     }
 
     /// Returns a reference to the counter set.
@@ -98,15 +101,15 @@ mod tests {
         let prof = Profiler::default_profiler();
         prof.record_span("forward_pass", Duration::from_micros(150));
         prof.record_span("backward_pass", Duration::from_micros(300));
-        
+
         let stats = prof.get_stats();
         assert!(stats.contains_key("forward_pass"));
         assert!(stats.contains_key("backward_pass"));
         assert_eq!(stats.get("forward_pass").unwrap().count, 1);
-        
+
         prof.counters().get_counter("batches_processed").inc();
         assert_eq!(prof.counters().get_counter("batches_processed").get(), 1);
-        
+
         prof.reset();
         let reset_stats = prof.get_stats();
         assert!(reset_stats.is_empty());

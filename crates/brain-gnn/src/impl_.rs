@@ -3,8 +3,8 @@
 //! Execution wrappers: `forward_node`, `forward_graph`, `embed`, `predict`.
 #![allow(missing_docs)]
 
-use brain_core::Tensor;
 use crate::graph::Graph;
+use brain_core::Tensor;
 
 /// Simple linear transformation of node features: X * W + b.
 pub fn transform_node_features(x: &Tensor, weight: &Tensor, bias: Option<&Tensor>) -> Tensor {
@@ -41,7 +41,13 @@ pub fn embed_nodes(graph: &Graph, weights: &[Tensor]) -> Tensor {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

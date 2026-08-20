@@ -1,7 +1,16 @@
 //! # Action Selection Policies & Exploration Schedules
 //!
 //! Universal Policy trait, Epsilon-Greedy policies, and linear/exponential exploration schedules.
-#![allow(missing_docs, clippy::excessive_precision, clippy::approx_constant, clippy::needless_range_loop, clippy::too_many_arguments, clippy::manual_is_multiple_of, clippy::manual_div_ceil, clippy::doc_markdown)]
+#![allow(
+    missing_docs,
+    clippy::excessive_precision,
+    clippy::approx_constant,
+    clippy::needless_range_loop,
+    clippy::too_many_arguments,
+    clippy::manual_is_multiple_of,
+    clippy::manual_div_ceil,
+    clippy::doc_markdown
+)]
 
 pub mod dist;
 pub mod gaussian;
@@ -15,15 +24,27 @@ use brain_core::Tensor;
 #[derive(Debug, Clone, PartialEq)]
 pub enum EpsilonSchedule {
     Constant(f64),
-    Linear { start: f64, end: f64, decay_steps: usize },
-    Exponential { start: f64, end: f64, decay_rate: f64 },
+    Linear {
+        start: f64,
+        end: f64,
+        decay_steps: usize,
+    },
+    Exponential {
+        start: f64,
+        end: f64,
+        decay_rate: f64,
+    },
 }
 
 impl EpsilonSchedule {
     pub fn get_epsilon(&self, step: usize) -> f64 {
         match self {
             EpsilonSchedule::Constant(eps) => *eps,
-            EpsilonSchedule::Linear { start, end, decay_steps } => {
+            EpsilonSchedule::Linear {
+                start,
+                end,
+                decay_steps,
+            } => {
                 if step >= *decay_steps {
                     *end
                 } else {
@@ -31,7 +52,11 @@ impl EpsilonSchedule {
                     start + (end - start) * progress
                 }
             }
-            EpsilonSchedule::Exponential { start, end, decay_rate } => {
+            EpsilonSchedule::Exponential {
+                start,
+                end,
+                decay_rate,
+            } => {
                 let eps = start * decay_rate.powi(step as i32);
                 eps.max(*end)
             }
@@ -95,23 +120,35 @@ impl EpsilonGreedyPolicy {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant, clippy::needless_range_loop, clippy::manual_div_ceil, clippy::manual_is_multiple_of, clippy::too_many_arguments, clippy::doc_markdown, clippy::excessive_precision)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant,
+        clippy::needless_range_loop,
+        clippy::manual_div_ceil,
+        clippy::manual_is_multiple_of,
+        clippy::too_many_arguments,
+        clippy::doc_markdown,
+        clippy::excessive_precision
+    )]
     use super::*;
-    use crate::core::*;
-    use crate::env::*;
-    use crate::policy::*;
-    use crate::value::*;
-    use crate::buffer::*;
-    use crate::dqn::*;
-    use crate::ppo::*;
     use crate::a2c::*;
     use crate::actor_critic::*;
-    use crate::sac::*;
     use crate::agents::*;
-    use crate::trainer::*;
-    use crate::eval::*;
+    use crate::buffer::*;
     use crate::checkpoint::*;
+    use crate::core::*;
+    use crate::dqn::*;
+    use crate::env::*;
+    use crate::eval::*;
+    use crate::policy::*;
+    use crate::ppo::*;
+    use crate::sac::*;
+    use crate::trainer::*;
     use crate::utils::*;
+    use crate::value::*;
     use crate::VERSION;
     use brain_core::Tensor;
 }

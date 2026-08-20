@@ -6,10 +6,16 @@ use crate::tensor::Tensor;
 
 /// Pads a tensor according to the specified padding widths and mode.
 pub fn pad(input: &Tensor, pad: &[usize], mode: &str, value: f64) -> Tensor {
-    assert!(pad.len() % 2 == 0, "pad must contain pairs of (before, after)");
+    assert!(
+        pad.len() % 2 == 0,
+        "pad must contain pairs of (before, after)"
+    );
     let num_padded_dims = pad.len() / 2;
     let rank = input.ndim();
-    assert!(num_padded_dims <= rank, "Cannot pad more dimensions than tensor rank");
+    assert!(
+        num_padded_dims <= rank,
+        "Cannot pad more dimensions than tensor rank"
+    );
 
     let mut new_shape = input.shape().to_vec();
     for i in 0..num_padded_dims {
@@ -52,7 +58,8 @@ pub fn pad(input: &Tensor, pad: &[usize], mode: &str, value: f64) -> Tensor {
                         };
                     }
                     "circular" => {
-                        let idx = (cur_coord as isize - p_before as isize).rem_euclid(orig_len as isize);
+                        let idx =
+                            (cur_coord as isize - p_before as isize).rem_euclid(orig_len as isize);
                         src_coords[dim] = idx as usize;
                     }
                     _ => {}

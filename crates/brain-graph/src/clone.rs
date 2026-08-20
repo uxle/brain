@@ -3,8 +3,8 @@
 //! Deep copy of graphs with complete node and value identifier remapping.
 #![allow(missing_docs)]
 
-use std::collections::HashMap;
 use crate::ir::GraphIr;
+use std::collections::HashMap;
 
 /// Clones a subgraph containing the specified node IDs.
 pub fn clone_subgraph(graph: &GraphIr, node_ids: &[usize]) -> GraphIr {
@@ -42,7 +42,13 @@ pub fn clone_subgraph(graph: &GraphIr, node_ids: &[usize]) -> GraphIr {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

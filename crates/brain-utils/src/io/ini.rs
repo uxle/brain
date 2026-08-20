@@ -3,8 +3,8 @@
 //! Provides parsing and generation of INI configuration files supporting
 //! sections, comments, key-value pairs, and typed value conversions.
 
-use std::collections::BTreeMap;
 use crate::core::UtilsResult;
+use std::collections::BTreeMap;
 
 /// INI configuration file AST representation.
 #[derive(Debug, Clone, PartialEq, Default)]
@@ -30,17 +30,23 @@ impl IniFile {
 
     /// Retrieves string value.
     pub fn get(&self, section: &str, key: &str) -> Option<&str> {
-        self.sections.get(section).and_then(|sec| sec.get(key).map(|s| s.as_str()))
+        self.sections
+            .get(section)
+            .and_then(|sec| sec.get(key).map(|s| s.as_str()))
     }
 
     /// Retrieves and parses integer value.
     pub fn get_i64(&self, section: &str, key: &str, default: i64) -> i64 {
-        self.get(section, key).and_then(|v| v.parse::<i64>().ok()).unwrap_or(default)
+        self.get(section, key)
+            .and_then(|v| v.parse::<i64>().ok())
+            .unwrap_or(default)
     }
 
     /// Retrieves and parses float value.
     pub fn get_f64(&self, section: &str, key: &str, default: f64) -> f64 {
-        self.get(section, key).and_then(|v| v.parse::<f64>().ok()).unwrap_or(default)
+        self.get(section, key)
+            .and_then(|v| v.parse::<f64>().ok())
+            .unwrap_or(default)
     }
 
     /// Retrieves and parses boolean value.
@@ -98,14 +104,15 @@ mod tests {
 
     #[test]
     fn test_ini_parser_and_sections_1() {
-        let ini_text = "[server]\nhost = 127.0.0.1\nport = 8080\nenabled = true\n\n[model]\nlayers = 24\n";
+        let ini_text =
+            "[server]\nhost = 127.0.0.1\nport = 8080\nenabled = true\n\n[model]\nlayers = 24\n";
         let ini = IniFile::parse(ini_text).unwrap();
-    
+
         assert_eq!(ini.get("server", "host"), Some("127.0.0.1"));
         assert_eq!(ini.get_i64("server", "port", 80), 8080);
         assert!(ini.get_bool("server", "enabled", false));
         assert_eq!(ini.get_i64("model", "layers", 12), 24);
-    
+
         let serialized = ini.serialize();
         assert!(serialized.contains("[server]"));
         assert!(serialized.contains("port = 8080"));

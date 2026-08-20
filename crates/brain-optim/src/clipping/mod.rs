@@ -3,12 +3,12 @@
 //! Numerical gradient stabilization strategies including global norm clipping, value clipping, and adaptive clipping.
 #![allow(missing_docs)]
 
-pub mod norm;
 pub mod adaptive;
+pub mod norm;
 
+pub use adaptive::{clip_grad_adaptive_, AdaptiveClipConfig, AGC};
 use brain_core::Tensor;
 pub use norm::{clip_grad_norm_, clip_grad_value_, ClipConfig, NormType};
-pub use adaptive::{clip_grad_adaptive_, AdaptiveClipConfig, AGC};
 
 /// Clipping operation mode.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -90,7 +90,13 @@ impl GradClipper {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

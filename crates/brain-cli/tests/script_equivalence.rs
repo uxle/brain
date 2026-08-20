@@ -16,5 +16,9 @@ z = add(x, y)
     assert_eq!(code, ExitCode::SUCCESS);
 
     let output = sink.captured().unwrap_or_default();
-    assert!(output.contains("z = [2, 2]"), "Expected output to contain z = [2, 2], got: {}", output);
+    assert!(
+        output.contains("z = [2, 2]"),
+        "Expected output to contain z = [2, 2], got: {}",
+        output
+    );
 }

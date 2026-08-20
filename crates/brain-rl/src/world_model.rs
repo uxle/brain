@@ -2,8 +2,8 @@
 //!
 //! Predicts next state $\hat{s}_{t+1}$ and reward $\hat{r}_t$ from current state $s_t$ and action $a_t$.
 
-use brain_core::Tensor;
 use crate::core::{RlError, RlResult};
+use brain_core::Tensor;
 
 /// Transition and reward prediction from the world model.
 #[derive(Debug, Clone)]
@@ -33,7 +33,7 @@ impl WorldModel {
     pub fn new(state_dim: usize, action_dim: usize, hidden_dim: usize) -> Self {
         let in_dim = state_dim + action_dim;
         let scale = (2.0 / in_dim as f64).sqrt();
-        
+
         let w_embed_data: Vec<f64> = (0..hidden_dim * in_dim)
             .map(|i| ((i as f64 * 0.1337).sin()) * scale)
             .collect();
@@ -63,10 +63,16 @@ impl WorldModel {
         let a_data = action.data();
 
         if s_data.len() != self.state_dim {
-            return Err(RlError::InvalidStateShape { expected: vec![self.state_dim], found: state.shape().to_vec() });
+            return Err(RlError::InvalidStateShape {
+                expected: vec![self.state_dim],
+                found: state.shape().to_vec(),
+            });
         }
         if a_data.len() != self.action_dim {
-            return Err(RlError::InvalidStateShape { expected: vec![self.action_dim], found: action.shape().to_vec() });
+            return Err(RlError::InvalidStateShape {
+                expected: vec![self.action_dim],
+                found: action.shape().to_vec(),
+            });
         }
 
         // Concatenate state and action
@@ -115,7 +121,13 @@ impl WorldModel {
     }
 
     /// Computes transition and reward MSE losses for supervised updates.
-    pub fn loss(&self, state: &Tensor, action: &Tensor, target_next_state: &Tensor, target_reward: f64) -> RlResult<f64> {
+    pub fn loss(
+        &self,
+        state: &Tensor,
+        action: &Tensor,
+        target_next_state: &Tensor,
+        target_reward: f64,
+    ) -> RlResult<f64> {
         let pred = self.predict(state, action)?;
         let s_pred = pred.next_state.data();
         let s_target = target_next_state.data();
@@ -124,7 +136,8 @@ impl WorldModel {
             .iter()
             .zip(s_target.iter())
             .map(|(p, t)| (p - t).powi(2))
-            .sum::<f64>() / (self.state_dim as f64);
+            .sum::<f64>()
+            / (self.state_dim as f64);
 
         let reward_mse = (pred.reward - target_reward).powi(2);
         Ok(state_mse + 0.5 * reward_mse)

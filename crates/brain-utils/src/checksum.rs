@@ -99,10 +99,10 @@ mod tests {
         let data = b"123456789";
         let crc = Crc32::compute(data);
         assert_eq!(crc, 0xCBF43926); // Standard CRC32 IEEE test vector
-    
+
         let adler = Adler32::compute(data);
         assert_eq!(adler, 0x091E01DE); // Standard Adler32 test vector
-    
+
         let mut stream_crc = Crc32::new();
         stream_crc.update(b"12345");
         stream_crc.update(b"6789");

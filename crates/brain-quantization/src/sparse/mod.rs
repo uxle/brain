@@ -1,12 +1,19 @@
 //! # Sparse Matrix Representation
 //!
 //! Compressed Sparse Row (CSR), Compressed Sparse Column (CSC), and Coordinate (COO) sparse matrix representations.
-#![allow(missing_docs, clippy::needless_range_loop, clippy::too_many_arguments, clippy::manual_is_multiple_of, clippy::manual_div_ceil, clippy::doc_markdown)]
+#![allow(
+    missing_docs,
+    clippy::needless_range_loop,
+    clippy::too_many_arguments,
+    clippy::manual_is_multiple_of,
+    clippy::manual_div_ceil,
+    clippy::doc_markdown
+)]
 
 pub mod ops;
 
-use brain_core::Tensor;
 use super::core::{QuantError, QuantResult};
+use brain_core::Tensor;
 
 /// Compressed Sparse Row (CSR) matrix representation.
 #[derive(Debug, Clone, PartialEq)]
@@ -91,7 +98,13 @@ impl CsrMatrix {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

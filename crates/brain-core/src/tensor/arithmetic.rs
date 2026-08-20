@@ -172,10 +172,17 @@ pub fn rpow_scalar(scalar: f64, a: &Tensor) -> Tensor {
 
 /// Standard matrix multiplication (2D x 2D or broadcasted batched).
 pub fn matmul(a: &Tensor, b: &Tensor) -> Tensor {
-    assert!(a.ndim() >= 2 && b.ndim() >= 2, "matmul requires at least 2D tensors");
+    assert!(
+        a.ndim() >= 2 && b.ndim() >= 2,
+        "matmul requires at least 2D tensors"
+    );
     let (m, k_a) = (a.shape()[a.ndim() - 2], a.shape()[a.ndim() - 1]);
     let (k_b, n) = (b.shape()[b.ndim() - 2], b.shape()[b.ndim() - 1]);
-    assert_eq!(k_a, k_b, "Inner matrix dimensions must agree: {} != {}", k_a, k_b);
+    assert_eq!(
+        k_a, k_b,
+        "Inner matrix dimensions must agree: {} != {}",
+        k_a, k_b
+    );
 
     let num_threads = std::thread::available_parallelism()
         .map(|x| x.get())
@@ -198,7 +205,15 @@ pub fn matmul(a: &Tensor, b: &Tensor) -> Tensor {
                     let row_count = out_chunk.len() / n;
                     if row_count > 0 {
                         s.spawn(move || {
-                            gemm_2d_tile(a_slice, b_slice, out_chunk, k_a, n, row_start, row_start + row_count);
+                            gemm_2d_tile(
+                                a_slice,
+                                b_slice,
+                                out_chunk,
+                                k_a,
+                                n,
+                                row_start,
+                                row_start + row_count,
+                            );
                         });
                     }
                 }
@@ -212,7 +227,8 @@ pub fn matmul(a: &Tensor, b: &Tensor) -> Tensor {
         let batch_shape = crate::shape::Shape::broadcast_shapes(&[
             &crate::shape::Shape::from_dims(batch_a),
             &crate::shape::Shape::from_dims(batch_b),
-        ]).expect("Batch shapes must be broadcastable");
+        ])
+        .expect("Batch shapes must be broadcastable");
 
         let max_ndim = batch_shape.ndim();
 
@@ -267,14 +283,18 @@ pub fn matmul(a: &Tensor, b: &Tensor) -> Tensor {
             let b_shape_ref = &batch_shape;
 
             std::thread::scope(|s| {
-                for (t_idx, out_chunk) in out_data.chunks_mut(batches_per_thread * matrix_size).enumerate() {
+                for (t_idx, out_chunk) in out_data
+                    .chunks_mut(batches_per_thread * matrix_size)
+                    .enumerate()
+                {
                     let b_start = t_idx * batches_per_thread;
                     let b_len = out_chunk.len() / matrix_size;
 
                     s.spawn(move || {
                         for local_b in 0..b_len {
                             let global_b = b_start + local_b;
-                            let out_matrix = &mut out_chunk[local_b * matrix_size..(local_b + 1) * matrix_size];
+                            let out_matrix =
+                                &mut out_chunk[local_b * matrix_size..(local_b + 1) * matrix_size];
                             compute_batch_gemm(
                                 global_b,
                                 max_ndim,
@@ -417,13 +437,25 @@ pub fn baddbmm(mat: &Tensor, a: &Tensor, b: &Tensor, beta: f64, alpha: f64) -> T
 pub fn dot(a: &Tensor, b: &Tensor) -> f64 {
     assert!(a.ndim() == 1 && b.ndim() == 1, "dot requires 1D vectors");
     assert_eq!(a.numel(), b.numel(), "Vectors must have same length");
-    a.data().iter().zip(b.data().iter()).map(|(&x, &y)| x * y).sum()
+    a.data()
+        .iter()
+        .zip(b.data().iter())
+        .map(|(&x, &y)| x * y)
+        .sum()
 }
 
 /// Matrix-vector product: (M, N) x (N,) -> (M,).
 pub fn matvec(a: &Tensor, v: &Tensor) -> Tensor {
-    assert!(a.ndim() == 2, "matvec requires a 2D matrix, got {}D", a.ndim());
-    assert!(v.ndim() == 1, "matvec requires a 1D vector, got {}D", v.ndim());
+    assert!(
+        a.ndim() == 2,
+        "matvec requires a 2D matrix, got {}D",
+        a.ndim()
+    );
+    assert!(
+        v.ndim() == 1,
+        "matvec requires a 1D vector, got {}D",
+        v.ndim()
+    );
     let (m, k) = (a.shape()[0], a.shape()[1]);
     assert_eq!(v.shape()[0], k, "Matrix columns must match vector length");
     let mut out_data = vec![0.0; m];
@@ -457,12 +489,22 @@ pub fn outer(a: &Tensor, b: &Tensor) -> Tensor {
 /// Cosine similarity of two equal-shaped tensors along a dimension: dot / (||a|| * ||b||).
 /// Zero-norm pairs yield 0.0.
 pub fn cosine_similarity(a: &Tensor, b: &Tensor, dim: usize) -> Tensor {
-    assert_eq!(a.shape(), b.shape(), "cosine_similarity requires equal shapes");
+    assert_eq!(
+        a.shape(),
+        b.shape(),
+        "cosine_similarity requires equal shapes"
+    );
     assert!(dim < a.ndim(), "cosine_similarity: dim out of bounds");
     let dim_size = a.shape()[dim];
     assert!(dim_size > 0, "cosine_similarity: empty reduction dim");
 
-    let out_shape: Vec<usize> = a.shape().iter().enumerate().filter(|(d, _)| *d != dim).map(|(_, &s)| s).collect();
+    let out_shape: Vec<usize> = a
+        .shape()
+        .iter()
+        .enumerate()
+        .filter(|(d, _)| *d != dim)
+        .map(|(_, &s)| s)
+        .collect();
     let out_numel: usize = out_shape.iter().product();
     let mut dot_acc = vec![0.0; out_numel];
     let mut aa_acc = vec![0.0; out_numel];
@@ -501,7 +543,11 @@ pub fn cosine_similarity(a: &Tensor, b: &Tensor, dim: usize) -> Tensor {
 /// 3D vector cross product along the last dimension of size 3.
 pub fn cross(a: &Tensor, b: &Tensor) -> Tensor {
     assert_eq!(a.shape(), b.shape(), "Shapes must match for cross product");
-    assert_eq!(a.shape().last(), Some(&3), "Last dimension must be 3 for cross product");
+    assert_eq!(
+        a.shape().last(),
+        Some(&3),
+        "Last dimension must be 3 for cross product"
+    );
 
     let num_vecs = a.numel() / 3;
     let mut out_data = Vec::with_capacity(a.numel());
@@ -547,7 +593,11 @@ pub fn kron(a: &Tensor, b: &Tensor) -> Tensor {
 /// Multi-axis tensor contraction (tensordot).
 pub fn tensordot(a: &Tensor, b: &Tensor, axes: (&[usize], &[usize])) -> Tensor {
     let (axes_a, axes_b) = axes;
-    assert_eq!(axes_a.len(), axes_b.len(), "Contraction axes count must match");
+    assert_eq!(
+        axes_a.len(),
+        axes_b.len(),
+        "Contraction axes count must match"
+    );
 
     let a_shape = a.shape();
     let b_shape = b.shape();
@@ -575,8 +625,12 @@ pub fn tensordot(a: &Tensor, b: &Tensor, axes: (&[usize], &[usize])) -> Tensor {
     let mut perm_b = axes_b.to_vec();
     perm_b.extend_from_slice(&free_b);
 
-    let a_perm = a.permute(&perm_a).reshape(vec![m_size.max(1), k_size.max(1)]);
-    let b_perm = b.permute(&perm_b).reshape(vec![k_size.max(1), n_size.max(1)]);
+    let a_perm = a
+        .permute(&perm_a)
+        .reshape(vec![m_size.max(1), k_size.max(1)]);
+    let b_perm = b
+        .permute(&perm_b)
+        .reshape(vec![k_size.max(1), n_size.max(1)]);
 
     let c_mat = matmul(&a_perm, &b_perm);
 
@@ -716,7 +770,7 @@ mod tests {
     fn test_nan_inf_propagation() {
         let a = Tensor::from_slice(&[f64::NAN, 1.0, f64::INFINITY], vec![3]);
         let b = Tensor::from_slice(&[2.0, 3.0, 4.0], vec![3]);
-        
+
         let c_add = add(&a, &b);
         assert!(c_add.get(0).is_nan());
         assert_eq!(c_add.get(1), 4.0);

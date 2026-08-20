@@ -3,10 +3,10 @@
 //! Direct helper functions to construct and apply graph operations.
 #![allow(missing_docs)]
 
-use brain_core::Tensor;
-use crate::core::ValueId;
 use crate::builder::GraphBuilder;
+use crate::core::ValueId;
 use crate::ir::ops::OpKind;
+use brain_core::Tensor;
 
 /// Adds an addition node to the builder.
 pub fn graph_add(builder: &mut GraphBuilder, a: ValueId, b: ValueId, shape: Vec<usize>) -> ValueId {
@@ -14,7 +14,12 @@ pub fn graph_add(builder: &mut GraphBuilder, a: ValueId, b: ValueId, shape: Vec<
 }
 
 /// Adds a matrix multiplication node to the builder.
-pub fn graph_matmul(builder: &mut GraphBuilder, a: ValueId, b: ValueId, shape: Vec<usize>) -> ValueId {
+pub fn graph_matmul(
+    builder: &mut GraphBuilder,
+    a: ValueId,
+    b: ValueId,
+    shape: Vec<usize>,
+) -> ValueId {
     builder.add_node("matmul", OpKind::MatMul, vec![a, b], shape)
 }
 
@@ -27,13 +32,25 @@ pub fn graph_relu(builder: &mut GraphBuilder, a: ValueId, shape: Vec<usize>) -> 
 pub fn op_apply(op: OpKind, inputs: &[&Tensor]) -> Tensor {
     match op {
         OpKind::Add => {
-            if inputs.len() >= 2 { inputs[0] + inputs[1] } else { Tensor::zeros(vec![1]) }
+            if inputs.len() >= 2 {
+                inputs[0] + inputs[1]
+            } else {
+                Tensor::zeros(vec![1])
+            }
         }
         OpKind::Sub => {
-            if inputs.len() >= 2 { inputs[0] - inputs[1] } else { Tensor::zeros(vec![1]) }
+            if inputs.len() >= 2 {
+                inputs[0] - inputs[1]
+            } else {
+                Tensor::zeros(vec![1])
+            }
         }
         OpKind::Mul => {
-            if inputs.len() >= 2 { inputs[0] * inputs[1] } else { Tensor::zeros(vec![1]) }
+            if inputs.len() >= 2 {
+                inputs[0] * inputs[1]
+            } else {
+                Tensor::zeros(vec![1])
+            }
         }
         OpKind::MatMul => {
             if inputs.len() >= 2
@@ -70,7 +87,11 @@ pub fn op_apply(op: OpKind, inputs: &[&Tensor]) -> Tensor {
         }
         OpKind::Sigmoid => {
             if let Some(t) = inputs.first() {
-                let data: Vec<f64> = t.to_vec().iter().map(|&v| 1.0 / (1.0 + (-v).exp())).collect();
+                let data: Vec<f64> = t
+                    .to_vec()
+                    .iter()
+                    .map(|&v| 1.0 / (1.0 + (-v).exp()))
+                    .collect();
                 Tensor::from_vec(data, t.shape().to_vec())
             } else {
                 Tensor::zeros(vec![1])
@@ -82,10 +103,16 @@ pub fn op_apply(op: OpKind, inputs: &[&Tensor]) -> Tensor {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
-    use brain_core::Tensor;
-    use crate::core::DType;
     use crate::builder::GraphBuilder;
+    use crate::core::DType;
     use crate::ir::ops::OpKind;
+    use brain_core::Tensor;
 }

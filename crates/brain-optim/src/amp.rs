@@ -3,8 +3,8 @@
 //! Dynamic loss scaling preventing gradient underflow in reduced-precision training.
 #![allow(missing_docs)]
 
+use crate::optimizer::{OptimResult, Optimizer, StepInfo};
 use brain_core::Tensor;
-use crate::optimizer::{Optimizer, OptimResult, StepInfo};
 
 /// Configuration settings for dynamic loss scaling.
 #[derive(Debug, Clone, PartialEq)]
@@ -80,7 +80,12 @@ impl GradScaler {
     }
 
     /// Advances optimizer step if no overflow occurred; adjusts loss scale factor accordingly.
-    pub fn step(&mut self, optimizer: &mut dyn Optimizer, params: &mut [Tensor], grads: &mut [Tensor]) -> OptimResult<Option<StepInfo>> {
+    pub fn step(
+        &mut self,
+        optimizer: &mut dyn Optimizer,
+        params: &mut [Tensor],
+        grads: &mut [Tensor],
+    ) -> OptimResult<Option<StepInfo>> {
         if !self.config.enabled {
             return optimizer.step(params, grads).map(Some);
         }
@@ -105,7 +110,13 @@ impl GradScaler {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

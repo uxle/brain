@@ -28,30 +28,30 @@
     clippy::type_complexity
 )]
 
-pub mod core;
-pub mod config;
-pub mod ops;
-pub mod utils;
-pub mod r#impl;
-pub mod feature;
-pub mod augment;
-pub mod io;
-pub mod resample;
-pub mod vad;
 pub mod align;
-pub mod encoding;
-pub mod denoise;
-pub mod features_pitch;
-pub mod features_energy;
-pub mod features_rhythm;
+pub mod augment;
 pub mod batch;
+pub mod config;
+pub mod core;
+pub mod denoise;
+pub mod encoding;
+pub mod feature;
+pub mod features_energy;
+pub mod features_pitch;
+pub mod features_rhythm;
+pub mod r#impl;
+pub mod io;
+pub mod ops;
+pub mod resample;
+pub mod utils;
+pub mod vad;
 
 /// Audio prelude for convenient imports.
 pub mod prelude {
-    pub use crate::core::{AudioBuffer, Channels, SampleRate, AudioFormat};
-    pub use crate::config::{STFTConfig, MelConfig, MFCCConfig, WindowType};
-    pub use crate::feature::{stft, istft, spectrogram, mel_spectrogram, mfcc};
-    pub use crate::augment::{time_stretch, pitch_shift, spec_augment};
+    pub use crate::augment::{pitch_shift, spec_augment, time_stretch};
+    pub use crate::config::{MFCCConfig, MelConfig, STFTConfig, WindowType};
+    pub use crate::core::{AudioBuffer, AudioFormat, Channels, SampleRate};
+    pub use crate::feature::{istft, mel_spectrogram, mfcc, spectrogram, stft};
     pub use crate::io::{read_wav, write_wav};
     pub use crate::resample::{resample_audio, ResampleMethod};
 }

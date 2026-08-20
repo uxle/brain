@@ -38,18 +38,22 @@ pub mod server;
 pub mod transform;
 pub mod utils;
 
-pub use analyze::{cosine_similarity_deltas, estimate_heterogeneity, communication_cost_bytes};
+pub use analyze::{communication_cost_bytes, cosine_similarity_deltas, estimate_heterogeneity};
 pub use builder::FedSystemBuilder;
 pub use client::{ClientConfig, ClientReport, LocalTrainer};
-pub use compression::{QuantConfig, SparseConfig, quantize_tensor, dequantize_tensor, top_k_sparsify};
+pub use compression::{
+    dequantize_tensor, quantize_tensor, top_k_sparsify, QuantConfig, SparseConfig,
+};
 pub use compute::{clip_grad_norm, global_grad_norm, multiply_accumulate};
 pub use config::FedConfig;
-pub use core::{ClientId, ModelDelta, ClientMetrics, ServerMetrics, RoundId};
+pub use core::{ClientId, ClientMetrics, ModelDelta, RoundId, ServerMetrics};
+pub use impl_::run_round;
 pub use monitor::FedMonitor;
 pub use ops::{l2_norm_delta, scale_delta};
-pub use privacy::{DpConfig, GaussianNoise, SecureAggregator, add_dp_noise, mask_tensor};
+pub use privacy::{add_dp_noise, mask_tensor, DpConfig, GaussianNoise, SecureAggregator};
 pub use process::{apply_weight_decay, cosine_lr, mse_eval};
-pub use server::{AggregationAlgorithm, FederatedServer, RoundStats, ServerConfig, fed_avg_aggregate};
+pub use server::{
+    fed_avg_aggregate, AggregationAlgorithm, FederatedServer, RoundStats, ServerConfig,
+};
 pub use transform::{normalize_weights, polyak_average};
 pub use utils::{sample_clients, stddev};
-pub use impl_::run_round;

@@ -61,7 +61,11 @@ impl LognormalDistribution {
 
     /// Fits a Lognormal distribution to strictly positive empirical samples.
     pub fn fit(samples: &[f64]) -> Self {
-        let valid_logs: Vec<f64> = samples.iter().filter(|&&x| x > 0.0).map(|&x| x.ln()).collect();
+        let valid_logs: Vec<f64> = samples
+            .iter()
+            .filter(|&&x| x > 0.0)
+            .map(|&x| x.ln())
+            .collect();
         if valid_logs.is_empty() {
             return Self::new(0.0, 1.0);
         }

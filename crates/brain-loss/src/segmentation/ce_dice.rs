@@ -3,8 +3,8 @@
 //! Combined Cross-Entropy + Soft Dice loss and Lovász Hinge for image segmentation.
 #![allow(missing_docs)]
 
-use brain_core::Tensor;
 use crate::core::{LossResult, Reduction};
+use brain_core::Tensor;
 
 /// Configuration for segmentation losses.
 #[derive(Debug, Clone)]
@@ -67,7 +67,13 @@ impl CEDiceLoss {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

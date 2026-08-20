@@ -3,17 +3,19 @@
 //! Removes nodes and values that do not contribute to any graph outputs.
 #![allow(missing_docs)]
 
-use std::collections::HashSet;
+use super::GraphPass;
 use crate::core::GraphResult;
 use crate::ir::GraphIr;
-use super::GraphPass;
+use std::collections::HashSet;
 
 /// Dead Code Elimination pass.
 #[derive(Debug, Default)]
 pub struct DeadCodeElimPass;
 
 impl GraphPass for DeadCodeElimPass {
-    fn name(&self) -> &'static str { "DeadCodeElimination" }
+    fn name(&self) -> &'static str {
+        "DeadCodeElimination"
+    }
 
     fn run(&mut self, graph: &mut GraphIr) -> GraphResult<bool> {
         eliminate_dead_code(graph)
@@ -50,7 +52,13 @@ pub fn eliminate_dead_code(graph: &mut GraphIr) -> GraphResult<bool> {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

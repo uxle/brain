@@ -69,10 +69,7 @@ pub fn run_make_command(args: &[String], sink: &OutputSink) -> ExitCode {
         }
     };
 
-    let arch_name = matches
-        .get_option("arch")
-        .unwrap_or("mlp")
-        .to_lowercase();
+    let arch_name = matches.get_option("arch").unwrap_or("mlp").to_lowercase();
 
     // Determine output classes.
     let n_classes = if let Some(c) = matches.get_option("classes") {
@@ -106,10 +103,7 @@ pub fn run_make_command(args: &[String], sink: &OutputSink) -> ExitCode {
         .unwrap_or(8)
         .max(1);
 
-    let optim_name = matches
-        .get_option("optim")
-        .unwrap_or("sgd")
-        .to_lowercase();
+    let optim_name = matches.get_option("optim").unwrap_or("sgd").to_lowercase();
     if optim_name != "sgd" {
         sink.println(&format!(
             "warning: optimizer '{}' is not supported in current trainer, falling back to 'sgd'",
@@ -146,7 +140,11 @@ pub fn run_make_command(args: &[String], sink: &OutputSink) -> ExitCode {
     let (model, is_conv, arch_desc) = if arch_name == "convnet" {
         // Try square image layout
         let side = (dataset.n_features as f64).sqrt().round() as usize;
-        let s = if side * side == dataset.n_features && side >= 3 { side } else { 6 };
+        let s = if side * side == dataset.n_features && side >= 3 {
+            side
+        } else {
+            6
+        };
         let conv_out_h = brain_core::Shape::output_dim(s, 1, 3, 1, 1);
         let conv_out_w = brain_core::Shape::output_dim(s, 1, 3, 1, 1);
         let pool_out_h = brain_core::Shape::output_dim(conv_out_h, 0, 2, 2, 1);
@@ -193,7 +191,11 @@ pub fn run_make_command(args: &[String], sink: &OutputSink) -> ExitCode {
         }
         let input_shape = if is_conv {
             let side = (dataset.n_features as f64).sqrt().round() as usize;
-            let s = if side * side == dataset.n_features && side >= 3 { side } else { 6 };
+            let s = if side * side == dataset.n_features && side >= 3 {
+                side
+            } else {
+                6
+            };
             if batch_data.len() == count * s * s {
                 vec![count, 1, s, s]
             } else {
@@ -229,9 +231,7 @@ pub fn run_make_command(args: &[String], sink: &OutputSink) -> ExitCode {
 
     // Serialize state + the architecture descriptor so `run` can reconstruct layers.
     let mut state: ModelState = trainer.state();
-    state
-        .metadata
-        .insert("arch".to_string(), arch_desc);
+    state.metadata.insert("arch".to_string(), arch_desc);
     state
         .metadata
         .insert("n_features".to_string(), dataset.n_features.to_string());
@@ -244,6 +244,10 @@ pub fn run_make_command(args: &[String], sink: &OutputSink) -> ExitCode {
         sink.println(&format!("error: could not write '{}': {}", out_path, err));
         return ExitCode::IO_ERROR;
     }
-    sink.println(&format!("wrote model checkpoint: {} ({} bytes)", out_path, bytes.len()));
+    sink.println(&format!(
+        "wrote model checkpoint: {} ({} bytes)",
+        out_path,
+        bytes.len()
+    ));
     ExitCode::SUCCESS
 }

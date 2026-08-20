@@ -1,7 +1,15 @@
 //! # Configuration Models for NLP Pipelines
 //!
 //! Structural configurations for tokenizers, embeddings, sequence processing, and unified pipelines.
-#![allow(missing_docs, unused_imports, unused_variables, dead_code, unused_mut, unused_comparisons, clippy::all)]
+#![allow(
+    missing_docs,
+    unused_imports,
+    unused_variables,
+    dead_code,
+    unused_mut,
+    unused_comparisons,
+    clippy::all
+)]
 
 use crate::core::{TextError, TextResult};
 
@@ -145,11 +153,15 @@ impl TokenizerConfig {
     /// Validates the tokenizer configuration.
     pub fn validate(&self) -> TextResult<()> {
         if self.vocab_size == 0 {
-            return Err(TextError::InvalidConfig("Vocab size cannot be 0".to_string()));
+            return Err(TextError::InvalidConfig(
+                "Vocab size cannot be 0".to_string(),
+            ));
         }
         if let Some(max_len) = self.max_length {
             if max_len == 0 {
-                return Err(TextError::InvalidConfig("Max length cannot be 0".to_string()));
+                return Err(TextError::InvalidConfig(
+                    "Max length cannot be 0".to_string(),
+                ));
             }
         }
         Ok(())
@@ -196,13 +208,19 @@ impl EmbeddingConfig {
     /// Validates the embedding configuration.
     pub fn validate(&self) -> TextResult<()> {
         if self.vocab_size == 0 {
-            return Err(TextError::InvalidConfig("Vocab size must be > 0".to_string()));
+            return Err(TextError::InvalidConfig(
+                "Vocab size must be > 0".to_string(),
+            ));
         }
         if self.embedding_dim == 0 {
-            return Err(TextError::InvalidConfig("Embedding dim must be > 0".to_string()));
+            return Err(TextError::InvalidConfig(
+                "Embedding dim must be > 0".to_string(),
+            ));
         }
         if self.max_position_embeddings == 0 {
-            return Err(TextError::InvalidConfig("Max position embeddings must be > 0".to_string()));
+            return Err(TextError::InvalidConfig(
+                "Max position embeddings must be > 0".to_string(),
+            ));
         }
         Ok(())
     }
@@ -257,7 +275,9 @@ impl TextConfig {
         self.tokenizer.validate()?;
         self.embedding.validate()?;
         if self.process.max_length == 0 {
-            return Err(TextError::InvalidConfig("Process max_length must be > 0".to_string()));
+            return Err(TextError::InvalidConfig(
+                "Process max_length must be > 0".to_string(),
+            ));
         }
         Ok(())
     }
@@ -276,37 +296,51 @@ impl TextConfig {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant, clippy::needless_range_loop, clippy::manual_div_ceil, clippy::manual_is_multiple_of, clippy::too_many_arguments, clippy::doc_markdown, clippy::excessive_precision, clippy::float_cmp, clippy::len_zero)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant,
+        clippy::needless_range_loop,
+        clippy::manual_div_ceil,
+        clippy::manual_is_multiple_of,
+        clippy::too_many_arguments,
+        clippy::doc_markdown,
+        clippy::excessive_precision,
+        clippy::float_cmp,
+        clippy::len_zero
+    )]
     use super::*;
-    use crate::core::*;
-    use crate::config::*;
-    use crate::utils::*;
-    use crate::ops::*;
-    use crate::vocab::*;
-    use crate::text_ops::*;
-    use crate::features::*;
-    use crate::similarity::*;
-    use crate::lm::*;
-    use crate::process::*;
-    use crate::optimize::*;
     use crate::analyze::*;
-    use crate::compute::*;
-    use crate::helper::*;
-    use crate::transform::*;
     use crate::builder::*;
-    use crate::tokenizer::*;
-    use crate::tokenizer::bpe::*;
-    use crate::tokenizer::sentencepiece::*;
-    use crate::tokenizer::wordpiece::*;
-    use crate::tokenizer::char::*;
-    use crate::tokenizer::trainer::*;
-    use crate::tokenizer::normalizer::*;
-    use crate::tokenizer::pretokenizer::*;
-    use crate::tokenizer::bytelevel::*;
-    use crate::tokenizer::post::*;
-    use crate::embedding::*;
-    use crate::embedding::pretrained::*;
+    use crate::compute::*;
+    use crate::config::*;
+    use crate::core::*;
     use crate::embedding::fasttext::*;
+    use crate::embedding::pretrained::*;
+    use crate::embedding::*;
+    use crate::features::*;
+    use crate::helper::*;
+    use crate::lm::*;
+    use crate::ops::*;
+    use crate::optimize::*;
+    use crate::process::*;
+    use crate::similarity::*;
+    use crate::text_ops::*;
+    use crate::tokenizer::bpe::*;
+    use crate::tokenizer::bytelevel::*;
+    use crate::tokenizer::char::*;
+    use crate::tokenizer::normalizer::*;
+    use crate::tokenizer::post::*;
+    use crate::tokenizer::pretokenizer::*;
+    use crate::tokenizer::sentencepiece::*;
+    use crate::tokenizer::trainer::*;
+    use crate::tokenizer::wordpiece::*;
+    use crate::tokenizer::*;
+    use crate::transform::*;
+    use crate::utils::*;
+    use crate::vocab::*;
     use crate::VERSION;
     use brain_core::Tensor;
 

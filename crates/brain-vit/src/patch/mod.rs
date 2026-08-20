@@ -10,8 +10,8 @@
 
 pub mod pos_embed;
 
-use crate::core::{VitError, VitResult, Tensor2D, SimpleRng};
 use crate::config::{PatchEmbedConfig, PatchMode};
+use crate::core::{SimpleRng, Tensor2D, VitError, VitResult};
 use crate::ops::{extract_patches, linear};
 
 /// Patch embedding module: maps `[B, C, H, W]` → `[B, N, D]`.
@@ -49,7 +49,11 @@ impl PatchEmbed {
         } else {
             None
         };
-        Ok(Self { config: config.clone(), weight, bias })
+        Ok(Self {
+            config: config.clone(),
+            weight,
+            bias,
+        })
     }
 
     /// Forward pass: `[B, C, H, W]` → `[B, N, D]`.
@@ -83,9 +87,13 @@ impl PatchEmbed {
 
         // Extract patches: [B, N, patch_dim]
         let patches = extract_patches(
-            images, batch, cfg.in_channels,
-            cfg.image_size, cfg.image_size,
-            cfg.patch_size, cfg.patch_size,
+            images,
+            batch,
+            cfg.in_channels,
+            cfg.image_size,
+            cfg.image_size,
+            cfg.patch_size,
+            cfg.patch_size,
         )?;
 
         // Project each patch
@@ -112,13 +120,19 @@ impl PatchEmbed {
     }
 
     /// Grid size (patches per side).
-    pub fn grid_size(&self) -> usize { self.config.grid_size() }
+    pub fn grid_size(&self) -> usize {
+        self.config.grid_size()
+    }
 
     /// Total number of patches.
-    pub fn num_patches(&self) -> usize { self.config.num_patches() }
+    pub fn num_patches(&self) -> usize {
+        self.config.num_patches()
+    }
 
     /// Get the embedding dimension.
-    pub fn embed_dim(&self) -> usize { self.config.embed_dim }
+    pub fn embed_dim(&self) -> usize {
+        self.config.embed_dim
+    }
 }
 
 /// Validate a patch embedding configuration.
@@ -127,7 +141,10 @@ pub fn validate_patch_config(image_size: usize, patch_size: usize) -> VitResult<
         return Err(VitError::Config("patch_size must be > 0".to_string()));
     }
     if !image_size.is_multiple_of(patch_size) {
-        return Err(VitError::InvalidPatchSize { image_dim: image_size, patch_size });
+        return Err(VitError::InvalidPatchSize {
+            image_dim: image_size,
+            patch_size,
+        });
     }
     Ok(())
 }
@@ -154,9 +171,13 @@ pub fn verify_patch_embed_correctness(
     let embed_dim = cfg.embed_dim;
 
     let patches = extract_patches(
-        images, batch, cfg.in_channels,
-        cfg.image_size, cfg.image_size,
-        cfg.patch_size, cfg.patch_size,
+        images,
+        batch,
+        cfg.in_channels,
+        cfg.image_size,
+        cfg.image_size,
+        cfg.patch_size,
+        cfg.patch_size,
     )?;
     let proj_w = Tensor2D::from_data(embed_dim, patch_dim, embed.weight.clone())?;
     let bias_ref = embed.bias.as_deref();
@@ -262,7 +283,7 @@ mod tests {
     fn test_verify_correctness() {
         let cfg = small_config();
         let embed = PatchEmbed::new(&cfg, 7).unwrap();
-        let img: Vec<f64> = (0..16*16).map(|x| x as f64 / 256.0).collect();
+        let img: Vec<f64> = (0..16 * 16).map(|x| x as f64 / 256.0).collect();
         let ok = verify_patch_embed_correctness(&embed, &img, 1, 1e-9).unwrap();
         assert!(ok);
     }
@@ -313,8 +334,12 @@ mod tests {
     #[test]
     fn test_patch_embed_multichannel() {
         let cfg = PatchEmbedConfig {
-            image_size: 16, patch_size: 4, in_channels: 3,
-            embed_dim: 8, bias: true, mode: PatchMode::Conv,
+            image_size: 16,
+            patch_size: 4,
+            in_channels: 3,
+            embed_dim: 8,
+            bias: true,
+            mode: PatchMode::Conv,
         };
         let embed = PatchEmbed::new(&cfg, 0).unwrap();
         let img = vec![0.5f64; 1 * 3 * 16 * 16];
@@ -375,7 +400,14 @@ mod tests {
     #[test]
     fn test_grid_size_various() {
         for (img, patch, expected) in [(224, 16, 14), (32, 8, 4), (64, 4, 16)] {
-            let cfg = PatchEmbedConfig { image_size: img, patch_size: patch, in_channels: 1, embed_dim: 8, bias: false, mode: PatchMode::Conv };
+            let cfg = PatchEmbedConfig {
+                image_size: img,
+                patch_size: patch,
+                in_channels: 1,
+                embed_dim: 8,
+                bias: false,
+                mode: PatchMode::Conv,
+            };
             let embed = PatchEmbed::new(&cfg, 0).unwrap();
             assert_eq!(embed.grid_size(), expected);
         }
@@ -384,7 +416,14 @@ mod tests {
     #[test]
     fn test_patch_embed_single_patch() {
         // image_size == patch_size → 1 patch
-        let cfg = PatchEmbedConfig { image_size: 4, patch_size: 4, in_channels: 1, embed_dim: 8, bias: false, mode: PatchMode::Conv };
+        let cfg = PatchEmbedConfig {
+            image_size: 4,
+            patch_size: 4,
+            in_channels: 1,
+            embed_dim: 8,
+            bias: false,
+            mode: PatchMode::Conv,
+        };
         let embed = PatchEmbed::new(&cfg, 0).unwrap();
         assert_eq!(embed.num_patches(), 1);
         let img = vec![1.0f64; 1 * 1 * 4 * 4];

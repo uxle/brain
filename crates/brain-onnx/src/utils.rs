@@ -23,7 +23,9 @@ pub fn decode_varint(bytes: &[u8], mut offset: usize) -> OnnxResult<(u64, usize)
         }
     }
 
-    Err(OnnxError::ProtobufDecodeError("Unexpected EOF while decoding varint".into()))
+    Err(OnnxError::ProtobufDecodeError(
+        "Unexpected EOF while decoding varint".into(),
+    ))
 }
 
 /// Encodes a u64 into unsigned LEB128 / Varint bytes.
@@ -45,8 +47,7 @@ pub fn read_f32_le(slice: &[u8]) -> f32 {
 /// Reads little-endian f64 from slice.
 pub fn read_f64_le(slice: &[u8]) -> f64 {
     f64::from_le_bytes([
-        slice[0], slice[1], slice[2], slice[3],
-        slice[4], slice[5], slice[6], slice[7],
+        slice[0], slice[1], slice[2], slice[3], slice[4], slice[5], slice[6], slice[7],
     ])
 }
 
@@ -68,7 +69,13 @@ pub fn compute_crc32(bytes: &[u8]) -> u32 {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

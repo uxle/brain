@@ -15,7 +15,9 @@ pub trait LocalTrainer: Send + Sync {
 pub struct SgdTrainer;
 
 impl SgdTrainer {
-    pub fn new() -> Self { Self }
+    pub fn new() -> Self {
+        Self
+    }
 }
 
 impl LocalTrainer for SgdTrainer {

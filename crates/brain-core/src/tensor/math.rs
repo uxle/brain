@@ -238,7 +238,13 @@ pub fn selu(a: &Tensor) -> Tensor {
 /// Continuously Differentiable Exponential Linear Unit (CELU).
 pub fn celu(a: &Tensor, alpha: f64) -> Tensor {
     assert!(alpha != 0.0, "CELU alpha cannot be zero");
-    a.map(|x| if x >= 0.0 { x } else { alpha * ((x / alpha).exp() - 1.0) })
+    a.map(|x| {
+        if x >= 0.0 {
+            x
+        } else {
+            alpha * ((x / alpha).exp() - 1.0)
+        }
+    })
 }
 
 /// Softplus activation: ln(1 + e^x).
@@ -321,7 +327,10 @@ mod tests {
     fn test_activations() {
         let zero = Tensor::zeros(vec![1]);
         assert_eq!(sigmoid(&zero).get(0), 0.5);
-        assert_eq!(relu(&Tensor::from_slice(&[-2.0, 3.0], vec![2])).data(), &[0.0, 3.0]);
+        assert_eq!(
+            relu(&Tensor::from_slice(&[-2.0, 3.0], vec![2])).data(),
+            &[0.0, 3.0]
+        );
         assert_eq!(gelu(&zero).get(0), 0.0);
         assert_eq!(silu(&zero).get(0), 0.0);
     }
@@ -331,7 +340,7 @@ mod tests {
         let a = Tensor::from_slice(&[-2.0, 0.0, 4.0], vec![3]);
         assert_eq!(abs(&a).to_vec(), vec![2.0, 0.0, 4.0]);
         assert_eq!(clamp(&a, -1.0, 1.0).to_vec(), vec![-1.0, 0.0, 1.0]);
-        
+
         let p = Tensor::from_slice(&[1.0, 4.0, 9.0], vec![3]);
         assert_eq!(sqrt(&p).to_vec(), vec![1.0, 2.0, 3.0]);
     }

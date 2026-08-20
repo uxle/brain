@@ -3,9 +3,9 @@
 //! Topological sanity checks, defined-before-use verification, and cycle detection.
 #![allow(missing_docs)]
 
-use std::collections::HashSet;
 use crate::core::{GraphError, GraphResult};
 use crate::ir::GraphIr;
+use std::collections::HashSet;
 
 /// Verifies structural and semantic integrity of a `GraphIr`.
 pub fn verify_graph(graph: &GraphIr) -> GraphResult<()> {
@@ -32,7 +32,10 @@ pub fn verify_graph(graph: &GraphIr) -> GraphResult<()> {
         if node.inputs.len() < node.op.min_inputs() {
             return Err(GraphError::VerificationFailed(format!(
                 "Node '{}' (op {:?}) has {} inputs, expected at least {}",
-                node.name, node.op, node.inputs.len(), node.op.min_inputs()
+                node.name,
+                node.op,
+                node.inputs.len(),
+                node.op.min_inputs()
             )));
         }
 
@@ -59,7 +62,8 @@ pub fn verify_graph(graph: &GraphIr) -> GraphResult<()> {
     for &output in &graph.outputs {
         if !defined_values.contains(&output) {
             return Err(GraphError::VerificationFailed(format!(
-                "Graph output value {} was never defined", output
+                "Graph output value {} was never defined",
+                output
             )));
         }
     }
@@ -69,7 +73,13 @@ pub fn verify_graph(graph: &GraphIr) -> GraphResult<()> {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

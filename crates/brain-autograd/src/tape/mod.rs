@@ -4,13 +4,13 @@
 //! and static graph compilation.
 
 pub mod builder;
-pub mod node;
 pub mod fused;
+pub mod node;
 pub mod prune;
 
 pub use builder::TapeBuilder;
-pub use node::OpRecord;
 pub use fused::TapeFusionPass;
+pub use node::OpRecord;
 pub use prune::TapePruner;
 
 use std::cell::RefCell;
@@ -90,9 +90,9 @@ mod tests {
     #[allow(unused_imports)]
     use super::*;
     #[allow(unused_imports)]
+    use crate::tape::OpRecord;
+    #[allow(unused_imports)]
     use crate::value::Value;
     #[allow(unused_imports)]
     use brain_core::Tensor;
-    #[allow(unused_imports)]
-    use crate::tape::OpRecord;
 }

@@ -187,7 +187,11 @@ impl BrainMind {
         for list in self.associations.values() {
             count += list.len();
         }
-        count + self.facts.len() + self.token_embeddings.numel() + self.w_q.numel() * 4 + self.lm_head.numel()
+        count
+            + self.facts.len()
+            + self.token_embeddings.numel()
+            + self.w_q.numel() * 4
+            + self.lm_head.numel()
     }
 
     /// UTF-8 Byte-level token encoding.
@@ -207,7 +211,21 @@ impl BrainMind {
         let k = a.shape()[1];
         let n = b.shape()[1];
         let mut out = vec![0.0; m * n];
-        crate::tensor::blas::gemm(false, false, m, n, k, 1.0, a.data(), k, b.data(), n, 0.0, &mut out, n);
+        crate::tensor::blas::gemm(
+            false,
+            false,
+            m,
+            n,
+            k,
+            1.0,
+            a.data(),
+            k,
+            b.data(),
+            n,
+            0.0,
+            &mut out,
+            n,
+        );
         Tensor::from_vec(out, vec![m, n])
     }
 
@@ -360,7 +378,10 @@ impl BrainMind {
                     .unwrap_or(0)
             } else {
                 // Temperature sampling with max-subtraction for numerical stability
-                let max_val = last_logits.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
+                let max_val = last_logits
+                    .iter()
+                    .cloned()
+                    .fold(f64::NEG_INFINITY, f64::max);
                 let exp_logits: Vec<f64> = last_logits
                     .iter()
                     .map(|&v| ((v - max_val) / temperature).exp())
@@ -469,7 +490,12 @@ impl BrainMind {
         let swish = up.map(|a| a / (1.0 + (-a).exp()));
         let down = Self::matmul_2d(&swish, &self.w_ffn_down);
 
-        let x2_pre: Vec<f64> = x1.data().iter().zip(down.data()).map(|(a, b)| a + b).collect();
+        let x2_pre: Vec<f64> = x1
+            .data()
+            .iter()
+            .zip(down.data())
+            .map(|(a, b)| a + b)
+            .collect();
         let x2 = Self::rms_norm(&Tensor::from_vec(x2_pre.clone(), vec![n, d]), 1e-5);
         let logits = Self::matmul_2d(&x2, &self.lm_head);
         let probs = Self::softmax_rows(&logits);
@@ -517,7 +543,8 @@ impl BrainMind {
         for i in 0..n {
             for a in 0..hidden_ffn {
                 for j in 0..d {
-                    dswish[i * hidden_ffn + a] += ddown[i * d + j] * self.w_ffn_down.data()[a * d + j];
+                    dswish[i * hidden_ffn + a] +=
+                        ddown[i * d + j] * self.w_ffn_down.data()[a * d + j];
                     dw_ffn_down[a * d + j] += swish.data()[i * hidden_ffn + a] * ddown[i * d + j];
                 }
             }
@@ -529,7 +556,8 @@ impl BrainMind {
             for a in 0..hidden_ffn {
                 let av = up.data()[i * hidden_ffn + a];
                 let sig = 1.0 / (1.0 + (-av).exp());
-                dup[i * hidden_ffn + a] = dswish[i * hidden_ffn + a] * sig * (1.0 + av * (1.0 - sig));
+                dup[i * hidden_ffn + a] =
+                    dswish[i * hidden_ffn + a] * sig * (1.0 + av * (1.0 - sig));
             }
         }
 
@@ -755,7 +783,11 @@ impl BrainMind {
 
         // 1. Percentages (e.g. "what is 20% of 150", "15 percent of 200", "20% of 80")
         if lower.contains('%') || lower.contains("percent") {
-            let clean = lower.replace('%', " percent ").replace("what is", "").replace("calculate", "").replace('?', "");
+            let clean = lower
+                .replace('%', " percent ")
+                .replace("what is", "")
+                .replace("calculate", "")
+                .replace('?', "");
             let tokens: Vec<&str> = clean.split_whitespace().collect();
             for i in 0..tokens.len() {
                 if tokens[i] == "percent" && i > 0 {
@@ -763,10 +795,15 @@ impl BrainMind {
                     if let Ok(pct) = num_str.parse::<f64>() {
                         // find next number after "of"
                         for j in i + 1..tokens.len() {
-                            let base_str = tokens[j].trim_matches(|c: char| !c.is_numeric() && c != '.');
+                            let base_str =
+                                tokens[j].trim_matches(|c: char| !c.is_numeric() && c != '.');
                             if let Ok(base) = base_str.parse::<f64>() {
                                 let ans = (pct / 100.0) * base;
-                                let ans_str = if ans.fract() == 0.0 { format!("{}", ans as i64) } else { format!("{:.2}", ans) };
+                                let ans_str = if ans.fract() == 0.0 {
+                                    format!("{}", ans as i64)
+                                } else {
+                                    format!("{:.2}", ans)
+                                };
                                 return Some(format!("{}% of {} = {}", pct, base, ans_str));
                             }
                         }
@@ -776,11 +813,24 @@ impl BrainMind {
         }
 
         // 2. Speed x Time = Distance Kinematics (e.g. "if a car drive 60km/h then how much in 5 haurs?")
-        let has_speed_indicator = lower.contains("km/h") || lower.contains("kmh") || lower.contains("kmph")
-            || lower.contains("mph") || lower.contains("m/s") || lower.contains("km per hour") || lower.contains("miles per hour")
-            || lower.contains("speed") || lower.contains("drive") || lower.contains("travel");
-        let has_time_indicator = lower.contains("hour") || lower.contains("haur") || lower.contains("houre")
-            || lower.contains("hr") || lower.contains("minute") || lower.contains("min") || lower.contains("second") || lower.contains("sec");
+        let has_speed_indicator = lower.contains("km/h")
+            || lower.contains("kmh")
+            || lower.contains("kmph")
+            || lower.contains("mph")
+            || lower.contains("m/s")
+            || lower.contains("km per hour")
+            || lower.contains("miles per hour")
+            || lower.contains("speed")
+            || lower.contains("drive")
+            || lower.contains("travel");
+        let has_time_indicator = lower.contains("hour")
+            || lower.contains("haur")
+            || lower.contains("houre")
+            || lower.contains("hr")
+            || lower.contains("minute")
+            || lower.contains("min")
+            || lower.contains("second")
+            || lower.contains("sec");
 
         if has_speed_indicator && has_time_indicator {
             let mut speed: Option<f64> = None;
@@ -802,7 +852,8 @@ impl BrainMind {
                         speed_unit = "km/h".to_string();
                         dist_unit = "km".to_string();
                     } else if idx > 0 {
-                        let prev_num = tokens[idx - 1].trim_matches(|c: char| !c.is_numeric() && c != '.');
+                        let prev_num =
+                            tokens[idx - 1].trim_matches(|c: char| !c.is_numeric() && c != '.');
                         if let Ok(v) = prev_num.parse::<f64>() {
                             speed = Some(v);
                             speed_unit = "km/h".to_string();
@@ -816,7 +867,8 @@ impl BrainMind {
                         speed_unit = "mph".to_string();
                         dist_unit = "miles".to_string();
                     } else if idx > 0 {
-                        let prev_num = tokens[idx - 1].trim_matches(|c: char| !c.is_numeric() && c != '.');
+                        let prev_num =
+                            tokens[idx - 1].trim_matches(|c: char| !c.is_numeric() && c != '.');
                         if let Ok(v) = prev_num.parse::<f64>() {
                             speed = Some(v);
                             speed_unit = "mph".to_string();
@@ -826,8 +878,13 @@ impl BrainMind {
                 }
 
                 // Check time token
-                let is_time_word = tok.contains("hour") || tok.contains("haur") || tok.contains("houre")
-                    || tok == "hrs" || tok == "hr" || tok.contains("min") || tok.contains("sec");
+                let is_time_word = tok.contains("hour")
+                    || tok.contains("haur")
+                    || tok.contains("houre")
+                    || tok == "hrs"
+                    || tok == "hr"
+                    || tok.contains("min")
+                    || tok.contains("sec");
                 if is_time_word {
                     let num = tok.trim_matches(|c: char| !c.is_numeric() && c != '.');
                     if let Ok(v) = num.parse::<f64>() {
@@ -840,7 +897,8 @@ impl BrainMind {
                             time_in_hours = Some(v);
                         }
                     } else if idx > 0 {
-                        let prev_num = tokens[idx - 1].trim_matches(|c: char| !c.is_numeric() && c != '.');
+                        let prev_num =
+                            tokens[idx - 1].trim_matches(|c: char| !c.is_numeric() && c != '.');
                         if let Ok(v) = prev_num.parse::<f64>() {
                             time = Some(v);
                             if tok.contains("min") {
@@ -857,8 +915,16 @@ impl BrainMind {
 
             if let (Some(s), Some(t), Some(th)) = (speed, time, time_in_hours) {
                 let dist = s * th;
-                let dist_str = if dist.fract() == 0.0 { format!("{}", dist as i64) } else { format!("{:.2}", dist) };
-                let time_str = if t.fract() == 0.0 { format!("{}", t as i64) } else { format!("{}", t) };
+                let dist_str = if dist.fract() == 0.0 {
+                    format!("{}", dist as i64)
+                } else {
+                    format!("{:.2}", dist)
+                };
+                let time_str = if t.fract() == 0.0 {
+                    format!("{}", t as i64)
+                } else {
+                    format!("{}", t)
+                };
                 return Some(format!(
                     "At {} {}, in {} hours, the distance traveled is {} {}.",
                     s, speed_unit, time_str, dist_str, dist_unit
@@ -925,7 +991,11 @@ impl BrainMind {
         }
 
         // 3. User feeling / pleasantry queries ("how are you", "how are you doing", "what's up")
-        if lower.contains("how are you") || lower.contains("how r u") || lower.contains("whats up") || lower.contains("what's up") {
+        if lower.contains("how are you")
+            || lower.contains("how r u")
+            || lower.contains("whats up")
+            || lower.contains("what's up")
+        {
             let resp = format!(
                 "I am feeling active! My 3D neural cube ({}x{}x{}) has {} active synapses, and my mind has learned {} words. How can I help you?",
                 self.cube_dim, self.cube_dim, self.cube_dim, self.total_synapses(), self.vocab.len()
@@ -936,27 +1006,41 @@ impl BrainMind {
 
         // 4. Nickname / identity learning: "my name is X" / "call me X" / "i am X"
         if lower.starts_with("my name is ") || lower.starts_with("call me ") {
-            let prefix_len = if lower.starts_with("my name is ") { 11 } else { 8 };
+            let prefix_len = if lower.starts_with("my name is ") {
+                11
+            } else {
+                8
+            };
             let name = trimmed[prefix_len..].trim().trim_matches('.').to_string();
             self.user_nickname = Some(name.clone());
             self.facts.insert("user_name".to_string(), name.clone());
-            let resp = format!("Nice to meet you, {}! I will remember your name in my memory.", name);
+            let resp = format!(
+                "Nice to meet you, {}! I will remember your name in my memory.",
+                name
+            );
             self.record_turn(trimmed, &resp);
             return resp;
         }
-        if lower.starts_with("i am ") && !lower.contains("learning") && !lower.contains("thinking") {
+        if lower.starts_with("i am ") && !lower.contains("learning") && !lower.contains("thinking")
+        {
             let name = trimmed[5..].trim().trim_matches('.').to_string();
             if !name.is_empty() && name.split_whitespace().count() <= 2 {
                 self.user_nickname = Some(name.clone());
                 self.facts.insert("user_name".to_string(), name.clone());
-                let resp = format!("Hello, {}! I've stored your identity in my neural network.", name);
+                let resp = format!(
+                    "Hello, {}! I've stored your identity in my neural network.",
+                    name
+                );
                 self.record_turn(trimmed, &resp);
                 return resp;
             }
         }
 
         // 5. User identity recall: "who am i" / "what is my name"
-        if lower.contains("who am i") || lower.contains("what is my name") || lower.contains("do you know me") {
+        if lower.contains("who am i")
+            || lower.contains("what is my name")
+            || lower.contains("do you know me")
+        {
             let resp = if let Some(ref name) = self.user_nickname {
                 format!("You are {}! My teacher and companion.", name)
             } else {
@@ -967,7 +1051,10 @@ impl BrainMind {
         }
 
         // 6. Brain identity questions: "who are you" / "what are you" / "tell me about yourself"
-        if lower.contains("who are you") || lower.contains("what are you") || lower.contains("tell me about yourself") {
+        if lower.contains("who are you")
+            || lower.contains("what are you")
+            || lower.contains("tell me about yourself")
+        {
             let resp = format!(
                 "I am {}, an associative biological deep-learning brain mind. I live in a {}x{}x{} 3D cubic space ({} neurons), currently holding {} vocabulary words and {} synaptic memories.",
                 self.name, self.cube_dim, self.cube_dim, self.cube_dim, self.total_neurons(), self.vocab.len(), self.total_synapses()
@@ -991,21 +1078,30 @@ impl BrainMind {
         }
 
         let stop_words_set: HashSet<&str> = [
-            "a", "an", "the", "is", "are", "was", "were", "be", "been", "being", "in", "on", "at", "to", "for",
-            "from", "by", "with", "of", "and", "or", "but", "if", "then", "so", "as", "it", "its", "they", "them",
-            "he", "she", "we", "you", "i", "my", "your", "his", "her", "our", "their", "do", "does", "did",
-            "have", "has", "had", "can", "could", "will", "would", "shall", "should", "what", "which", "who", "whom"
-        ].iter().cloned().collect();
+            "a", "an", "the", "is", "are", "was", "were", "be", "been", "being", "in", "on", "at",
+            "to", "for", "from", "by", "with", "of", "and", "or", "but", "if", "then", "so", "as",
+            "it", "its", "they", "them", "he", "she", "we", "you", "i", "my", "your", "his", "her",
+            "our", "their", "do", "does", "did", "have", "has", "had", "can", "could", "will",
+            "would", "shall", "should", "what", "which", "who", "whom",
+        ]
+        .iter()
+        .cloned()
+        .collect();
 
         // 9. & 10. Associative memory / thought generation only for statements.
         //    Questions must not be answered with confident n-gram continuations.
         if !is_question {
-            let meaningful_tokens: Vec<&String> = raw_tokens.iter().filter(|t| !stop_words_set.contains(t.as_str()) && t.len() >= 3).collect();
+            let meaningful_tokens: Vec<&String> = raw_tokens
+                .iter()
+                .filter(|t| !stop_words_set.contains(t.as_str()) && t.len() >= 3)
+                .collect();
 
             // 9. Associative memory lookup: find concepts linked to meaningful tokens
             for token in &meaningful_tokens {
                 if let Some(assocs) = self.associations.get(*token) {
-                    if let Some((best_resp, _)) = assocs.iter().max_by(|a, b| a.1.partial_cmp(&b.1).unwrap()) {
+                    if let Some((best_resp, _)) =
+                        assocs.iter().max_by(|a, b| a.1.partial_cmp(&b.1).unwrap())
+                    {
                         let resp = best_resp.clone();
                         self.record_turn(trimmed, &resp);
                         return resp;
@@ -1024,7 +1120,10 @@ impl BrainMind {
         if is_question {
             if self.vocab.len() >= 64 {
                 let gen = self.neural_generate(trimmed, 24, 0.8);
-                let gen_clean = gen.trim().trim_matches(|c: char| c == '.' || c == '!' || c == '?').to_string();
+                let gen_clean = gen
+                    .trim()
+                    .trim_matches(|c: char| c == '.' || c == '!' || c == '?')
+                    .to_string();
                 if gen_clean.len() > trimmed.len() && gen_clean.len() < 120 {
                     self.record_turn(trimmed, &gen_clean);
                     return gen_clean;
@@ -1044,7 +1143,10 @@ impl BrainMind {
                 .or_else(|| raw_tokens.first())
                 .cloned()
                 .unwrap_or_else(|| "that".to_string());
-            let resp = format!("I don't know about '{}' yet. Could you explain it to me so I can learn it?", kw);
+            let resp = format!(
+                "I don't know about '{}' yet. Could you explain it to me so I can learn it?",
+                kw
+            );
             self.record_turn(trimmed, &resp);
             return resp;
         }
@@ -1053,7 +1155,10 @@ impl BrainMind {
         let resp = if let Some(keyword) = raw_tokens.first() {
             format!("I am thinking about '{}'. Could you explain more about how it connects with what we're learning?", keyword)
         } else {
-            format!("I registered '{}' into my 3D neural memory. Teach me more!", trimmed)
+            format!(
+                "I registered '{}' into my 3D neural memory. Teach me more!",
+                trimmed
+            )
         };
 
         self.record_turn(trimmed, &resp);
@@ -1062,7 +1167,18 @@ impl BrainMind {
 
     /// Checks if the input is an informal or formal greeting with fuzzy matching.
     fn is_greeting(&self, lower: &str, tokens: &[String]) -> bool {
-        let exact_greetings = ["hi", "hello", "hey", "ello", "helo", "yo", "hola", "greetings", "howdy", "sup"];
+        let exact_greetings = [
+            "hi",
+            "hello",
+            "hey",
+            "ello",
+            "helo",
+            "yo",
+            "hola",
+            "greetings",
+            "howdy",
+            "sup",
+        ];
         if exact_greetings.contains(&lower.trim()) {
             return true;
         }
@@ -1083,7 +1199,8 @@ impl BrainMind {
 
     /// Records conversational turn in short-term context history.
     fn record_turn(&mut self, user: &str, brain: &str) {
-        self.context_history.push((user.to_string(), brain.to_string()));
+        self.context_history
+            .push((user.to_string(), brain.to_string()));
         if self.context_history.len() > 20 {
             self.context_history.remove(0);
         }
@@ -1098,12 +1215,74 @@ impl BrainMind {
     /// matching a grammar lesson about "correct:").
     fn search_knowledge_facts(&self, lower: &str) -> Option<String> {
         let stop_words_set: HashSet<&str> = [
-            "what", "who", "where", "when", "why", "how", "this", "that", "the", "a", "an", "is",
-            "are", "tell", "explain", "about", "define", "definition", "of", "mean", "meaning", "in",
-            "if", "then", "else", "so", "much", "many", "does", "do", "did", "will", "would", "can",
-            "could", "should", "was", "were", "have", "has", "had", "car", "drive", "drives", "train",
-            "travel", "travels", "walk", "run", "with", "for", "to", "from", "by", "at", "on", "out",
-            "it", "its", "they", "them", "there", "here", "let", "given", "assume", "suppose", "me",
+            "what",
+            "who",
+            "where",
+            "when",
+            "why",
+            "how",
+            "this",
+            "that",
+            "the",
+            "a",
+            "an",
+            "is",
+            "are",
+            "tell",
+            "explain",
+            "about",
+            "define",
+            "definition",
+            "of",
+            "mean",
+            "meaning",
+            "in",
+            "if",
+            "then",
+            "else",
+            "so",
+            "much",
+            "many",
+            "does",
+            "do",
+            "did",
+            "will",
+            "would",
+            "can",
+            "could",
+            "should",
+            "was",
+            "were",
+            "have",
+            "has",
+            "had",
+            "car",
+            "drive",
+            "drives",
+            "train",
+            "travel",
+            "travels",
+            "walk",
+            "run",
+            "with",
+            "for",
+            "to",
+            "from",
+            "by",
+            "at",
+            "on",
+            "out",
+            "it",
+            "its",
+            "they",
+            "them",
+            "there",
+            "here",
+            "let",
+            "given",
+            "assume",
+            "suppose",
+            "me",
         ]
         .iter()
         .cloned()
@@ -1158,20 +1337,91 @@ impl BrainMind {
     /// no clearly targeted concept and yield `None` instead of a keyword guess.
     fn question_subject(&self, lower: &str) -> Option<String> {
         let stop_words_set: HashSet<&str> = [
-            "what", "who", "where", "when", "why", "how", "this", "that", "the", "a", "an", "is",
-            "are", "tell", "explain", "about", "define", "definition", "of", "mean", "meaning", "in",
-            "if", "then", "else", "so", "much", "many", "does", "do", "did", "will", "would", "can",
-            "could", "should", "was", "were", "have", "has", "had", "car", "drive", "drives", "train",
-            "travel", "travels", "walk", "run", "with", "for", "to", "from", "by", "at", "on", "out",
-            "it", "its", "they", "them", "there", "here", "let", "given", "assume", "suppose", "me",
+            "what",
+            "who",
+            "where",
+            "when",
+            "why",
+            "how",
+            "this",
+            "that",
+            "the",
+            "a",
+            "an",
+            "is",
+            "are",
+            "tell",
+            "explain",
+            "about",
+            "define",
+            "definition",
+            "of",
+            "mean",
+            "meaning",
+            "in",
+            "if",
+            "then",
+            "else",
+            "so",
+            "much",
+            "many",
+            "does",
+            "do",
+            "did",
+            "will",
+            "would",
+            "can",
+            "could",
+            "should",
+            "was",
+            "were",
+            "have",
+            "has",
+            "had",
+            "car",
+            "drive",
+            "drives",
+            "train",
+            "travel",
+            "travels",
+            "walk",
+            "run",
+            "with",
+            "for",
+            "to",
+            "from",
+            "by",
+            "at",
+            "on",
+            "out",
+            "it",
+            "its",
+            "they",
+            "them",
+            "there",
+            "here",
+            "let",
+            "given",
+            "assume",
+            "suppose",
+            "me",
         ]
         .iter()
         .cloned()
         .collect();
 
         let triggers = [
-            "what is ", "what are ", "what's ", "whats ", "what does ", "what do ",
-            "define ", "explain ", "meaning of ", "tell me about ", "describe ",
+            "what is ",
+            "what are ",
+            "what's ",
+            "whats ",
+            "what does ",
+            "what do ",
+            "define ",
+            "explain ",
+            "meaning of ",
+            "tell me about ",
+            "describe ",
         ];
 
         let mut rest = lower.trim();
@@ -1204,20 +1454,85 @@ impl BrainMind {
     /// Synthesizes an associative thought through spreading synaptic activation.
     fn synthesize_thought(&self, tokens: &[String]) -> Option<String> {
         let stop_words_set: HashSet<&str> = [
-            "what", "who", "where", "when", "why", "how", "this", "that", "the", "a", "an", "is",
-            "are", "tell", "explain", "about", "define", "definition", "of", "mean", "meaning", "in",
-            "if", "then", "else", "so", "much", "many", "does", "do", "did", "will", "would", "can",
-            "could", "should", "was", "were", "have", "has", "had", "car", "drive", "drives", "train",
-            "with", "for", "to", "from", "by", "at", "on", "out", "it", "its", "they", "them", "there", "here"
-        ].iter().cloned().collect();
+            "what",
+            "who",
+            "where",
+            "when",
+            "why",
+            "how",
+            "this",
+            "that",
+            "the",
+            "a",
+            "an",
+            "is",
+            "are",
+            "tell",
+            "explain",
+            "about",
+            "define",
+            "definition",
+            "of",
+            "mean",
+            "meaning",
+            "in",
+            "if",
+            "then",
+            "else",
+            "so",
+            "much",
+            "many",
+            "does",
+            "do",
+            "did",
+            "will",
+            "would",
+            "can",
+            "could",
+            "should",
+            "was",
+            "were",
+            "have",
+            "has",
+            "had",
+            "car",
+            "drive",
+            "drives",
+            "train",
+            "with",
+            "for",
+            "to",
+            "from",
+            "by",
+            "at",
+            "on",
+            "out",
+            "it",
+            "its",
+            "they",
+            "them",
+            "there",
+            "here",
+        ]
+        .iter()
+        .cloned()
+        .collect();
 
         for token in tokens {
             if !stop_words_set.contains(token.as_str()) && token.len() >= 3 {
                 if let Some(next_map) = self.transitions.get(token) {
-                    if let Some((best_next, _)) = next_map.iter().max_by(|a, b| a.1.partial_cmp(b.1).unwrap()) {
+                    if let Some((best_next, _)) =
+                        next_map.iter().max_by(|a, b| a.1.partial_cmp(b.1).unwrap())
+                    {
                         if let Some(third_map) = self.transitions.get(best_next) {
-                            if let Some((third_word, _)) = third_map.iter().max_by(|a, b| a.1.partial_cmp(b.1).unwrap()) {
-                                return Some(format!("When I think of {}, it connects to {} and {}.", token, best_next, third_word));
+                            if let Some((third_word, _)) = third_map
+                                .iter()
+                                .max_by(|a, b| a.1.partial_cmp(b.1).unwrap())
+                            {
+                                return Some(format!(
+                                    "When I think of {}, it connects to {} and {}.",
+                                    token, best_next, third_word
+                                ));
                             }
                         }
                         return Some(format!("I associate {} with {}.", token, best_next));
@@ -1274,8 +1589,14 @@ impl BrainMind {
             let sym_b = tokens[2];
 
             if matches!(op, "+" | "-" | "*" | "/") {
-                let val_a = sym_a.parse::<f64>().ok().or_else(|| self.lookup_number(sym_a));
-                let val_b = sym_b.parse::<f64>().ok().or_else(|| self.lookup_number(sym_b));
+                let val_a = sym_a
+                    .parse::<f64>()
+                    .ok()
+                    .or_else(|| self.lookup_number(sym_a));
+                let val_b = sym_b
+                    .parse::<f64>()
+                    .ok()
+                    .or_else(|| self.lookup_number(sym_b));
 
                 match (val_a, val_b) {
                     (Some(a), Some(b)) => {
@@ -1338,7 +1659,8 @@ impl BrainMind {
                     return Some(num);
                 }
                 for token in v.split_whitespace() {
-                    let clean = token.trim_matches(|c: char| !c.is_numeric() && c != '.' && c != '-');
+                    let clean =
+                        token.trim_matches(|c: char| !c.is_numeric() && c != '.' && c != '-');
                     if let Ok(num) = clean.parse::<f64>() {
                         return Some(num);
                     }
@@ -1371,7 +1693,10 @@ impl BrainMind {
         for i in 0..words.len().saturating_sub(1) {
             let w1 = &words[i];
             let w2 = &words[i + 1];
-            let entry = self.transitions.entry(w1.clone()).or_insert_with(HashMap::new);
+            let entry = self
+                .transitions
+                .entry(w1.clone())
+                .or_insert_with(HashMap::new);
             *entry.entry(w2.clone()).or_insert(0.0) += 1.0;
         }
 
@@ -1380,13 +1705,17 @@ impl BrainMind {
             for i in 0..words.len().saturating_sub(2) {
                 if words[i + 1] == "is" || words[i + 1] == "are" {
                     let subject = words[i].clone();
-                    let stop_subjects = ["what", "who", "where", "when", "why", "how", "this", "that", "it", "there", "here", "a", "an", "the", "of"];
+                    let stop_subjects = [
+                        "what", "who", "where", "when", "why", "how", "this", "that", "it",
+                        "there", "here", "a", "an", "the", "of",
+                    ];
                     if stop_subjects.contains(&subject.as_str()) {
                         continue;
                     }
                     let predicate = words[i + 2..].join(" ");
                     if !predicate.is_empty() {
-                        self.facts.insert(subject.clone(), format!("{} is {}", subject, predicate));
+                        self.facts
+                            .insert(subject.clone(), format!("{} is {}", subject, predicate));
                         self.associations
                             .entry(subject.clone())
                             .or_insert_with(Vec::new)
@@ -1399,7 +1728,8 @@ impl BrainMind {
         // 4. Update 3D synaptic weight matrix
         let weight_data = self.synaptic_weights.data_mut();
         for i in 0..weight_data.len() {
-            weight_data[i] = (weight_data[i] * 0.999 + 0.001 * (words.len() as f64)).clamp(-5.0, 5.0);
+            weight_data[i] =
+                (weight_data[i] * 0.999 + 0.001 * (words.len() as f64)).clamp(-5.0, 5.0);
         }
     }
 
@@ -1437,7 +1767,10 @@ impl BrainMind {
 
             if trimmed.starts_with("NAME: ") {
                 current_name = trimmed[6..].trim().to_lowercase();
-                self.facts.insert(current_name.clone(), format!("an entity of type {}", current_type));
+                self.facts.insert(
+                    current_name.clone(),
+                    format!("an entity of type {}", current_type),
+                );
                 summary.facts_indexed += 1;
                 continue;
             }
@@ -1446,17 +1779,25 @@ impl BrainMind {
                 let def = trimmed[12..].trim().to_string();
                 if !current_name.is_empty() {
                     self.facts.insert(current_name.clone(), def.clone());
-                    self.facts.insert(format!("{}_definition", current_name), def.clone());
+                    self.facts
+                        .insert(format!("{}_definition", current_name), def.clone());
                     summary.facts_indexed += 1;
                 }
                 continue;
             }
 
             if trimmed.starts_with("FORMULA: ") || trimmed.starts_with("STATEMENT: ") {
-                let stmt = if trimmed.starts_with("FORMULA: ") { &trimmed[9..] } else { &trimmed[11..] }.trim().to_string();
+                let stmt = if trimmed.starts_with("FORMULA: ") {
+                    &trimmed[9..]
+                } else {
+                    &trimmed[11..]
+                }
+                .trim()
+                .to_string();
                 if !current_name.is_empty() {
                     self.facts.insert(current_name.clone(), stmt.clone());
-                    self.facts.insert(format!("{}_formula", current_name), stmt.clone());
+                    self.facts
+                        .insert(format!("{}_formula", current_name), stmt.clone());
                     summary.facts_indexed += 1;
                 }
                 continue;
@@ -1548,15 +1889,51 @@ impl BrainMind {
         model = model.with_meta("facts_db", &fact_pairs.join(";;"));
 
         // Store genuine neural weights in TensorArchive
-        model.add_tensor("model.token_embeddings", self.token_embeddings.clone(), Some(NodeCoord3D::new(0, 0, 0)));
-        model.add_tensor("model.w_q", self.w_q.clone(), Some(NodeCoord3D::new(1, 0, 0)));
-        model.add_tensor("model.w_k", self.w_k.clone(), Some(NodeCoord3D::new(2, 0, 0)));
-        model.add_tensor("model.w_v", self.w_v.clone(), Some(NodeCoord3D::new(3, 0, 0)));
-        model.add_tensor("model.w_o", self.w_o.clone(), Some(NodeCoord3D::new(4, 0, 0)));
-        model.add_tensor("model.w_ffn_up", self.w_ffn_up.clone(), Some(NodeCoord3D::new(5, 0, 0)));
-        model.add_tensor("model.w_ffn_down", self.w_ffn_down.clone(), Some(NodeCoord3D::new(6, 0, 0)));
-        model.add_tensor("model.lm_head", self.lm_head.clone(), Some(NodeCoord3D::new(7, 0, 0)));
-        model.add_tensor("model.synaptic_weights", self.synaptic_weights.clone(), Some(NodeCoord3D::new(8, 0, 0)));
+        model.add_tensor(
+            "model.token_embeddings",
+            self.token_embeddings.clone(),
+            Some(NodeCoord3D::new(0, 0, 0)),
+        );
+        model.add_tensor(
+            "model.w_q",
+            self.w_q.clone(),
+            Some(NodeCoord3D::new(1, 0, 0)),
+        );
+        model.add_tensor(
+            "model.w_k",
+            self.w_k.clone(),
+            Some(NodeCoord3D::new(2, 0, 0)),
+        );
+        model.add_tensor(
+            "model.w_v",
+            self.w_v.clone(),
+            Some(NodeCoord3D::new(3, 0, 0)),
+        );
+        model.add_tensor(
+            "model.w_o",
+            self.w_o.clone(),
+            Some(NodeCoord3D::new(4, 0, 0)),
+        );
+        model.add_tensor(
+            "model.w_ffn_up",
+            self.w_ffn_up.clone(),
+            Some(NodeCoord3D::new(5, 0, 0)),
+        );
+        model.add_tensor(
+            "model.w_ffn_down",
+            self.w_ffn_down.clone(),
+            Some(NodeCoord3D::new(6, 0, 0)),
+        );
+        model.add_tensor(
+            "model.lm_head",
+            self.lm_head.clone(),
+            Some(NodeCoord3D::new(7, 0, 0)),
+        );
+        model.add_tensor(
+            "model.synaptic_weights",
+            self.synaptic_weights.clone(),
+            Some(NodeCoord3D::new(8, 0, 0)),
+        );
 
         model
     }
@@ -1602,15 +1979,33 @@ impl BrainMind {
         }
 
         // Restore neural weights if present
-        if let Some(w) = model.archive.get("model.token_embeddings") { mind.token_embeddings = w.clone(); }
-        if let Some(w) = model.archive.get("model.w_q") { mind.w_q = w.clone(); }
-        if let Some(w) = model.archive.get("model.w_k") { mind.w_k = w.clone(); }
-        if let Some(w) = model.archive.get("model.w_v") { mind.w_v = w.clone(); }
-        if let Some(w) = model.archive.get("model.w_o") { mind.w_o = w.clone(); }
-        if let Some(w) = model.archive.get("model.w_ffn_up") { mind.w_ffn_up = w.clone(); }
-        if let Some(w) = model.archive.get("model.w_ffn_down") { mind.w_ffn_down = w.clone(); }
-        if let Some(w) = model.archive.get("model.lm_head") { mind.lm_head = w.clone(); }
-        if let Some(w) = model.archive.get("model.synaptic_weights") { mind.synaptic_weights = w.clone(); }
+        if let Some(w) = model.archive.get("model.token_embeddings") {
+            mind.token_embeddings = w.clone();
+        }
+        if let Some(w) = model.archive.get("model.w_q") {
+            mind.w_q = w.clone();
+        }
+        if let Some(w) = model.archive.get("model.w_k") {
+            mind.w_k = w.clone();
+        }
+        if let Some(w) = model.archive.get("model.w_v") {
+            mind.w_v = w.clone();
+        }
+        if let Some(w) = model.archive.get("model.w_o") {
+            mind.w_o = w.clone();
+        }
+        if let Some(w) = model.archive.get("model.w_ffn_up") {
+            mind.w_ffn_up = w.clone();
+        }
+        if let Some(w) = model.archive.get("model.w_ffn_down") {
+            mind.w_ffn_down = w.clone();
+        }
+        if let Some(w) = model.archive.get("model.lm_head") {
+            mind.lm_head = w.clone();
+        }
+        if let Some(w) = model.archive.get("model.synaptic_weights") {
+            mind.synaptic_weights = w.clone();
+        }
 
         Ok(mind)
     }
@@ -1646,7 +2041,11 @@ fn levenshtein(a: &str, b: &str) -> usize {
 
     for i in 1..=len_a {
         for j in 1..=len_b {
-            let cost = if a_chars[i - 1] == b_chars[j - 1] { 0 } else { 1 };
+            let cost = if a_chars[i - 1] == b_chars[j - 1] {
+                0
+            } else {
+                1
+            };
             dp[i][j] = (dp[i - 1][j] + 1)
                 .min(dp[i][j - 1] + 1)
                 .min(dp[i - 1][j - 1] + cost);

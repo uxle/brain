@@ -1,7 +1,18 @@
 //! # Linear Gate Combiners & State Slicing
 //!
 //! Fused linear gate operations $W x + U h + b$ and vector concatenations.
-#![allow(missing_docs, clippy::excessive_precision, clippy::approx_constant, clippy::needless_range_loop, clippy::too_many_arguments, clippy::manual_is_multiple_of, clippy::manual_div_ceil, clippy::doc_markdown, clippy::module_inception, clippy::manual_memcpy)]
+#![allow(
+    missing_docs,
+    clippy::excessive_precision,
+    clippy::approx_constant,
+    clippy::needless_range_loop,
+    clippy::too_many_arguments,
+    clippy::manual_is_multiple_of,
+    clippy::manual_div_ceil,
+    clippy::doc_markdown,
+    clippy::module_inception,
+    clippy::manual_memcpy
+)]
 
 use brain_core::Tensor;
 
@@ -61,20 +72,32 @@ pub fn split_states(combined: &Tensor) -> (Tensor, Tensor) {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant, clippy::needless_range_loop, clippy::manual_div_ceil, clippy::manual_is_multiple_of, clippy::too_many_arguments, clippy::doc_markdown, clippy::excessive_precision)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant,
+        clippy::needless_range_loop,
+        clippy::manual_div_ceil,
+        clippy::manual_is_multiple_of,
+        clippy::too_many_arguments,
+        clippy::doc_markdown,
+        clippy::excessive_precision
+    )]
     use super::*;
-    use crate::core::*;
-    use crate::config::*;
-    use crate::utils::*;
-    use crate::ops::*;
-    use crate::cells::*;
-    use crate::seq::*;
-    use crate::init_rnn::*;
-    use crate::reg_ops::*;
-    use crate::process::*;
     use crate::backward_ops::*;
     use crate::builder::*;
+    use crate::cells::*;
+    use crate::config::*;
+    use crate::core::*;
     use crate::helper::*;
+    use crate::init_rnn::*;
+    use crate::ops::*;
+    use crate::process::*;
+    use crate::reg_ops::*;
+    use crate::seq::*;
+    use crate::utils::*;
     use crate::VERSION;
     use brain_core::Tensor;
 }

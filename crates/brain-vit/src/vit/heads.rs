@@ -5,7 +5,7 @@
 //! - [`DinoHead`] — self-supervised projection head (DINO-lite)
 //! - [`SegHead`] — pixel-level segmentation decoder (upsampling)
 
-use crate::core::{VitError, VitResult, Tensor2D, SimpleRng};
+use crate::core::{SimpleRng, Tensor2D, VitError, VitResult};
 use crate::ops::linear;
 
 /// Trait for all ViT head types.
@@ -36,12 +36,19 @@ impl ClsHead {
     /// Create with Xavier-initialized weights.
     pub fn new(embed_dim: usize, num_classes: usize, seed: u64) -> VitResult<Self> {
         if embed_dim == 0 || num_classes == 0 {
-            return Err(VitError::Config("ClsHead: embed_dim and num_classes must be > 0".to_string()));
+            return Err(VitError::Config(
+                "ClsHead: embed_dim and num_classes must be > 0".to_string(),
+            ));
         }
         let mut rng = SimpleRng::new(seed);
         let weight = rng.xavier_uniform(num_classes, embed_dim);
         let bias = vec![0.0f64; num_classes];
-        Ok(Self { weight, bias, embed_dim, num_classes })
+        Ok(Self {
+            weight,
+            bias,
+            embed_dim,
+            num_classes,
+        })
     }
 }
 
@@ -49,7 +56,9 @@ impl VitHead for ClsHead {
     fn forward(&self, pooled: &[f64], batch: usize) -> VitResult<Vec<f64>> {
         if pooled.len() != batch * self.embed_dim {
             return Err(VitError::Shape(format!(
-                "ClsHead: expected {} elements, got {}", batch * self.embed_dim, pooled.len()
+                "ClsHead: expected {} elements, got {}",
+                batch * self.embed_dim,
+                pooled.len()
             )));
         }
         let input = Tensor2D::from_data(batch, self.embed_dim, pooled.to_vec())?;
@@ -57,8 +66,12 @@ impl VitHead for ClsHead {
         let out = linear(&input, &w, Some(&self.bias))?;
         Ok(out.data)
     }
-    fn num_params(&self) -> usize { self.weight.len() + self.bias.len() }
-    fn out_dim(&self) -> usize { self.num_classes }
+    fn num_params(&self) -> usize {
+        self.weight.len() + self.bias.len()
+    }
+    fn out_dim(&self) -> usize {
+        self.num_classes
+    }
 }
 
 /// DINO-lite self-supervised projection head.
@@ -87,7 +100,9 @@ impl DinoHead {
     /// Create with Xavier-initialized weights.
     pub fn new(embed_dim: usize, hidden_dim: usize, proj_dim: usize, seed: u64) -> VitResult<Self> {
         if embed_dim == 0 || hidden_dim == 0 || proj_dim == 0 {
-            return Err(VitError::Config("DinoHead: all dims must be > 0".to_string()));
+            return Err(VitError::Config(
+                "DinoHead: all dims must be > 0".to_string(),
+            ));
         }
         let mut rng = SimpleRng::new(seed);
         let w1 = rng.xavier_uniform(hidden_dim, embed_dim);
@@ -95,7 +110,16 @@ impl DinoHead {
         let w2 = rng.xavier_uniform(hidden_dim, hidden_dim);
         let b2 = vec![0.0f64; hidden_dim];
         let w3 = rng.xavier_uniform(proj_dim, hidden_dim);
-        Ok(Self { w1, b1, w2, b2, w3, embed_dim, hidden_dim, proj_dim })
+        Ok(Self {
+            w1,
+            b1,
+            w2,
+            b2,
+            w3,
+            embed_dim,
+            hidden_dim,
+            proj_dim,
+        })
     }
 }
 
@@ -133,7 +157,11 @@ impl VitHead for DinoHead {
         for b in 0..batch {
             let start = b * self.proj_dim;
             let norm: f64 = out[start..start + self.proj_dim]
-                .iter().map(|&x| x * x).sum::<f64>().sqrt().max(1e-12);
+                .iter()
+                .map(|&x| x * x)
+                .sum::<f64>()
+                .sqrt()
+                .max(1e-12);
             for x in out[start..start + self.proj_dim].iter_mut() {
                 *x /= norm;
             }
@@ -145,7 +173,9 @@ impl VitHead for DinoHead {
         self.w1.len() + self.b1.len() + self.w2.len() + self.b2.len() + self.w3.len()
     }
 
-    fn out_dim(&self) -> usize { self.proj_dim }
+    fn out_dim(&self) -> usize {
+        self.proj_dim
+    }
 }
 
 /// Simple segmentation head: projects patch tokens to per-pixel logits via upsampling.
@@ -168,11 +198,24 @@ pub struct SegHead {
 
 impl SegHead {
     /// Create a new segmentation head.
-    pub fn new(embed_dim: usize, num_classes: usize, out_h: usize, out_w: usize, seed: u64) -> VitResult<Self> {
+    pub fn new(
+        embed_dim: usize,
+        num_classes: usize,
+        out_h: usize,
+        out_w: usize,
+        seed: u64,
+    ) -> VitResult<Self> {
         let mut rng = SimpleRng::new(seed);
         let weight = rng.xavier_uniform(num_classes, embed_dim);
         let bias = vec![0.0f64; num_classes];
-        Ok(Self { weight, bias, embed_dim, num_classes, out_h, out_w })
+        Ok(Self {
+            weight,
+            bias,
+            embed_dim,
+            num_classes,
+            out_h,
+            out_w,
+        })
     }
 
     /// Forward: patch token logits `[B, N, num_classes]` (upsampling is bilinear).
@@ -180,7 +223,9 @@ impl SegHead {
     /// `patch_tokens`: `[B, N, D]` flat; `n_sqrt = sqrt(N)` (grid side).
     pub fn forward_seg(&self, patch_tokens: &[f64], batch: usize, n: usize) -> VitResult<Vec<f64>> {
         if patch_tokens.len() != batch * n * self.embed_dim {
-            return Err(VitError::Shape("SegHead: patch_tokens shape mismatch".to_string()));
+            return Err(VitError::Shape(
+                "SegHead: patch_tokens shape mismatch".to_string(),
+            ));
         }
         let input = Tensor2D::from_data(batch * n, self.embed_dim, patch_tokens.to_vec())?;
         let w = Tensor2D::from_data(self.num_classes, self.embed_dim, self.weight.clone())?;
@@ -191,7 +236,9 @@ impl SegHead {
     }
 
     /// Number of parameters.
-    pub fn num_params(&self) -> usize { self.weight.len() + self.bias.len() }
+    pub fn num_params(&self) -> usize {
+        self.weight.len() + self.bias.len()
+    }
 }
 
 /// Configuration for ViT heads.

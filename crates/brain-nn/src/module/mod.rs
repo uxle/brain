@@ -9,7 +9,7 @@
 #![allow(missing_docs)]
 
 pub mod parameter;
-pub use parameter::{Parameter, Buffer, NamedParameter};
+pub use parameter::{Buffer, NamedParameter, Parameter};
 
 use brain_autograd::Value;
 use brain_core::Tensor;
@@ -18,7 +18,10 @@ use std::collections::HashMap;
 /// Error type for neural network modules.
 #[derive(Debug, Clone, PartialEq)]
 pub enum ModuleError {
-    ShapeMismatch { expected: Vec<usize>, got: Vec<usize> },
+    ShapeMismatch {
+        expected: Vec<usize>,
+        got: Vec<usize>,
+    },
     InvalidParameter(String),
     MissingState(String),
 }
@@ -26,7 +29,9 @@ pub enum ModuleError {
 impl std::fmt::Display for ModuleError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            ModuleError::ShapeMismatch { expected, got } => write!(f, "Shape mismatch: expected {:?}, got {:?}", expected, got),
+            ModuleError::ShapeMismatch { expected, got } => {
+                write!(f, "Shape mismatch: expected {:?}, got {:?}", expected, got)
+            }
             ModuleError::InvalidParameter(msg) => write!(f, "Invalid parameter: {}", msg),
             ModuleError::MissingState(msg) => write!(f, "Missing state: {}", msg),
         }
@@ -167,7 +172,7 @@ mod tests {
     #[test]
     fn test_container_parameter_completeness() {
         let mut seq = ModuleList::new();
-        seq.add(Linear::new(4, 8, true));  // weight [8, 4] (32), bias [8] (8) -> 40
+        seq.add(Linear::new(4, 8, true)); // weight [8, 4] (32), bias [8] (8) -> 40
         seq.add(Linear::new(8, 2, false)); // weight [2, 8] (16), no bias -> 16
         let params = seq.parameters();
         assert_eq!(params.len(), 3);
@@ -198,14 +203,18 @@ mod tests {
 
         let out = linear.forward(&x).expect("forward should succeed");
         let loss = out.sum();
-        loss.backward().expect("backward should succeed through the real tape");
+        loss.backward()
+            .expect("backward should succeed through the real tape");
 
         // Every parameter should now have a non-None gradient populated by
         // the tape -- this was categorically impossible before Phase 0,
         // since Linear had no backward path at all.
         for p in linear.parameters() {
             let g = p.grad();
-            assert!(g.is_some(), "parameter gradient should be populated by .backward()");
+            assert!(
+                g.is_some(),
+                "parameter gradient should be populated by .backward()"
+            );
         }
     }
 }

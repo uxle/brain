@@ -23,7 +23,11 @@ impl Interpreter {
     }
 
     /// Evaluates the graph given input tensors and returns output tensors.
-    pub fn evaluate(&self, graph: &IrGraph, inputs: &[Tensor]) -> Result<Vec<Tensor>, CompilationError> {
+    pub fn evaluate(
+        &self,
+        graph: &IrGraph,
+        inputs: &[Tensor],
+    ) -> Result<Vec<Tensor>, CompilationError> {
         let mut registers: HashMap<usize, Tensor> = HashMap::new();
 
         for (i, &in_id) in graph.inputs.iter().enumerate() {
@@ -39,22 +43,34 @@ impl Interpreter {
                     registers.insert(node.output, Tensor::scalar(*c));
                 }
                 OpKind::Add if node.inputs.len() == 2 => {
-                    if let (Some(a), Some(b)) = (registers.get(&node.inputs[0]), registers.get(&node.inputs[1])) {
+                    if let (Some(a), Some(b)) = (
+                        registers.get(&node.inputs[0]),
+                        registers.get(&node.inputs[1]),
+                    ) {
                         registers.insert(node.output, a + b);
                     }
                 }
                 OpKind::Mul if node.inputs.len() == 2 => {
-                    if let (Some(a), Some(b)) = (registers.get(&node.inputs[0]), registers.get(&node.inputs[1])) {
+                    if let (Some(a), Some(b)) = (
+                        registers.get(&node.inputs[0]),
+                        registers.get(&node.inputs[1]),
+                    ) {
                         registers.insert(node.output, a * b);
                     }
                 }
                 OpKind::Sub if node.inputs.len() == 2 => {
-                    if let (Some(a), Some(b)) = (registers.get(&node.inputs[0]), registers.get(&node.inputs[1])) {
+                    if let (Some(a), Some(b)) = (
+                        registers.get(&node.inputs[0]),
+                        registers.get(&node.inputs[1]),
+                    ) {
                         registers.insert(node.output, a - b);
                     }
                 }
                 OpKind::Div if node.inputs.len() == 2 => {
-                    if let (Some(a), Some(b)) = (registers.get(&node.inputs[0]), registers.get(&node.inputs[1])) {
+                    if let (Some(a), Some(b)) = (
+                        registers.get(&node.inputs[0]),
+                        registers.get(&node.inputs[1]),
+                    ) {
                         registers.insert(node.output, a / b);
                     }
                 }

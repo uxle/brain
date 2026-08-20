@@ -3,11 +3,11 @@
 //! Convenient unified metric evaluation: `compute_metric`, `metric_names`, `default_config`.
 #![allow(missing_docs)]
 
-use brain_core::Tensor;
-use crate::core::{MetricKind, MetricResult, MetricValue};
-use crate::config::MetricConfig;
 use crate::classification::accuracy_score;
+use crate::config::MetricConfig;
+use crate::core::{MetricKind, MetricResult, MetricValue};
 use crate::regression::mse_score;
+use brain_core::Tensor;
 
 /// Evaluates a metric directly from prediction and target tensors.
 pub fn compute_metric(
@@ -40,20 +40,45 @@ pub fn compute_metric(
 /// Returns a slice of all supported metric display names.
 pub fn metric_names() -> &'static [&'static str] {
     &[
-        "Accuracy", "TopKAccuracy", "Precision", "Recall", "F1Score",
-        "ROCAUC", "PRAUC", "MSE", "RMSE", "MAE", "MAPE", "R2Score",
-        "IoU", "mAP", "BLEU", "ROUGE", "NDCG", "Silhouette", "MCC",
+        "Accuracy",
+        "TopKAccuracy",
+        "Precision",
+        "Recall",
+        "F1Score",
+        "ROCAUC",
+        "PRAUC",
+        "MSE",
+        "RMSE",
+        "MAE",
+        "MAPE",
+        "R2Score",
+        "IoU",
+        "mAP",
+        "BLEU",
+        "ROUGE",
+        "NDCG",
+        "Silhouette",
+        "MCC",
     ]
 }
 
 /// Generates a default `MetricConfig` for a given `MetricKind`.
 pub fn default_config(kind: MetricKind) -> MetricConfig {
-    MetricConfig { kind, ..Default::default() }
+    MetricConfig {
+        kind,
+        ..Default::default()
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

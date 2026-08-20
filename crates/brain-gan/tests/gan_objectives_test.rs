@@ -1,6 +1,6 @@
 //! Tests for GAN architectures and losses
-use brain_gan::*;
 use brain_core::Tensor;
+use brain_gan::*;
 
 #[test]
 fn test_gan_config_and_builder() {

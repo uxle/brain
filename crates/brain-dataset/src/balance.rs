@@ -11,7 +11,9 @@ pub struct BalanceConfig {
 impl BalanceConfig {
     /// Creates a new `BalanceConfig`.
     pub fn new(target_samples_per_class: usize) -> Self {
-        Self { target_samples_per_class }
+        Self {
+            target_samples_per_class,
+        }
     }
 }
 

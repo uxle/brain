@@ -6,7 +6,7 @@
 pub mod auc;
 pub mod calibration;
 
-pub use auc::{roc_auc_score, pr_auc_score, AucConfig};
+pub use auc::{pr_auc_score, roc_auc_score, AucConfig};
 pub use calibration::{compute_calibration, CalibrationReport};
 
 use crate::config::AverageMode;
@@ -16,8 +16,14 @@ use crate::utils::stable_divide;
 /// Computes standard multi-class classification accuracy (Top-1).
 pub fn accuracy_score(preds: &[usize], targets: &[usize]) -> f64 {
     let n = preds.len().min(targets.len());
-    if n == 0 { return 0.0; }
-    let correct = preds.iter().zip(targets.iter()).filter(|(&p, &t)| p == t).count();
+    if n == 0 {
+        return 0.0;
+    }
+    let correct = preds
+        .iter()
+        .zip(targets.iter())
+        .filter(|(&p, &t)| p == t)
+        .count();
     correct as f64 / n as f64
 }
 
@@ -31,7 +37,12 @@ pub struct PrfReport {
 }
 
 /// Computes Precision, Recall, and F1 score with specified averaging mode.
-pub fn precision_recall_f1(preds: &[usize], targets: &[usize], num_classes: usize, average: AverageMode) -> PrfReport {
+pub fn precision_recall_f1(
+    preds: &[usize],
+    targets: &[usize],
+    num_classes: usize,
+    average: AverageMode,
+) -> PrfReport {
     let cm = confusion_matrix(preds, targets, num_classes);
 
     let mut precisions = vec![0.0f64; num_classes];
@@ -59,7 +70,12 @@ pub fn precision_recall_f1(preds: &[usize], targets: &[usize], num_classes: usiz
             let avg_p: f64 = precisions.iter().sum::<f64>() / num_classes as f64;
             let avg_r: f64 = recalls.iter().sum::<f64>() / num_classes as f64;
             let avg_f: f64 = f1s.iter().sum::<f64>() / num_classes as f64;
-            PrfReport { precision: avg_p, recall: avg_r, f1: avg_f, per_class_f1: f1s }
+            PrfReport {
+                precision: avg_p,
+                recall: avg_r,
+                f1: avg_f,
+                per_class_f1: f1s,
+            }
         }
         AverageMode::Weighted => {
             let total_support: usize = supports.iter().sum();
@@ -74,18 +90,34 @@ pub fn precision_recall_f1(preds: &[usize], targets: &[usize], num_classes: usiz
                     weighted_f += f1s[c] * w;
                 }
             }
-            PrfReport { precision: weighted_p, recall: weighted_r, f1: weighted_f, per_class_f1: f1s }
+            PrfReport {
+                precision: weighted_p,
+                recall: weighted_r,
+                f1: weighted_f,
+                per_class_f1: f1s,
+            }
         }
         _ => {
             let acc = accuracy_score(preds, targets);
-            PrfReport { precision: acc, recall: acc, f1: acc, per_class_f1: f1s }
+            PrfReport {
+                precision: acc,
+                recall: acc,
+                f1: acc,
+                per_class_f1: f1s,
+            }
         }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

@@ -1,10 +1,21 @@
 //! # Sequence Attention Mechanisms
 //!
 //! Global attention over encoder hidden states (Dot, Additive/Bahdanau, Scaled Dot-Product).
-#![allow(missing_docs, clippy::excessive_precision, clippy::approx_constant, clippy::needless_range_loop, clippy::too_many_arguments, clippy::manual_is_multiple_of, clippy::manual_div_ceil, clippy::doc_markdown, clippy::module_inception, clippy::manual_memcpy)]
+#![allow(
+    missing_docs,
+    clippy::excessive_precision,
+    clippy::approx_constant,
+    clippy::needless_range_loop,
+    clippy::too_many_arguments,
+    clippy::manual_is_multiple_of,
+    clippy::manual_div_ceil,
+    clippy::doc_markdown,
+    clippy::module_inception,
+    clippy::manual_memcpy
+)]
 
-use brain_core::Tensor;
 use super::super::core::RnnResult;
+use brain_core::Tensor;
 
 /// Attention scoring mechanism type.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -39,7 +50,12 @@ impl SeqAttention {
     }
 
     /// Computes context vector $c$ and attention weights $\alpha$: query $[1, \text{dim}]$, keys $[\text{seq\_len}, \text{dim}]$.
-    pub fn forward(&self, query: &Tensor, keys: &Tensor, values: &Tensor) -> RnnResult<(Tensor, Tensor)> {
+    pub fn forward(
+        &self,
+        query: &Tensor,
+        keys: &Tensor,
+        values: &Tensor,
+    ) -> RnnResult<(Tensor, Tensor)> {
         let q_data = query.data();
         let k_data = keys.data();
         let v_data = values.data();
@@ -63,7 +79,9 @@ impl SeqAttention {
         // Softmax
         let mut max_s = f64::NEG_INFINITY;
         for &s in &raw_scores {
-            if s > max_s { max_s = s; }
+            if s > max_s {
+                max_s = s;
+            }
         }
         let mut sum_exp = 0.0;
         let mut weights = vec![0.0; seq_len];
@@ -95,20 +113,32 @@ impl SeqAttention {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant, clippy::needless_range_loop, clippy::manual_div_ceil, clippy::manual_is_multiple_of, clippy::too_many_arguments, clippy::doc_markdown, clippy::excessive_precision)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant,
+        clippy::needless_range_loop,
+        clippy::manual_div_ceil,
+        clippy::manual_is_multiple_of,
+        clippy::too_many_arguments,
+        clippy::doc_markdown,
+        clippy::excessive_precision
+    )]
     use super::*;
-    use crate::core::*;
-    use crate::config::*;
-    use crate::utils::*;
-    use crate::ops::*;
-    use crate::cells::*;
-    use crate::seq::*;
-    use crate::init_rnn::*;
-    use crate::reg_ops::*;
-    use crate::process::*;
     use crate::backward_ops::*;
     use crate::builder::*;
+    use crate::cells::*;
+    use crate::config::*;
+    use crate::core::*;
     use crate::helper::*;
+    use crate::init_rnn::*;
+    use crate::ops::*;
+    use crate::process::*;
+    use crate::reg_ops::*;
+    use crate::seq::*;
+    use crate::utils::*;
     use crate::VERSION;
     use brain_core::Tensor;
 }

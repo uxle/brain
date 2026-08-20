@@ -3,10 +3,10 @@
 //! Pure-Rust, allocation-free Short-Time Fourier Transform with perfect reconstruction
 //! overlap-add (OLA), reflection padding / centering, and Phase Vocoder pitch/time transformations.
 
-use brain_core::{BrainError, BrainResult, Tensor};
-use crate::core::AudioBuffer;
 use crate::config::{STFTConfig, WindowType};
-use crate::utils::{hann_window, hamming_window, blackman_window, bartlett_window};
+use crate::core::AudioBuffer;
+use crate::utils::{bartlett_window, blackman_window, hamming_window, hann_window};
+use brain_core::{BrainError, BrainResult, Tensor};
 use std::f64::consts::PI;
 
 /// Short-Time Fourier Transform engine.
@@ -48,7 +48,11 @@ impl STFTProcessor {
             padded.extend_from_slice(signal);
             // Reflect right
             for i in 1..=pad {
-                let idx = if signal.len() > i { signal.len() - 1 - i } else { 0 };
+                let idx = if signal.len() > i {
+                    signal.len() - 1 - i
+                } else {
+                    0
+                };
                 padded.push(signal.get(idx).copied().unwrap_or(0.0));
             }
             padded
@@ -57,7 +61,9 @@ impl STFTProcessor {
         };
 
         if padded_signal.len() < win_len {
-            return Err(BrainError::invalid_value("signal is shorter than window length"));
+            return Err(BrainError::invalid_value(
+                "signal is shorter than window length",
+            ));
         }
 
         let num_frames = (padded_signal.len() - win_len) / hop + 1;
@@ -88,10 +94,19 @@ impl STFTProcessor {
     }
 
     /// Computes Inverse STFT (iSTFT) using Overlap-Add (OLA) reconstruction.
-    pub fn istft_1d(&self, real: &Tensor, imag: &Tensor, length: Option<usize>) -> BrainResult<Vec<f64>> {
+    pub fn istft_1d(
+        &self,
+        real: &Tensor,
+        imag: &Tensor,
+        length: Option<usize>,
+    ) -> BrainResult<Vec<f64>> {
         let shape = real.shape();
         if shape.len() != 2 || imag.shape() != shape {
-            return Err(BrainError::shape_mismatch("2D [bins, frames]", format!("{:?}", shape), "istft_1d"));
+            return Err(BrainError::shape_mismatch(
+                "2D [bins, frames]",
+                format!("{:?}", shape),
+                "istft_1d",
+            ));
         }
         let num_bins = shape[0];
         let num_frames = shape[1];
@@ -100,7 +115,11 @@ impl STFTProcessor {
         let win_len = self.config.win_length;
 
         if num_bins != n_fft / 2 + 1 {
-            return Err(BrainError::invalid_value(format!("expected {} bins, got {}", n_fft / 2 + 1, num_bins)));
+            return Err(BrainError::invalid_value(format!(
+                "expected {} bins, got {}",
+                n_fft / 2 + 1,
+                num_bins
+            )));
         }
 
         let expected_len = (num_frames - 1) * hop + win_len;
@@ -187,7 +206,12 @@ pub fn stft(audio: &AudioBuffer, config: &STFTConfig) -> BrainResult<(Tensor, Te
 }
 
 /// Standalone helper to compute Inverse STFT back to an AudioBuffer.
-pub fn istft(real: &Tensor, imag: &Tensor, config: &STFTConfig, sample_rate: crate::core::SampleRate) -> BrainResult<AudioBuffer> {
+pub fn istft(
+    real: &Tensor,
+    imag: &Tensor,
+    config: &STFTConfig,
+    sample_rate: crate::core::SampleRate,
+) -> BrainResult<AudioBuffer> {
     let processor = STFTProcessor::new(config.clone())?;
     let reconstructed = processor.istft_1d(real, imag, None)?;
     AudioBuffer::from_mono(reconstructed, sample_rate)

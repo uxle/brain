@@ -1,8 +1,8 @@
 //! # Tape & Deep Graph Bounded Memory Verification
 
-use brain_core::Tensor;
+use brain_autograd::tape::{OpRecord, Tape};
 use brain_autograd::Value;
-use brain_autograd::tape::{Tape, OpRecord};
+use brain_core::Tensor;
 
 #[test]
 fn test_repeated_forward_backward_memory_bounded() {
@@ -31,7 +31,11 @@ fn test_deep_chain_100k_bounded_stack() {
 
     v.backward().unwrap();
     let grad_val = base.grad().unwrap().get(0);
-    assert!((grad_val - 1.0).abs() < 1e-6, "Expected grad=1.0 through 100k relu chain, got {}", grad_val);
+    assert!(
+        (grad_val - 1.0).abs() < 1e-6,
+        "Expected grad=1.0 through 100k relu chain, got {}",
+        grad_val
+    );
 
     // Drop deep graph and ensure zero stack overflow
     drop(v);

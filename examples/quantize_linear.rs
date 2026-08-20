@@ -2,21 +2,17 @@
 //!
 //! Demonstrates quantizing floating-point layer weights to 8-bit integers.
 
-use brain_core::Tensor;
 use brain_core::tensor::arithmetic::matmul;
+use brain_core::Tensor;
 use brain_quantization::{
-    apply_magnitude_prune, dequantize_tensor, quantize_tensor,
-    QuantConfig, QuantDType,
+    apply_magnitude_prune, dequantize_tensor, quantize_tensor, QuantConfig, QuantDType,
 };
 
 fn main() {
     println!("=== Brain 1.0 Dynamic 8-bit Quantization Example ===");
 
     let weight = Tensor::from_vec(
-        vec![
-            0.12, -0.45, 0.78, -0.23,
-            0.91, -0.05, 0.33, -0.88,
-        ],
+        vec![0.12, -0.45, 0.78, -0.23, 0.91, -0.05, 0.33, -0.88],
         vec![2, 4],
     );
     let x = Tensor::from_vec(vec![1.0, 0.5, -0.5, 2.0], vec![1, 4]);

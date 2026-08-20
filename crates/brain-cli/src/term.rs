@@ -60,7 +60,13 @@ impl ProgressBar {
         let empty = self.width.saturating_sub(filled);
 
         let bar = format!("[{}{}]", "=".repeat(filled), " ".repeat(empty));
-        format!("{} {:>3.0}% ({}/{})", bar, pct * 100.0, self.current, self.total)
+        format!(
+            "{} {:>3.0}% ({}/{})",
+            bar,
+            pct * 100.0,
+            self.current,
+            self.total
+        )
     }
 }
 

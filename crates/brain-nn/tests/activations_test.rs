@@ -1,9 +1,7 @@
 //! # Activations Verification Test Suite
 
 use brain_core::Tensor;
-use brain_nn::{
-    celu, elu, glu, hard_sigmoid, hard_swish, selu, softplus, softsign, swiglu,
-};
+use brain_nn::{celu, elu, glu, hard_sigmoid, hard_swish, selu, softplus, softsign, swiglu};
 
 #[test]
 fn test_elu_and_celu() {

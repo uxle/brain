@@ -43,7 +43,11 @@ pub fn pitch_autocorr(frame: &[f64], sample_rate: u32, min_f0: f64, max_f0: f64)
         let beta = corrs[best_lag];
         let gamma = corrs[best_lag + 1];
         let denom = 2.0 * (2.0 * beta - alpha - gamma);
-        let delta = if denom.abs() > 1e-9 { (gamma - alpha) / denom } else { 0.0 };
+        let delta = if denom.abs() > 1e-9 {
+            (gamma - alpha) / denom
+        } else {
+            0.0
+        };
         let refined_lag = best_lag as f64 + delta.clamp(-0.5, 0.5);
         Some(sample_rate as f64 / refined_lag)
     } else if max_corr > 0.3 && best_lag > 0 {

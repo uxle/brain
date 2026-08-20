@@ -30,10 +30,7 @@ pub struct AGC {
 impl AGC {
     pub fn new(clipping_rate: f64, eps: f64) -> Self {
         Self {
-            config: AdaptiveClipConfig {
-                clipping_rate,
-                eps,
-            },
+            config: AdaptiveClipConfig { clipping_rate, eps },
         }
     }
 
@@ -46,7 +43,12 @@ impl AGC {
 ///
 /// Formula: max_norm = clip_factor * max(||w||, eps)
 /// if ||g|| > max_norm: g = g * (max_norm / ||g||)
-pub fn clip_grad_adaptive_(params: &mut [Tensor], grads: &mut [Tensor], clipping_rate: f64, eps: f64) {
+pub fn clip_grad_adaptive_(
+    params: &mut [Tensor],
+    grads: &mut [Tensor],
+    clipping_rate: f64,
+    eps: f64,
+) {
     if params.len() != grads.len() || clipping_rate <= 0.0 {
         return;
     }
@@ -82,7 +84,13 @@ pub fn clip_grad_adaptive_(params: &mut [Tensor], grads: &mut [Tensor], clipping
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

@@ -3,12 +3,12 @@
 //! [`Discriminator`] trait, `DiscriminatorConfig`, score interpretation.
 #![allow(missing_docs)]
 
-pub mod dcgan;
 pub mod conditional;
+pub mod dcgan;
 pub mod patch;
 
-pub use dcgan::DcganDiscriminator;
 pub use conditional::ConditionalDiscriminator;
+pub use dcgan::DcganDiscriminator;
 pub use patch::PatchDiscriminator;
 
 use brain_core::Tensor;
@@ -36,8 +36,14 @@ pub fn batch_score_to_prob(scores: &Tensor) -> Tensor {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
-    use brain_core::Tensor;
     use crate::config::DiscriminatorConfig;
+    use brain_core::Tensor;
 }

@@ -3,13 +3,13 @@
 //! Trades computation for memory by discarding intermediate forward activations
 //! and recomputing them on-demand during the reverse sweep.
 
-pub mod selective;
-pub mod offload;
 pub mod cpu_offload;
+pub mod offload;
+pub mod selective;
 
-pub use selective::{checkpoint, CheckpointPolicy};
-pub use offload::RecomputeGraph;
 pub use cpu_offload::CpuOffloader;
+pub use offload::RecomputeGraph;
+pub use selective::{checkpoint, CheckpointPolicy};
 
 /// Optimal checkpoint schedule calculator (Chen et al. sqrt(N) allocation).
 #[derive(Debug, Clone)]
@@ -43,9 +43,9 @@ mod tests {
     #[allow(unused_imports)]
     use super::*;
     #[allow(unused_imports)]
+    use crate::tape::OpRecord;
+    #[allow(unused_imports)]
     use crate::value::Value;
     #[allow(unused_imports)]
     use brain_core::Tensor;
-    #[allow(unused_imports)]
-    use crate::tape::OpRecord;
 }

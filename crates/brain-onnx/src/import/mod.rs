@@ -3,16 +3,16 @@
 //! Orchestrates byte decoding into `ModelProto` and conversion into canonical `OnnxModel` IR.
 #![allow(missing_docs)]
 
-pub mod ops;
 pub mod onnx2graph;
+pub mod ops;
 pub mod unsupported;
 
-pub use ops::translate_op;
 pub use onnx2graph::proto_to_ir;
+pub use ops::translate_op;
 pub use unsupported::{UnsupportedOpRegistry, UnsupportedReport};
 
-use crate::core::OnnxResult;
 use crate::config::ImportConfig;
+use crate::core::OnnxResult;
 use crate::ir::OnnxModel;
 use crate::proto::parse_model_proto;
 
@@ -32,7 +32,13 @@ pub fn import_model(bytes: &[u8], config: &ImportConfig) -> OnnxResult<OnnxModel
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

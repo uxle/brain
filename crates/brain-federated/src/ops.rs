@@ -13,7 +13,8 @@ pub fn scale_delta(tensors: &[Tensor], factor: f64) -> Vec<Tensor> {
 
 /// Computes the L2 norm of a flattened delta.
 pub fn l2_norm_delta(tensors: &[Tensor]) -> f64 {
-    tensors.iter()
+    tensors
+        .iter()
         .flat_map(|t| t.to_vec())
         .map(|v| v * v)
         .sum::<f64>()

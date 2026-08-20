@@ -1,8 +1,8 @@
 //! # Brain Utils Test Suite
-use brain_utils::checksum::{Crc32, Adler32};
-use brain_utils::prof::timer::TimingStats;
-use brain_utils::hal::safety::{SafetyGuard, SafetyConfig};
+use brain_utils::checksum::{Adler32, Crc32};
 use brain_utils::hal::hid::{HidAction, KeyAction};
+use brain_utils::hal::safety::{SafetyConfig, SafetyGuard};
+use brain_utils::prof::timer::TimingStats;
 use std::time::Duration;
 
 #[test]

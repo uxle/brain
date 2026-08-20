@@ -30,9 +30,8 @@ impl HardwareInfo {
             .map(|p| p.get())
             .unwrap_or(1);
 
-        let (cpu_model, physical_cores) = Self::probe_linux_cpuinfo().unwrap_or_else(|| {
-            ("Generic CPU".to_string(), logical_cores)
-        });
+        let (cpu_model, physical_cores) = Self::probe_linux_cpuinfo()
+            .unwrap_or_else(|| ("Generic CPU".to_string(), logical_cores));
 
         Self {
             cpu_model,

@@ -18,7 +18,12 @@ pub fn randn(shape: Vec<usize>) -> Tensor {
 /// Fills a tensor with Kaiming / He uniform initialization.
 pub fn kaiming_uniform(shape: Vec<usize>, a: f64) -> Tensor {
     assert!(shape.len() >= 2);
-    let fan_in = shape[1] * if shape.len() > 2 { shape[2..].iter().product() } else { 1 };
+    let fan_in = shape[1]
+        * if shape.len() > 2 {
+            shape[2..].iter().product()
+        } else {
+            1
+        };
     let gain = (2.0 / (1.0 + a * a)).sqrt();
     let std = gain / (fan_in as f64).sqrt();
     let bound = (3.0f64).sqrt() * std;

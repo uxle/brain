@@ -1,7 +1,15 @@
 //! # Feed-Forward Networks (FFN / MLP) & Gated Variants
 //!
 //! Standard FFN ($W_2 \text{Act}(W_1 x + b)$) and SwiGLU / GEGLU gated MLP architectures ($W_2 (\text{SiLU}(W_{\text{gate}} x) \odot W_{\text{up}} x)$).
-#![allow(missing_docs, unused_imports, unused_variables, dead_code, unused_mut, unused_comparisons, clippy::all)]
+#![allow(
+    missing_docs,
+    unused_imports,
+    unused_variables,
+    dead_code,
+    unused_mut,
+    unused_comparisons,
+    clippy::all
+)]
 
 use crate::config::{ActivationType, FfnConfig};
 use crate::core::{LinearParams, TransformerError, TransformerResult};
@@ -24,15 +32,33 @@ pub struct FeedForwardNetwork {
 impl FeedForwardNetwork {
     /// Creates a new `FeedForwardNetwork` with initialized parameters.
     pub fn new(config: FfnConfig, seed: u64) -> Self {
-        let is_gated = matches!(config.activation, ActivationType::Swiglu | ActivationType::Geglu);
+        let is_gated = matches!(
+            config.activation,
+            ActivationType::Swiglu | ActivationType::Geglu
+        );
 
-        let up_proj = LinearParams::new(config.hidden_dim, config.intermediate_dim, config.bias, seed);
+        let up_proj = LinearParams::new(
+            config.hidden_dim,
+            config.intermediate_dim,
+            config.bias,
+            seed,
+        );
         let gate_proj = if is_gated {
-            Some(LinearParams::new(config.hidden_dim, config.intermediate_dim, config.bias, seed.wrapping_add(100)))
+            Some(LinearParams::new(
+                config.hidden_dim,
+                config.intermediate_dim,
+                config.bias,
+                seed.wrapping_add(100),
+            ))
         } else {
             None
         };
-        let down_proj = LinearParams::new(config.intermediate_dim, config.hidden_dim, config.bias, seed.wrapping_add(200));
+        let down_proj = LinearParams::new(
+            config.intermediate_dim,
+            config.hidden_dim,
+            config.bias,
+            seed.wrapping_add(200),
+        );
 
         Self {
             up_proj,
@@ -44,7 +70,10 @@ impl FeedForwardNetwork {
 
     /// Computes Feed-Forward Network forward pass on representation tensor `hidden_states`.
     pub fn forward(&self, hidden_states: &Tensor) -> TransformerResult<Tensor> {
-        let is_gated = matches!(self.config.activation, ActivationType::Swiglu | ActivationType::Geglu);
+        let is_gated = matches!(
+            self.config.activation,
+            ActivationType::Swiglu | ActivationType::Geglu
+        );
 
         if is_gated {
             let gate = self.gate_proj.as_ref().unwrap().forward(hidden_states)?;
@@ -81,40 +110,55 @@ impl FeedForwardNetwork {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant, clippy::needless_range_loop, clippy::manual_div_ceil, clippy::manual_is_multiple_of, clippy::too_many_arguments, clippy::doc_markdown, clippy::excessive_precision, clippy::float_cmp, clippy::len_zero, clippy::all)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant,
+        clippy::needless_range_loop,
+        clippy::manual_div_ceil,
+        clippy::manual_is_multiple_of,
+        clippy::too_many_arguments,
+        clippy::doc_markdown,
+        clippy::excessive_precision,
+        clippy::float_cmp,
+        clippy::len_zero,
+        clippy::all
+    )]
     use super::*;
-    use crate::core::*;
-    use crate::config::*;
-    use crate::utils::*;
-    use crate::ops::*;
-    use crate::attention::*;
-    use crate::attention::scaled::*;
-    use crate::attention::multi_head::*;
-    use crate::attention::relative::*;
     use crate::attention::flash_lite::*;
+    use crate::attention::multi_head::*;
     use crate::attention::multi_query::*;
+    use crate::attention::relative::*;
+    use crate::attention::scaled::*;
     use crate::attention::xformers_lite::*;
-    use crate::position::*;
-    use crate::position::rope::*;
-    use crate::position::alibi::*;
-    use crate::position::learned::*;
+    use crate::attention::*;
+    use crate::builder::*;
+    use crate::config::*;
+    use crate::core::*;
+    use crate::decoder::cross::*;
+    use crate::decoder::layer::*;
+    use crate::decoder::*;
     use crate::embedding_layers::*;
-    use crate::ffn::*;
-    use crate::encoder::*;
     use crate::encoder::block::*;
     use crate::encoder::layer::*;
-    use crate::decoder::*;
-    use crate::decoder::layer::*;
-    use crate::decoder::cross::*;
+    use crate::encoder::*;
+    use crate::ffn::*;
+    use crate::generate::*;
     use crate::head::*;
     use crate::kv_cache::*;
-    use crate::generate::*;
-    use crate::models::*;
     use crate::models::bert_lite::*;
     use crate::models::gpt_lite::*;
-    use crate::models::t5_lite::*;
     use crate::models::llama_lite::*;
-    use crate::builder::*;
+    use crate::models::t5_lite::*;
+    use crate::models::*;
+    use crate::ops::*;
+    use crate::position::alibi::*;
+    use crate::position::learned::*;
+    use crate::position::rope::*;
+    use crate::position::*;
+    use crate::utils::*;
     use brain_core::Tensor;
 
     #[test]

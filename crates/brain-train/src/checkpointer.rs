@@ -2,8 +2,8 @@
 //!
 //! Save/restore model weights, track best validation scores, and manage checkpoint retention.
 
-use std::collections::HashMap;
 use brain_core::Tensor;
+use std::collections::HashMap;
 
 /// Metadata associated with a model checkpoint.
 #[derive(Debug, Clone)]
@@ -27,7 +27,11 @@ pub struct BestModelTracker {
 impl BestModelTracker {
     pub fn new(minimize: bool) -> Self {
         Self {
-            best_score: if minimize { f64::INFINITY } else { f64::NEG_INFINITY },
+            best_score: if minimize {
+                f64::INFINITY
+            } else {
+                f64::NEG_INFINITY
+            },
             best_epoch: 0,
             minimize,
             best_state: None,
@@ -35,7 +39,12 @@ impl BestModelTracker {
     }
 
     /// Evaluates if `current_score` improves upon the historical best.
-    pub fn check_improvement(&mut self, epoch: usize, current_score: f64, state: &HashMap<String, Tensor>) -> bool {
+    pub fn check_improvement(
+        &mut self,
+        epoch: usize,
+        current_score: f64,
+        state: &HashMap<String, Tensor>,
+    ) -> bool {
         let is_better = if self.minimize {
             current_score < self.best_score
         } else {

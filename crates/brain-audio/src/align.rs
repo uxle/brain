@@ -23,12 +23,14 @@ pub enum DistanceMetric {
 pub fn vector_distance(x: &[f64], y: &[f64], metric: DistanceMetric) -> f64 {
     match metric {
         DistanceMetric::Euclidean => {
-            let sum_sq: f64 = x.iter().zip(y.iter()).map(|(&a, &b)| (a - b) * (a - b)).sum();
+            let sum_sq: f64 = x
+                .iter()
+                .zip(y.iter())
+                .map(|(&a, &b)| (a - b) * (a - b))
+                .sum();
             sum_sq.sqrt()
         }
-        DistanceMetric::Manhattan => {
-            x.iter().zip(y.iter()).map(|(&a, &b)| (a - b).abs()).sum()
-        }
+        DistanceMetric::Manhattan => x.iter().zip(y.iter()).map(|(&a, &b)| (a - b).abs()).sum(),
         DistanceMetric::Cosine => {
             let mut dot = 0.0;
             let mut norm_x = 0.0;
@@ -56,11 +58,17 @@ pub fn dynamic_time_warping(
     sakoe_chiba_band: Option<usize>,
 ) -> BrainResult<(f64, Vec<(usize, usize)>)> {
     if feat1.ndim() != 2 || feat2.ndim() != 2 {
-        return Err(BrainError::invalid_value("DTW requires 2D [dim, time] feature tensors"));
+        return Err(BrainError::invalid_value(
+            "DTW requires 2D [dim, time] feature tensors",
+        ));
     }
     let dim = feat1.shape()[0];
     if feat2.shape()[0] != dim {
-        return Err(BrainError::shape_mismatch(format!("dim {}", dim), format!("dim {}", feat2.shape()[0]), "DTW"));
+        return Err(BrainError::shape_mismatch(
+            format!("dim {}", dim),
+            format!("dim {}", feat2.shape()[0]),
+            "DTW",
+        ));
     }
 
     let n = feat1.shape()[1];

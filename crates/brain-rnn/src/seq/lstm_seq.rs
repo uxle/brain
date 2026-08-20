@@ -1,12 +1,23 @@
 //! # Multi-Layer Stacked LSTM Sequence
 //!
 //! Stacked LSTM layers with inter-layer representations and initial state management.
-#![allow(missing_docs, clippy::excessive_precision, clippy::approx_constant, clippy::needless_range_loop, clippy::too_many_arguments, clippy::manual_is_multiple_of, clippy::manual_div_ceil, clippy::doc_markdown, clippy::module_inception, clippy::manual_memcpy)]
+#![allow(
+    missing_docs,
+    clippy::excessive_precision,
+    clippy::approx_constant,
+    clippy::needless_range_loop,
+    clippy::too_many_arguments,
+    clippy::manual_is_multiple_of,
+    clippy::manual_div_ceil,
+    clippy::doc_markdown,
+    clippy::module_inception,
+    clippy::manual_memcpy
+)]
 
-use brain_core::Tensor;
 use super::super::cells::{LstmCell, RnnCell};
 use super::super::core::{CellState, RnnError, RnnResult, RnnState, SequenceOutput};
 use super::RnnSequence;
+use brain_core::Tensor;
 
 /// Multi-layer Stacked LSTM Sequence Processor.
 #[derive(Debug, Clone)]
@@ -40,7 +51,10 @@ impl RnnSequence for LstmSeq {
     fn forward(&self, input: &Tensor, init_state: Option<&RnnState>) -> RnnResult<SequenceOutput> {
         let s = input.shape();
         if s.len() != 3 {
-            return Err(RnnError::ShapeMismatch { expected: vec![1, 1, self.input_dim], found: s.to_vec() });
+            return Err(RnnError::ShapeMismatch {
+                expected: vec![1, 1, self.input_dim],
+                found: s.to_vec(),
+            });
         }
 
         let batch_size = s[0];
@@ -48,7 +62,10 @@ impl RnnSequence for LstmSeq {
         let in_dim = s[2];
 
         if in_dim != self.input_dim {
-            return Err(RnnError::DimensionMismatch { expected: self.input_dim, found: in_dim });
+            return Err(RnnError::DimensionMismatch {
+                expected: self.input_dim,
+                found: in_dim,
+            });
         }
 
         let mut current_states: Vec<CellState> = if let Some(st) = init_state {
@@ -62,15 +79,23 @@ impl RnnSequence for LstmSeq {
         layer_input.extend_from_slice(input_data);
 
         for l in 0..self.num_layers {
-            let cur_in_dim = if l == 0 { self.input_dim } else { self.hidden_dim };
+            let cur_in_dim = if l == 0 {
+                self.input_dim
+            } else {
+                self.hidden_dim
+            };
             let mut layer_output = vec![0.0; batch_size * seq_len * self.hidden_dim];
 
             for t in 0..seq_len {
                 for b in 0..batch_size {
                     let start_idx = b * (seq_len * cur_in_dim) + t * cur_in_dim;
-                    let x_t = Tensor::from_slice(&layer_input[start_idx..start_idx + cur_in_dim], vec![1, cur_in_dim]);
+                    let x_t = Tensor::from_slice(
+                        &layer_input[start_idx..start_idx + cur_in_dim],
+                        vec![1, cur_in_dim],
+                    );
 
-                    let (h_t, next_cell_state) = self.layers[l].forward(&x_t, &current_states[l])?;
+                    let (h_t, next_cell_state) =
+                        self.layers[l].forward(&x_t, &current_states[l])?;
                     current_states[l] = next_cell_state;
 
                     let h_data = h_t.data();
@@ -84,7 +109,8 @@ impl RnnSequence for LstmSeq {
             layer_input = layer_output;
         }
 
-        let out_tensor = Tensor::from_slice(&layer_input, vec![batch_size, seq_len, self.hidden_dim]);
+        let out_tensor =
+            Tensor::from_slice(&layer_input, vec![batch_size, seq_len, self.hidden_dim]);
         let final_rnn_state = RnnState::new(current_states);
 
         Ok(SequenceOutput::new(out_tensor, final_rnn_state))
@@ -101,20 +127,32 @@ impl RnnSequence for LstmSeq {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant, clippy::needless_range_loop, clippy::manual_div_ceil, clippy::manual_is_multiple_of, clippy::too_many_arguments, clippy::doc_markdown, clippy::excessive_precision)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant,
+        clippy::needless_range_loop,
+        clippy::manual_div_ceil,
+        clippy::manual_is_multiple_of,
+        clippy::too_many_arguments,
+        clippy::doc_markdown,
+        clippy::excessive_precision
+    )]
     use super::*;
-    use crate::core::*;
-    use crate::config::*;
-    use crate::utils::*;
-    use crate::ops::*;
-    use crate::cells::*;
-    use crate::seq::*;
-    use crate::init_rnn::*;
-    use crate::reg_ops::*;
-    use crate::process::*;
     use crate::backward_ops::*;
     use crate::builder::*;
+    use crate::cells::*;
+    use crate::config::*;
+    use crate::core::*;
     use crate::helper::*;
+    use crate::init_rnn::*;
+    use crate::ops::*;
+    use crate::process::*;
+    use crate::reg_ops::*;
+    use crate::seq::*;
+    use crate::utils::*;
     use crate::VERSION;
     use brain_core::Tensor;
 }

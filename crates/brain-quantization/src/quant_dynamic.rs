@@ -3,10 +3,10 @@
 //! Runtime dynamic quantization: statically quantizes model weights and computes runtime activation scales on each forward pass.
 #![allow(missing_docs)]
 
-use brain_core::Tensor;
 use super::config::DynamicConfig;
 use super::core::{QParams, QuantResult, QuantTensor};
 use super::utils::{compute_scale_zero_point, minmax, quantize_val};
+use brain_core::Tensor;
 
 /// Dynamic Quantization Runner.
 #[derive(Debug, Clone)]
@@ -22,7 +22,8 @@ impl DynamicQuantizer {
     /// Quantizes dynamic activation tensor on-the-fly.
     pub fn quantize_activation(&self, activation: &Tensor) -> QuantResult<QuantTensor> {
         let (min_v, max_v) = minmax(activation.data())?;
-        let (scale, zp) = compute_scale_zero_point(min_v, max_v, self.config.activation_dtype, false)?;
+        let (scale, zp) =
+            compute_scale_zero_point(min_v, max_v, self.config.activation_dtype, false)?;
         let params = QParams::per_tensor(scale, zp, self.config.activation_dtype);
 
         let qmin = params.qmin;
@@ -33,7 +34,11 @@ impl DynamicQuantizer {
             q_data.push(quantize_val(v, scale, zp, qmin, qmax));
         }
 
-        Ok(QuantTensor::new(q_data, activation.shape().to_vec(), params))
+        Ok(QuantTensor::new(
+            q_data,
+            activation.shape().to_vec(),
+            params,
+        ))
     }
 
     /// Quantizes weights ahead-of-time per channel or per tensor.
@@ -56,7 +61,13 @@ impl DynamicQuantizer {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

@@ -16,7 +16,12 @@ pub struct RoundStats {
 
 impl RoundStats {
     pub fn new(round_id: RoundId, num_participants: usize) -> Self {
-        Self { round_id, num_participants, avg_loss: 0.0, duration_ms: 0 }
+        Self {
+            round_id,
+            num_participants,
+            avg_loss: 0.0,
+            duration_ms: 0,
+        }
     }
 }
 

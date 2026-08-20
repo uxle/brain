@@ -12,7 +12,9 @@ pub struct GnnBuilder {
 }
 
 impl GnnBuilder {
-    pub fn new() -> Self { Self::default() }
+    pub fn new() -> Self {
+        Self::default()
+    }
 
     pub fn layer_type(mut self, layer_type: LayerType) -> Self {
         self.config.layer_type = layer_type;
@@ -57,7 +59,13 @@ impl GnnBuilder {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

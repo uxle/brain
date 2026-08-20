@@ -16,12 +16,12 @@ use std::collections::HashMap;
 use std::fmt;
 
 pub mod callbacks;
-pub mod metrics;
 pub mod checkpointer;
+pub mod metrics;
 
 pub use callbacks::{CallbackAction, EarlyStopping, MetricHistoryLogger, TrainingCallback};
-pub use metrics::{RunningAverage, AccuracyMetric, TopKAccuracyMetric};
 pub use checkpointer::{BestModelTracker, CheckpointMeta};
+pub use metrics::{AccuracyMetric, RunningAverage, TopKAccuracyMetric};
 
 /// Result type used by integrated training APIs.
 pub type TrainResult<T> = Result<T, TrainError>;
@@ -413,7 +413,12 @@ impl Conv2d {
     fn forward(&self, input: &Tensor) -> TrainResult<Tensor> {
         if input.ndim() != 4 || input.shape()[1] != self.in_channels {
             return Err(TrainError::ShapeMismatch {
-                expected: vec![input.shape().first().copied().unwrap_or(1), self.in_channels, 0, 0],
+                expected: vec![
+                    input.shape().first().copied().unwrap_or(1),
+                    self.in_channels,
+                    0,
+                    0,
+                ],
                 got: input.shape().to_vec(),
             });
         }
@@ -454,7 +459,9 @@ impl Conv2d {
 
     fn load_parameters(&mut self, params: &[Tensor]) -> TrainResult<usize> {
         if params.is_empty() {
-            return Err(TrainError::State("conv2d layer missing weight tensor".into()));
+            return Err(TrainError::State(
+                "conv2d layer missing weight tensor".into(),
+            ));
         }
         if params[0].shape() != self.weight.shape() {
             return Err(TrainError::ShapeMismatch {
@@ -851,10 +858,9 @@ impl TrainableModule for Sequential {
             .flat_map(|layer| match layer {
                 Layer::Linear(linear) => linear.parameters(),
                 Layer::Conv2d(conv) => conv.parameters(),
-                Layer::ReLU(_)
-                | Layer::MaxPool2d(_)
-                | Layer::AvgPool2d(_)
-                | Layer::Flatten(_) => Vec::new(),
+                Layer::ReLU(_) | Layer::MaxPool2d(_) | Layer::AvgPool2d(_) | Layer::Flatten(_) => {
+                    Vec::new()
+                }
             })
             .collect()
     }
@@ -869,10 +875,7 @@ impl TrainableModule for Sequential {
                 Layer::Conv2d(conv) => {
                     cursor += conv.load_parameters(&params[cursor..])?;
                 }
-                Layer::ReLU(_)
-                | Layer::MaxPool2d(_)
-                | Layer::AvgPool2d(_)
-                | Layer::Flatten(_) => {}
+                Layer::ReLU(_) | Layer::MaxPool2d(_) | Layer::AvgPool2d(_) | Layer::Flatten(_) => {}
             }
         }
         if cursor != params.len() {
@@ -901,10 +904,7 @@ impl TrainableModule for Sequential {
                         names.push(format!("layers.{}.bias", idx));
                     }
                 }
-                Layer::ReLU(_)
-                | Layer::MaxPool2d(_)
-                | Layer::AvgPool2d(_)
-                | Layer::Flatten(_) => {}
+                Layer::ReLU(_) | Layer::MaxPool2d(_) | Layer::AvgPool2d(_) | Layer::Flatten(_) => {}
             }
         }
         names
@@ -1276,7 +1276,10 @@ impl Trainer {
                 let grads = self.model.backward_from_cache(&caches, &grad_logits)?;
 
                 let ag = accum_grads.get_or_insert_with(|| {
-                    grads.iter().map(|g| Tensor::zeros(g.shape().to_vec())).collect()
+                    grads
+                        .iter()
+                        .map(|g| Tensor::zeros(g.shape().to_vec()))
+                        .collect()
                 });
                 for (acc, g) in ag.iter_mut().zip(&grads) {
                     for (acc_val, g_val) in acc.data_mut().iter_mut().zip(g.data()) {
@@ -1453,9 +1456,9 @@ fn mean(values: &[f64]) -> f64 {
 pub mod prelude {
     pub use crate::{
         argmax_rows, tensor_to_value, value_to_tensor, AvgPool2d, Batch, Conv2d, Flatten,
-        L2Regularization, Layer, Linear, MaxPool2d, ModelState, NamedTensor, ReLU, Relu, Sequential,
-        SyntheticClassification, TensorModuleAdapter, TrainError, TrainResult, TrainStep,
-        TrainableModule, Trainer, TrainerBuilder, TrainingSummary,
+        L2Regularization, Layer, Linear, MaxPool2d, ModelState, NamedTensor, ReLU, Relu,
+        Sequential, SyntheticClassification, TensorModuleAdapter, TrainError, TrainResult,
+        TrainStep, TrainableModule, Trainer, TrainerBuilder, TrainingSummary,
     };
 }
 
@@ -1541,7 +1544,11 @@ mod tests {
             before.loss,
             after.loss
         );
-        assert!(after.accuracy >= 0.85, "CNN should achieve high accuracy: got {}", after.accuracy);
+        assert!(
+            after.accuracy >= 0.85,
+            "CNN should achieve high accuracy: got {}",
+            after.accuracy
+        );
     }
 
     #[test]

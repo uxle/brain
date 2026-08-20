@@ -13,12 +13,16 @@ pub fn relu(input: &Tensor) -> Tensor {
 
 /// Computes LeakyReLU activation: max(negative_slope * x, x).
 pub fn leaky_relu(input: &Tensor, negative_slope: f64) -> Tensor {
-    let data: Vec<f64> = input.to_vec().iter().map(|&x| if x >= 0.0 { x } else { negative_slope * x }).collect();
+    let data: Vec<f64> = input
+        .to_vec()
+        .iter()
+        .map(|&x| if x >= 0.0 { x } else { negative_slope * x })
+        .collect();
     Tensor::from_vec(data, input.shape().to_vec())
 }
 
-use brain_autograd::Value;
 use crate::module::{Module, ModuleResult};
+use brain_autograd::Value;
 
 /// ReLU module wrapper.
 #[derive(Debug, Clone, Copy, Default)]
@@ -44,7 +48,9 @@ pub struct LeakyReLU {
 
 impl Default for LeakyReLU {
     fn default() -> Self {
-        Self { negative_slope: 0.01 }
+        Self {
+            negative_slope: 0.01,
+        }
     }
 }
 
@@ -60,7 +66,13 @@ impl LeakyReLU {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

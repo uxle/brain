@@ -20,7 +20,9 @@ fn test_mha_causal_forward_pass() {
     let seq_len = 8;
     let x = Tensor::ones(vec![batch, seq_len, 32]);
 
-    let out = mha.forward_mha(&x, None, &AttentionMask::Causal).expect("MHA causal forward");
+    let out = mha
+        .forward_mha(&x, None, &AttentionMask::Causal)
+        .expect("MHA causal forward");
     assert_eq!(out.shape(), &[batch, seq_len, 32]);
     for &v in out.data() {
         assert!(v.is_finite(), "MHA output must be finite");
@@ -69,10 +71,7 @@ fn test_llama_lite_end_to_end_forward() {
     let model = LlamaLite::new(cfg, 123);
 
     // Token IDs: [batch=2, seq_len=4]
-    let token_ids = vec![
-        1, 5, 12, 42,
-        3, 8, 99, 10,
-    ];
+    let token_ids = vec![1, 5, 12, 42, 3, 8, 99, 10];
 
     let logits = model.forward(&token_ids, 2, 4).expect("LLaMA forward");
     assert_eq!(logits.shape(), &[2, 4, 100]);
@@ -91,7 +90,10 @@ fn test_alibi_geometric_slopes_and_biases() {
 
     // Assert strictly decreasing geometric progression
     for i in 0..7 {
-        assert!(slopes[i] > slopes[i + 1], "Slopes must be monotonically decreasing");
+        assert!(
+            slopes[i] > slopes[i + 1],
+            "Slopes must be monotonically decreasing"
+        );
     }
 }
 

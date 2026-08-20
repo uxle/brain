@@ -3,10 +3,10 @@
 //! 70x70 receptive-field patch discriminator, multi-scale variant.
 #![allow(missing_docs)]
 
-use brain_core::Tensor;
-use crate::config::DiscriminatorConfig;
-use crate::ops::{leaky_relu, batch_norm};
 use super::Discriminator;
+use crate::config::DiscriminatorConfig;
+use crate::ops::{batch_norm, leaky_relu};
+use brain_core::Tensor;
 
 /// PatchGAN discriminator: outputs a grid of real/fake scores.
 #[derive(Debug, Clone)]
@@ -28,7 +28,11 @@ impl PatchDiscriminator {
             out_ch = (out_ch * 2).min(512);
         }
         weights.push(Tensor::zeros(vec![1, ch]));
-        Self { config, weights, patch_size }
+        Self {
+            config,
+            weights,
+            patch_size,
+        }
     }
 
     /// Returns patch score grid size (simplified: num_patches = num_layers+1).
@@ -53,15 +57,27 @@ impl Discriminator for PatchDiscriminator {
     }
 
     fn input_shape(&self) -> Vec<usize> {
-        vec![self.config.input_channels, self.config.image_size, self.config.image_size]
+        vec![
+            self.config.input_channels,
+            self.config.image_size,
+            self.config.image_size,
+        ]
     }
 
-    fn output_shape(&self) -> Vec<usize> { vec![self.num_patches()] }
+    fn output_shape(&self) -> Vec<usize> {
+        vec![self.num_patches()]
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

@@ -31,11 +31,10 @@ pub fn generate_completion_script(shell: Shell) -> String {
             s
         }
         Shell::Fish => {
-            "complete -c brain -f -a 'tensor model train bench dataset convert repl doctor init'\n".to_string()
+            "complete -c brain -f -a 'tensor model train bench dataset convert repl doctor init'\n"
+                .to_string()
         }
-        Shell::PowerShell => {
-            "Register-ArgumentCompleter -Native -CommandName brain\n".to_string()
-        }
+        Shell::PowerShell => "Register-ArgumentCompleter -Native -CommandName brain\n".to_string(),
     }
 }
 

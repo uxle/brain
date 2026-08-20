@@ -1,7 +1,15 @@
 //! # Vocabulary Management & Mapping
 //!
 //! Token-to-ID and ID-to-token bidirectional dictionaries with special token routing and serialization.
-#![allow(missing_docs, unused_imports, unused_variables, dead_code, unused_mut, unused_comparisons, clippy::all)]
+#![allow(
+    missing_docs,
+    unused_imports,
+    unused_variables,
+    dead_code,
+    unused_mut,
+    unused_comparisons,
+    clippy::all
+)]
 
 use crate::core::{TextError, TextResult, TokenId};
 use std::collections::{HashMap, HashSet};
@@ -190,8 +198,11 @@ impl Vocab {
     /// Exports vocabulary as tab-separated values `token\tid`.
     pub fn save_tsv(&self) -> String {
         let mut lines = Vec::with_capacity(self.token_to_id.len());
-        let mut sorted_entries: Vec<(TokenId, &String)> =
-            self.id_to_token.iter().map(|(&id, token)| (id, token)).collect();
+        let mut sorted_entries: Vec<(TokenId, &String)> = self
+            .id_to_token
+            .iter()
+            .map(|(&id, token)| (id, token))
+            .collect();
         sorted_entries.sort_by_key(|e| e.0);
         for (id, token) in sorted_entries {
             lines.push(format!("{}\t{}", token, id));
@@ -268,37 +279,51 @@ impl VocabBuilder {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant, clippy::needless_range_loop, clippy::manual_div_ceil, clippy::manual_is_multiple_of, clippy::too_many_arguments, clippy::doc_markdown, clippy::excessive_precision, clippy::float_cmp, clippy::len_zero)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant,
+        clippy::needless_range_loop,
+        clippy::manual_div_ceil,
+        clippy::manual_is_multiple_of,
+        clippy::too_many_arguments,
+        clippy::doc_markdown,
+        clippy::excessive_precision,
+        clippy::float_cmp,
+        clippy::len_zero
+    )]
     use super::*;
-    use crate::core::*;
-    use crate::config::*;
-    use crate::utils::*;
-    use crate::ops::*;
-    use crate::vocab::*;
-    use crate::text_ops::*;
-    use crate::features::*;
-    use crate::similarity::*;
-    use crate::lm::*;
-    use crate::process::*;
-    use crate::optimize::*;
     use crate::analyze::*;
-    use crate::compute::*;
-    use crate::helper::*;
-    use crate::transform::*;
     use crate::builder::*;
-    use crate::tokenizer::*;
-    use crate::tokenizer::bpe::*;
-    use crate::tokenizer::sentencepiece::*;
-    use crate::tokenizer::wordpiece::*;
-    use crate::tokenizer::char::*;
-    use crate::tokenizer::trainer::*;
-    use crate::tokenizer::normalizer::*;
-    use crate::tokenizer::pretokenizer::*;
-    use crate::tokenizer::bytelevel::*;
-    use crate::tokenizer::post::*;
-    use crate::embedding::*;
-    use crate::embedding::pretrained::*;
+    use crate::compute::*;
+    use crate::config::*;
+    use crate::core::*;
     use crate::embedding::fasttext::*;
+    use crate::embedding::pretrained::*;
+    use crate::embedding::*;
+    use crate::features::*;
+    use crate::helper::*;
+    use crate::lm::*;
+    use crate::ops::*;
+    use crate::optimize::*;
+    use crate::process::*;
+    use crate::similarity::*;
+    use crate::text_ops::*;
+    use crate::tokenizer::bpe::*;
+    use crate::tokenizer::bytelevel::*;
+    use crate::tokenizer::char::*;
+    use crate::tokenizer::normalizer::*;
+    use crate::tokenizer::post::*;
+    use crate::tokenizer::pretokenizer::*;
+    use crate::tokenizer::sentencepiece::*;
+    use crate::tokenizer::trainer::*;
+    use crate::tokenizer::wordpiece::*;
+    use crate::tokenizer::*;
+    use crate::transform::*;
+    use crate::utils::*;
+    use crate::vocab::*;
     use crate::VERSION;
     use brain_core::Tensor;
 
@@ -324,7 +349,9 @@ mod tests {
         let mut freqs = HashMap::new();
         freqs.insert("frequent_1".to_string(), 100);
         freqs.insert("rare_1".to_string(), 1);
-        let built = VocabBuilder::new().min_frequency(5).build_from_frequencies(&freqs);
+        let built = VocabBuilder::new()
+            .min_frequency(5)
+            .build_from_frequencies(&freqs);
         assert!(built.contains("frequent_1"));
         assert!(!built.contains("rare_1"));
     }

@@ -46,12 +46,27 @@ pub fn de_emphasis(signal: &[f64], coef: f64) -> Vec<f64> {
 }
 
 /// Applies a 2D spatial convolution filter on a 2D spectrogram matrix `[rows, cols]`.
-pub fn filter_2d(matrix: &[f64], rows: usize, cols: usize, kernel: &[f64], k_rows: usize, k_cols: usize) -> BrainResult<Vec<f64>> {
+pub fn filter_2d(
+    matrix: &[f64],
+    rows: usize,
+    cols: usize,
+    kernel: &[f64],
+    k_rows: usize,
+    k_cols: usize,
+) -> BrainResult<Vec<f64>> {
     if rows * cols != matrix.len() {
-        return Err(BrainError::shape_mismatch(format!("{}x{}", rows, cols), matrix.len().to_string(), "filter_2d matrix"));
+        return Err(BrainError::shape_mismatch(
+            format!("{}x{}", rows, cols),
+            matrix.len().to_string(),
+            "filter_2d matrix",
+        ));
     }
     if k_rows * k_cols != kernel.len() {
-        return Err(BrainError::shape_mismatch(format!("{}x{}", k_rows, k_cols), kernel.len().to_string(), "filter_2d kernel"));
+        return Err(BrainError::shape_mismatch(
+            format!("{}x{}", k_rows, k_cols),
+            kernel.len().to_string(),
+            "filter_2d kernel",
+        ));
     }
     let pad_r = k_rows / 2;
     let pad_c = k_cols / 2;
@@ -62,8 +77,10 @@ pub fn filter_2d(matrix: &[f64], rows: usize, cols: usize, kernel: &[f64], k_row
             let mut sum = 0.0;
             for kr in 0..k_rows {
                 for kc in 0..k_cols {
-                    let in_r = (r as isize + kr as isize - pad_r as isize).clamp(0, rows as isize - 1) as usize;
-                    let in_c = (c as isize + kc as isize - pad_c as isize).clamp(0, cols as isize - 1) as usize;
+                    let in_r = (r as isize + kr as isize - pad_r as isize)
+                        .clamp(0, rows as isize - 1) as usize;
+                    let in_c = (c as isize + kc as isize - pad_c as isize)
+                        .clamp(0, cols as isize - 1) as usize;
                     sum += matrix[in_r * cols + in_c] * kernel[kr * k_cols + kc];
                 }
             }

@@ -7,8 +7,8 @@
 //! * Polyphase multi-rate filter bank resampler
 //! * Full multi-channel [`AudioBuffer`] resampling (`resample_audio`)
 
-use brain_core::{BrainError, BrainResult};
 use crate::core::{AudioBuffer, SampleRate};
+use brain_core::{BrainError, BrainResult};
 use std::f64::consts::PI;
 
 /// Resampling interpolation algorithms.
@@ -32,7 +32,12 @@ pub enum ResampleMethod {
 /// let res = resample_1d(&sig, 16000, 8000, ResampleMethod::Linear).unwrap();
 /// assert_eq!(res.len(), 80);
 /// ```
-pub fn resample_1d(signal: &[f64], orig_sr: u32, target_sr: u32, method: ResampleMethod) -> BrainResult<Vec<f64>> {
+pub fn resample_1d(
+    signal: &[f64],
+    orig_sr: u32,
+    target_sr: u32,
+    method: ResampleMethod,
+) -> BrainResult<Vec<f64>> {
     if orig_sr == 0 || target_sr == 0 {
         return Err(BrainError::invalid_value("sample rates must be non-zero"));
     }
@@ -90,16 +95,26 @@ pub fn resample_1d(signal: &[f64], orig_sr: u32, target_sr: u32, method: Resampl
                     if in_idx >= 0 && (in_idx as usize) < signal.len() {
                         let diff = src_pos - in_idx as f64;
                         let x = diff * cutoff;
-                        let sinc = if x.abs() < 1e-9 { 1.0 } else { (PI * x).sin() / (PI * x) };
+                        let sinc = if x.abs() < 1e-9 {
+                            1.0
+                        } else {
+                            (PI * x).sin() / (PI * x)
+                        };
                         // Blackman window weighting
-                        let w_angle = PI * (k as f64 + HALF_WIDTH as f64) / (2.0 * HALF_WIDTH as f64);
-                        let window = 0.42 - 0.5 * (2.0 * w_angle).cos() + 0.08 * (4.0 * w_angle).cos();
+                        let w_angle =
+                            PI * (k as f64 + HALF_WIDTH as f64) / (2.0 * HALF_WIDTH as f64);
+                        let window =
+                            0.42 - 0.5 * (2.0 * w_angle).cos() + 0.08 * (4.0 * w_angle).cos();
                         let weight = sinc * window;
                         sum += signal[in_idx as usize] * weight;
                         weight_sum += weight;
                     }
                 }
-                out.push(if weight_sum.abs() > 1e-6 { sum / weight_sum } else { sum });
+                out.push(if weight_sum.abs() > 1e-6 {
+                    sum / weight_sum
+                } else {
+                    sum
+                });
             }
         }
     }
@@ -108,7 +123,11 @@ pub fn resample_1d(signal: &[f64], orig_sr: u32, target_sr: u32, method: Resampl
 }
 
 /// Resamples an entire multi-channel [`AudioBuffer`] to a new target [`SampleRate`].
-pub fn resample_audio(audio: &AudioBuffer, target_sr: SampleRate, method: ResampleMethod) -> BrainResult<AudioBuffer> {
+pub fn resample_audio(
+    audio: &AudioBuffer,
+    target_sr: SampleRate,
+    method: ResampleMethod,
+) -> BrainResult<AudioBuffer> {
     let orig_sr = audio.sample_rate();
     if orig_sr == target_sr {
         return Ok(audio.clone());

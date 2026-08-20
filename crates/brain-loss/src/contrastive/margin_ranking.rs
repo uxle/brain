@@ -5,9 +5,9 @@
 //! For score pair $(x_1, x_2)$ and target label $y \in \{1, -1\}$:
 //! $$\mathcal{L}(x_1, x_2, y) = \max(0, -y \cdot (x_1 - x_2) + \text{margin})$$
 
-use brain_core::Tensor;
 use crate::core::{LossResult, Reduction};
 use crate::utils::reduction_apply;
+use brain_core::Tensor;
 
 /// Margin Ranking Loss.
 #[derive(Debug, Clone)]
@@ -18,7 +18,10 @@ pub struct MarginRankingLoss {
 
 impl Default for MarginRankingLoss {
     fn default() -> Self {
-        Self { margin: 0.0, reduction: Reduction::Mean }
+        Self {
+            margin: 0.0,
+            reduction: Reduction::Mean,
+        }
     }
 }
 

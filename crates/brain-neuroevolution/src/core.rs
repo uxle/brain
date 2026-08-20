@@ -3,7 +3,6 @@
 //! Master evolutionary configuration, errors, results, and summary descriptors.
 #![allow(missing_docs)]
 
-
 /// Evolutionary algorithm kind.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum AlgorithmKind {
@@ -62,8 +61,13 @@ impl EvoConfig {
     pub fn summary(&self) -> String {
         format!(
             "EvoConfig[algo={:?} pop={} dim={} elites={} mut={:.2} xover={:.2} gens={}]",
-            self.algorithm, self.population_size, self.genome_dim, self.elite_count,
-            self.mutation_rate, self.crossover_rate, self.max_generations
+            self.algorithm,
+            self.population_size,
+            self.genome_dim,
+            self.elite_count,
+            self.mutation_rate,
+            self.crossover_rate,
+            self.max_generations
         )
     }
 }
@@ -83,7 +87,9 @@ impl std::fmt::Display for EvoError {
             EvoError::InvalidConfig(msg) => write!(f, "Invalid config: {}", msg),
             EvoError::PopulationEmpty => write!(f, "Population is empty"),
             EvoError::EvaluationFailed(msg) => write!(f, "Evaluation failed: {}", msg),
-            EvoError::DimensionMismatch { expected, got } => write!(f, "Dimension mismatch: expected {}, got {}", expected, got),
+            EvoError::DimensionMismatch { expected, got } => {
+                write!(f, "Dimension mismatch: expected {}, got {}", expected, got)
+            }
         }
     }
 }
@@ -92,6 +98,12 @@ pub type EvoResult<T> = Result<T, EvoError>;
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
 }

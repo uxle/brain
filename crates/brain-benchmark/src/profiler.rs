@@ -19,7 +19,10 @@ impl Profiler {
 
     /// Records duration for a named event or execution phase.
     pub fn record(&mut self, event_name: impl Into<String>, duration: Duration) {
-        let entry = self.events.entry(event_name.into()).or_insert(Duration::ZERO);
+        let entry = self
+            .events
+            .entry(event_name.into())
+            .or_insert(Duration::ZERO);
         *entry += duration;
     }
 

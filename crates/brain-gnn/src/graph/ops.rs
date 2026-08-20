@@ -3,9 +3,9 @@
 //! Subgraph extraction, degree computation, self-loops, and dense conversion.
 #![allow(missing_docs)]
 
-use brain_core::Tensor;
 use super::Graph;
 use crate::ops::normalize_adj;
+use brain_core::Tensor;
 
 /// Computes the in-degrees of all nodes in a graph.
 pub fn in_degrees(graph: &Graph) -> Vec<usize> {
@@ -30,7 +30,11 @@ pub fn to_dense_adj(graph: &Graph) -> Tensor {
     for i in 0..graph.src_nodes.len() {
         let s = graph.src_nodes[i];
         let d = graph.dst_nodes[i];
-        let w = graph.edge_weights.as_ref().map(|weights| weights[i]).unwrap_or(1.0);
+        let w = graph
+            .edge_weights
+            .as_ref()
+            .map(|weights| weights[i])
+            .unwrap_or(1.0);
         if s < n && d < n {
             adj[s * n + d] += w;
         }
@@ -85,12 +89,19 @@ pub fn induced_subgraph(graph: &Graph, node_subset: &[usize]) -> Graph {
         sub_src,
         sub_dst,
         Tensor::from_vec(sub_feats, vec![sub_num_nodes, feat_dim]),
-    ).unwrap()
+    )
+    .unwrap()
 }
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

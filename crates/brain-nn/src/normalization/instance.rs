@@ -4,8 +4,8 @@
 //! optional learned affine scale/bias (torch `InstanceNorm2d` semantics).
 #![allow(missing_docs)]
 
-use brain_core::Tensor;
 use crate::module::{Module, ModuleResult};
+use brain_core::Tensor;
 
 /// 2D Instance Normalization layer.
 #[derive(Debug, Clone)]
@@ -48,15 +48,24 @@ impl Module for InstanceNorm2d {
         let in_data = input.to_vec();
         let mut out = vec![0.0f64; total];
 
-        let w_data = if self.affine { self.weight.to_vec() } else { vec![1.0; c] };
-        let b_data = if self.affine { self.bias.to_vec() } else { vec![0.0; c] };
+        let w_data = if self.affine {
+            self.weight.to_vec()
+        } else {
+            vec![1.0; c]
+        };
+        let b_data = if self.affine {
+            self.bias.to_vec()
+        } else {
+            vec![0.0; c]
+        };
 
         for b in 0..n {
             for ch in 0..c {
                 let start = (b * c + ch) * spatial_size;
                 let slice = &in_data[start..start + spatial_size];
                 let mean: f64 = slice.iter().sum::<f64>() / (spatial_size as f64);
-                let var: f64 = slice.iter().map(|&x| (x - mean) * (x - mean)).sum::<f64>() / (spatial_size as f64);
+                let var: f64 = slice.iter().map(|&x| (x - mean) * (x - mean)).sum::<f64>()
+                    / (spatial_size as f64);
                 let inv_std = 1.0 / (var + self.eps).sqrt();
                 let gamma = w_data[ch];
                 let beta = b_data[ch];
@@ -73,7 +82,10 @@ impl Module for InstanceNorm2d {
 
     fn parameters(&self) -> Vec<Value> {
         if self.affine {
-            vec![Value::new(self.weight.clone(), true), Value::new(self.bias.clone(), true)]
+            vec![
+                Value::new(self.weight.clone(), true),
+                Value::new(self.bias.clone(), true),
+            ]
         } else {
             vec![]
         }
@@ -87,10 +99,13 @@ mod tests {
     #[test]
     fn test_instance_norm2d_no_affine() {
         let in_ = InstanceNorm2d::new(2, false);
-        let t = Value::new(Tensor::from_slice(
-            &[1.0, 3.0, 2.0, 4.0, 10.0, 20.0, 30.0, 40.0],
-            vec![1, 2, 2, 2],
-        ), false);
+        let t = Value::new(
+            Tensor::from_slice(
+                &[1.0, 3.0, 2.0, 4.0, 10.0, 20.0, 30.0, 40.0],
+                vec![1, 2, 2, 2],
+            ),
+            false,
+        );
         let out = in_.forward(&t).unwrap();
         // Channel 0: mean 2.5, pop-var 1.25 -> inv_std ~0.8944
         let inv = 1.0 / (1.25f64 + 1e-5).sqrt();
@@ -105,7 +120,10 @@ mod tests {
     #[test]
     fn test_instance_norm2d_affine() {
         let in_ = InstanceNorm2d::new(1, true);
-        let t = Value::new(Tensor::from_slice(&[1.0, 2.0, 3.0, 4.0], vec![1, 1, 2, 2]), false);
+        let t = Value::new(
+            Tensor::from_slice(&[1.0, 2.0, 3.0, 4.0], vec![1, 1, 2, 2]),
+            false,
+        );
         let out = in_.forward(&t).unwrap();
         // mean 2.5, var 1.25, gamma 1, beta 0
         let inv = 1.0 / (1.25f64 + 1e-5).sqrt();
@@ -116,7 +134,10 @@ mod tests {
     #[test]
     fn test_instance_norm_per_sample_independent() {
         let in_ = InstanceNorm2d::new(1, false);
-        let t = Value::new(Tensor::from_slice(&[1.0, 3.0, 100.0, 300.0], vec![2, 1, 1, 2]), false);
+        let t = Value::new(
+            Tensor::from_slice(&[1.0, 3.0, 100.0, 300.0], vec![2, 1, 1, 2]),
+            false,
+        );
         let out = in_.forward(&t).unwrap();
         // Both samples normalize to the same values: [-1, 1] (within eps tolerance)
         assert!((out.get(0) + 1.0).abs() < 1e-4);

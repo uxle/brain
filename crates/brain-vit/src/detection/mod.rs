@@ -6,7 +6,7 @@
 //! - [`Bbox`] — axis-aligned bounding box type
 //! - [`IoU`] — intersection-over-union computation
 
-use crate::core::{VitError, VitResult, Tensor2D, SimpleRng};
+use crate::core::{SimpleRng, Tensor2D, VitError, VitResult};
 use crate::ops::linear;
 use std::fmt;
 
@@ -30,7 +30,14 @@ pub struct Bbox {
 impl Bbox {
     /// Create a new bounding box.
     pub fn new(cx: f64, cy: f64, w: f64, h: f64, score: f64, class_id: usize) -> Self {
-        Self { cx, cy, w, h, score, class_id }
+        Self {
+            cx,
+            cy,
+            w,
+            h,
+            score,
+            class_id,
+        }
     }
 
     /// Convert to [x1, y1, x2, y2] format.
@@ -56,7 +63,9 @@ impl Bbox {
     }
 
     /// Area of the bounding box.
-    pub fn area(&self) -> f64 { self.w * self.h }
+    pub fn area(&self) -> f64 {
+        self.w * self.h
+    }
 
     /// Clamp box coordinates to [0, 1].
     pub fn clamp(&self) -> Self {
@@ -64,14 +73,23 @@ impl Bbox {
         let cy = self.cy.clamp(0.0, 1.0);
         let w = self.w.clamp(0.0, 1.0);
         let h = self.h.clamp(0.0, 1.0);
-        Self { cx, cy, w, h, ..*self }
+        Self {
+            cx,
+            cy,
+            w,
+            h,
+            ..*self
+        }
     }
 }
 
 impl fmt::Display for Bbox {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "Bbox(cx={:.3}, cy={:.3}, w={:.3}, h={:.3}, cls={}, score={:.3})",
-            self.cx, self.cy, self.w, self.h, self.class_id, self.score)
+        write!(
+            f,
+            "Bbox(cx={:.3}, cy={:.3}, w={:.3}, h={:.3}, cls={}, score={:.3})",
+            self.cx, self.cy, self.w, self.h, self.class_id, self.score
+        )
     }
 }
 
@@ -87,7 +105,11 @@ pub fn iou(a: &Bbox, b: &Bbox) -> f64 {
     let inter_h = (inter_y2 - inter_y1).max(0.0);
     let inter_area = inter_w * inter_h;
     let union_area = a.area() + b.area() - inter_area;
-    if union_area <= 0.0 { 0.0 } else { inter_area / union_area }
+    if union_area <= 0.0 {
+        0.0
+    } else {
+        inter_area / union_area
+    }
 }
 
 /// Compute Generalized IoU (GIoU).
@@ -101,14 +123,20 @@ pub fn giou(a: &Bbox, b: &Bbox) -> f64 {
     let inter_y2 = ay2.min(by2);
     let inter_area = ((inter_x2 - inter_x1).max(0.0)) * ((inter_y2 - inter_y1).max(0.0));
     let union_area = a.area() + b.area() - inter_area;
-    let iou_val = if union_area <= 0.0 { 0.0 } else { inter_area / union_area };
+    let iou_val = if union_area <= 0.0 {
+        0.0
+    } else {
+        inter_area / union_area
+    };
     // Enclosing box
     let enc_x1 = ax1.min(bx1);
     let enc_y1 = ay1.min(by1);
     let enc_x2 = ax2.max(bx2);
     let enc_y2 = ay2.max(by2);
     let enc_area = (enc_x2 - enc_x1) * (enc_y2 - enc_y1);
-    if enc_area <= 0.0 { iou_val } else {
+    if enc_area <= 0.0 {
+        iou_val
+    } else {
         iou_val - (enc_area - union_area) / enc_area
     }
 }
@@ -122,18 +150,25 @@ pub fn giou(a: &Bbox, b: &Bbox) -> f64 {
 /// - `iou_threshold`: boxes with IoU > threshold are suppressed.
 pub fn nms(boxes: &[Bbox], iou_threshold: f64) -> Vec<Bbox> {
     let mut sorted: Vec<&Bbox> = boxes.iter().collect();
-    sorted.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+    sorted.sort_by(|a, b| {
+        b.score
+            .partial_cmp(&a.score)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
 
     let mut kept = Vec::new();
     let mut suppressed = vec![false; sorted.len()];
 
     for i in 0..sorted.len() {
-        if suppressed[i] { continue; }
+        if suppressed[i] {
+            continue;
+        }
         kept.push(sorted[i].clone());
         for j in (i + 1)..sorted.len() {
-            if suppressed[j] { continue; }
-            if sorted[i].class_id == sorted[j].class_id
-                && iou(sorted[i], sorted[j]) > iou_threshold
+            if suppressed[j] {
+                continue;
+            }
+            if sorted[i].class_id == sorted[j].class_id && iou(sorted[i], sorted[j]) > iou_threshold
             {
                 suppressed[j] = true;
             }
@@ -164,16 +199,31 @@ pub struct DetectionHead {
 
 impl DetectionHead {
     /// Create a new detection head.
-    pub fn new(embed_dim: usize, num_classes: usize, num_queries: usize, seed: u64) -> VitResult<Self> {
+    pub fn new(
+        embed_dim: usize,
+        num_classes: usize,
+        num_queries: usize,
+        seed: u64,
+    ) -> VitResult<Self> {
         if embed_dim == 0 || num_classes == 0 || num_queries == 0 {
-            return Err(VitError::Config("DetectionHead: all dims must be > 0".to_string()));
+            return Err(VitError::Config(
+                "DetectionHead: all dims must be > 0".to_string(),
+            ));
         }
         let mut rng = SimpleRng::new(seed);
         let box_w = rng.xavier_uniform(4, embed_dim);
         let box_b = vec![0.0f64; 4];
         let cls_w = rng.xavier_uniform(num_classes + 1, embed_dim);
         let cls_b = vec![0.0f64; num_classes + 1];
-        Ok(Self { box_w, box_b, cls_w, cls_b, embed_dim, num_classes, num_queries })
+        Ok(Self {
+            box_w,
+            box_b,
+            cls_w,
+            cls_b,
+            embed_dim,
+            num_classes,
+            num_queries,
+        })
     }
 
     /// Forward: `[B, num_queries, embed_dim]` → `([B, Q, 4], [B, Q, C+1])` flat.
@@ -182,7 +232,9 @@ impl DetectionHead {
         let d = self.embed_dim;
         let c = self.num_classes + 1;
         if queries.len() != batch * n * d {
-            return Err(VitError::Shape("DetectionHead: queries shape mismatch".to_string()));
+            return Err(VitError::Shape(
+                "DetectionHead: queries shape mismatch".to_string(),
+            ));
         }
 
         let flat_input = Tensor2D::from_data(batch * n, d, queries.to_vec())?;
@@ -193,7 +245,11 @@ impl DetectionHead {
         let cls_out = linear(&flat_input, &cw, Some(&self.cls_b))?;
 
         // Apply sigmoid to box outputs to get normalized coords
-        let boxes: Vec<f64> = box_out.data.iter().map(|&x| 1.0 / (1.0 + (-x).exp())).collect();
+        let boxes: Vec<f64> = box_out
+            .data
+            .iter()
+            .map(|&x| 1.0 / (1.0 + (-x).exp()))
+            .collect();
         Ok((boxes, cls_out.data))
     }
 
@@ -224,7 +280,9 @@ impl DetectionHead {
                 let sum: f64 = exps.iter().sum();
                 let probs: Vec<f64> = exps.iter().map(|&e| e / sum).collect();
                 // Best foreground class (skip background = last)
-                let (best_cls, best_score) = probs[..self.num_classes].iter().enumerate()
+                let (best_cls, best_score) = probs[..self.num_classes]
+                    .iter()
+                    .enumerate()
                     .max_by(|a, b| a.1.partial_cmp(b.1).unwrap_or(std::cmp::Ordering::Equal))
                     .map(|(i, &s)| (i, s))
                     .unwrap_or((0, 0.0));
@@ -266,7 +324,9 @@ pub fn mean_average_precision(
             total_gt += cls_gts.len();
             let mut matched = vec![false; cls_gts.len()];
             for pred in &cls_preds {
-                let best = cls_gts.iter().enumerate()
+                let best = cls_gts
+                    .iter()
+                    .enumerate()
                     .filter(|(i, _)| !matched[*i])
                     .map(|(i, gt)| (i, iou(pred, gt)))
                     .max_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal));
@@ -276,32 +336,44 @@ pub fn mean_average_precision(
                         fp.push(0.0f64);
                         matched[idx] = true;
                     } else {
-                        tp.push(0.0f64); fp.push(1.0f64);
+                        tp.push(0.0f64);
+                        fp.push(1.0f64);
                     }
                 } else {
-                    tp.push(0.0f64); fp.push(1.0f64);
+                    tp.push(0.0f64);
+                    fp.push(1.0f64);
                 }
             }
         }
-        if total_gt == 0 { continue; }
+        if total_gt == 0 {
+            continue;
+        }
         // Compute AP via trapezoidal rule
         let mut cum_tp = 0.0f64;
         let mut cum_fp = 0.0f64;
         let mut prec_rec: Vec<(f64, f64)> = vec![(1.0, 0.0)];
         for (&t, &f) in tp.iter().zip(fp.iter()) {
-            cum_tp += t; cum_fp += f;
+            cum_tp += t;
+            cum_fp += f;
             let prec = cum_tp / (cum_tp + cum_fp).max(1e-10);
             let rec = cum_tp / total_gt as f64;
             prec_rec.push((prec, rec));
         }
         prec_rec.push((0.0, 1.0));
-        let ap: f64 = prec_rec.windows(2).map(|w| {
-            let dr = w[1].1 - w[0].1;
-            dr * w[1].0
-        }).sum();
+        let ap: f64 = prec_rec
+            .windows(2)
+            .map(|w| {
+                let dr = w[1].1 - w[0].1;
+                dr * w[1].0
+            })
+            .sum();
         ap_sum += ap;
     }
-    if num_classes > 0 { ap_sum / num_classes as f64 } else { 0.0 }
+    if num_classes > 0 {
+        ap_sum / num_classes as f64
+    } else {
+        0.0
+    }
 }
 
 #[cfg(test)]
@@ -369,7 +441,11 @@ mod tests {
         let a = Bbox::new(0.3, 0.5, 0.4, 0.4, 1.0, 0);
         let b = Bbox::new(0.5, 0.5, 0.4, 0.4, 1.0, 0);
         let v = iou(&a, &b);
-        assert!(v > 0.0 && v < 1.0, "Expected partial overlap IoU in (0,1), got {}", v);
+        assert!(
+            v > 0.0 && v < 1.0,
+            "Expected partial overlap IoU in (0,1), got {}",
+            v
+        );
     }
 
     #[test]
@@ -436,7 +512,9 @@ mod tests {
         let h = DetectionHead::new(16, 4, 5, 0).unwrap();
         let queries = vec![1.0f64; 1 * 5 * 16];
         let (boxes, _) = h.forward(&queries, 1).unwrap();
-        for &v in &boxes { assert!(v >= 0.0 && v <= 1.0); }
+        for &v in &boxes {
+            assert!(v >= 0.0 && v <= 1.0);
+        }
     }
 
     #[test]

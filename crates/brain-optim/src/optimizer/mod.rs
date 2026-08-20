@@ -6,19 +6,25 @@
 
 pub mod param_group;
 
+use brain_core::Tensor;
+pub use param_group::{ParamGroup, ParamGroupConfig, ParamId};
 use std::collections::HashMap;
 use std::fmt;
-use brain_core::Tensor;
-pub use param_group::{ParamGroup, ParamId, ParamGroupConfig};
 
 /// Comprehensive error type for optimization operations.
 #[derive(Debug, Clone, PartialEq)]
 pub enum OptimizerError {
     EmptyParamGroup,
-    GradientDimensionMismatch { expected: Vec<usize>, found: Vec<usize> },
+    GradientDimensionMismatch {
+        expected: Vec<usize>,
+        found: Vec<usize>,
+    },
     MissingGradient(ParamId),
     InvalidHyperparameter(String),
-    NonFiniteGradient { param_id: ParamId, value: f64 },
+    NonFiniteGradient {
+        param_id: ParamId,
+        value: f64,
+    },
     StateDictError(String),
     GroupNotFound(usize),
 }
@@ -28,15 +34,29 @@ impl fmt::Display for OptimizerError {
         match self {
             OptimizerError::EmptyParamGroup => write!(f, "Parameter group contains no parameters"),
             OptimizerError::GradientDimensionMismatch { expected, found } => {
-                write!(f, "Gradient shape {:?} does not match parameter shape {:?}", found, expected)
+                write!(
+                    f,
+                    "Gradient shape {:?} does not match parameter shape {:?}",
+                    found, expected
+                )
             }
-            OptimizerError::MissingGradient(id) => write!(f, "Missing gradient for parameter {}", id),
-            OptimizerError::InvalidHyperparameter(msg) => write!(f, "Invalid hyperparameter: {}", msg),
+            OptimizerError::MissingGradient(id) => {
+                write!(f, "Missing gradient for parameter {}", id)
+            }
+            OptimizerError::InvalidHyperparameter(msg) => {
+                write!(f, "Invalid hyperparameter: {}", msg)
+            }
             OptimizerError::NonFiniteGradient { param_id, value } => {
-                write!(f, "Non-finite gradient encountered in param {}: {}", param_id, value)
+                write!(
+                    f,
+                    "Non-finite gradient encountered in param {}: {}",
+                    param_id, value
+                )
             }
             OptimizerError::StateDictError(msg) => write!(f, "State dict error: {}", msg),
-            OptimizerError::GroupNotFound(idx) => write!(f, "Parameter group index {} out of bounds", idx),
+            OptimizerError::GroupNotFound(idx) => {
+                write!(f, "Parameter group index {} out of bounds", idx)
+            }
         }
     }
 }
@@ -111,7 +131,13 @@ pub trait Optimizer: Send + Sync {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

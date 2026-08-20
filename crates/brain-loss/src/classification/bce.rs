@@ -8,9 +8,9 @@
 //! Numerically stable BCE with Logits ($x = \text{logit}$):
 //! $$\mathcal{L}(y, x) = \max(x, 0) - x \cdot y + \log(1 + e^{-|x|})$$
 
-use brain_core::Tensor;
 use crate::core::{LossError, LossResult, Reduction};
 use crate::utils::reduction_apply;
+use brain_core::Tensor;
 
 /// Configuration for Binary Cross-Entropy losses.
 #[derive(Debug, Clone)]

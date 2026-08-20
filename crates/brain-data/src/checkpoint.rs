@@ -12,7 +12,10 @@ pub struct PipelineCheckpoint {
 impl PipelineCheckpoint {
     /// Creates a new `PipelineCheckpoint`.
     pub fn new(epoch: usize, sample_offset: usize) -> Self {
-        Self { epoch, sample_offset }
+        Self {
+            epoch,
+            sample_offset,
+        }
     }
 }
 

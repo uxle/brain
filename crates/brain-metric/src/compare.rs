@@ -14,7 +14,11 @@ pub struct CompareReport {
 /// Compares two model metric scores (where higher score is better).
 pub fn compare_models(score_a: f64, score_b: f64) -> CompareReport {
     let delta = score_a - score_b;
-    let rel = if score_b.abs() > 1e-12 { (delta / score_b) * 100.0 } else { 0.0 };
+    let rel = if score_b.abs() > 1e-12 {
+        (delta / score_b) * 100.0
+    } else {
+        0.0
+    };
     CompareReport {
         delta,
         relative_gain_pct: rel,
@@ -24,7 +28,13 @@ pub fn compare_models(score_a: f64, score_b: f64) -> CompareReport {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

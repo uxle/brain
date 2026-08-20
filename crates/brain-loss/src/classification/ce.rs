@@ -3,11 +3,11 @@
 //! Numerically stable fused log-softmax + NLL with label smoothing, class weights, and ignore index.
 #![allow(missing_docs)]
 
-use brain_core::Tensor;
+use super::{ClassLossConfig, ClassificationLoss};
 use crate::core::LossResult;
 use crate::ops::{log_softmax, nll_loss};
 use crate::utils::reduction_apply;
-use super::{ClassificationLoss, ClassLossConfig};
+use brain_core::Tensor;
 
 pub type CrossEntropyConfig = ClassLossConfig;
 
@@ -35,7 +35,8 @@ impl CrossEntropyLoss {
             let lsm_data = lsm.to_vec();
             let eps = self.config.label_smoothing;
             for r in 0..rows.min(targets.len()) {
-                let mean_log_prob: f64 = lsm_data[r * cols..(r + 1) * cols].iter().sum::<f64>() / cols as f64;
+                let mean_log_prob: f64 =
+                    lsm_data[r * cols..(r + 1) * cols].iter().sum::<f64>() / cols as f64;
                 sample_losses[r] = (1.0 - eps) * sample_losses[r] - eps * mean_log_prob;
             }
         }
@@ -54,7 +55,13 @@ impl CrossEntropyLoss {
             sample_losses = sample_losses
                 .into_iter()
                 .enumerate()
-                .filter_map(|(i, l)| if targets.get(i).copied() != Some(ignore) { Some(l) } else { None })
+                .filter_map(|(i, l)| {
+                    if targets.get(i).copied() != Some(ignore) {
+                        Some(l)
+                    } else {
+                        None
+                    }
+                })
                 .collect();
         }
 
@@ -62,7 +69,11 @@ impl CrossEntropyLoss {
     }
 
     /// Differentiable forward pass for cross-entropy with integer class targets.
-    pub fn forward_value_logits(&self, logits: &brain_autograd::Value, targets: &[usize]) -> LossResult<brain_autograd::Value> {
+    pub fn forward_value_logits(
+        &self,
+        logits: &brain_autograd::Value,
+        targets: &[usize],
+    ) -> LossResult<brain_autograd::Value> {
         let shape = logits.shape();
         if shape.is_empty() {
             return Err(crate::core::LossError::ShapeMismatch {
@@ -102,14 +113,24 @@ impl ClassificationLoss for CrossEntropyLoss {
         self.forward_logits(logits, targets)
     }
 
-    fn forward_value(&self, logits: &brain_autograd::Value, targets: &[usize]) -> LossResult<brain_autograd::Value> {
+    fn forward_value(
+        &self,
+        logits: &brain_autograd::Value,
+        targets: &[usize],
+    ) -> LossResult<brain_autograd::Value> {
         self.forward_value_logits(logits, targets)
     }
 }
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

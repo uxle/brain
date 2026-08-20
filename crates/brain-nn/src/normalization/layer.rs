@@ -3,8 +3,8 @@
 //! Standard Layer Normalization over specified normalized shapes.
 #![allow(missing_docs)]
 
-use brain_core::Tensor;
 use crate::module::{Module, ModuleResult};
+use brain_core::Tensor;
 
 /// Layer Normalization module.
 #[derive(Debug, Clone)]
@@ -41,7 +41,8 @@ impl LayerNorm {
         for b in 0..batch_items {
             let slice = &data[b * norm_size..(b + 1) * norm_size];
             let mean: f64 = slice.iter().sum::<f64>() / norm_size as f64;
-            let var: f64 = slice.iter().map(|&x| (x - mean).powi(2)).sum::<f64>() / norm_size as f64;
+            let var: f64 =
+                slice.iter().map(|&x| (x - mean).powi(2)).sum::<f64>() / norm_size as f64;
             let inv_std = 1.0 / (var + self.eps).sqrt();
 
             for i in 0..norm_size {
@@ -63,13 +64,22 @@ impl Module for LayerNorm {
     }
 
     fn parameters(&self) -> Vec<Value> {
-        vec![Value::new(self.weight.clone(), true), Value::new(self.bias.clone(), true)]
+        vec![
+            Value::new(self.weight.clone(), true),
+            Value::new(self.bias.clone(), true),
+        ]
     }
 }
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

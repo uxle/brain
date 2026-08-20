@@ -1,7 +1,15 @@
 //! # Pretrained Embedding Loaders: GloVe & Word2Vec
 //!
 //! High-throughput parsers for standard GloVe and Word2Vec formats with vector algebra and analogy solvers.
-#![allow(missing_docs, unused_imports, unused_variables, dead_code, unused_mut, unused_comparisons, clippy::all)]
+#![allow(
+    missing_docs,
+    unused_imports,
+    unused_variables,
+    dead_code,
+    unused_mut,
+    unused_comparisons,
+    clippy::all
+)]
 
 use crate::core::{TextError, TextResult};
 use crate::embedding::WordEmbedding;
@@ -161,13 +169,7 @@ impl PretrainedEmbedding {
     }
 
     /// Solves vector analogies: $v_{pos1} - v_{neg} + v_{pos2} \approx v_{result}$ (e.g. king - man + woman = queen).
-    pub fn analogy(
-        &self,
-        pos1: &str,
-        pos2: &str,
-        neg: &str,
-        top_k: usize,
-    ) -> Vec<(String, f32)> {
+    pub fn analogy(&self, pos1: &str, pos2: &str, neg: &str, top_k: usize) -> Vec<(String, f32)> {
         let v_pos1 = match self.get_vector(pos1) {
             Some(v) => v,
             None => return Vec::new(),
@@ -224,44 +226,62 @@ impl PretrainedEmbedding {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant, clippy::needless_range_loop, clippy::manual_div_ceil, clippy::manual_is_multiple_of, clippy::too_many_arguments, clippy::doc_markdown, clippy::excessive_precision, clippy::float_cmp, clippy::len_zero)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant,
+        clippy::needless_range_loop,
+        clippy::manual_div_ceil,
+        clippy::manual_is_multiple_of,
+        clippy::too_many_arguments,
+        clippy::doc_markdown,
+        clippy::excessive_precision,
+        clippy::float_cmp,
+        clippy::len_zero
+    )]
     use super::*;
-    use crate::core::*;
-    use crate::config::*;
-    use crate::utils::*;
-    use crate::ops::*;
-    use crate::vocab::*;
-    use crate::text_ops::*;
-    use crate::features::*;
-    use crate::similarity::*;
-    use crate::lm::*;
-    use crate::process::*;
-    use crate::optimize::*;
     use crate::analyze::*;
-    use crate::compute::*;
-    use crate::helper::*;
-    use crate::transform::*;
     use crate::builder::*;
-    use crate::tokenizer::*;
-    use crate::tokenizer::bpe::*;
-    use crate::tokenizer::sentencepiece::*;
-    use crate::tokenizer::wordpiece::*;
-    use crate::tokenizer::char::*;
-    use crate::tokenizer::trainer::*;
-    use crate::tokenizer::normalizer::*;
-    use crate::tokenizer::pretokenizer::*;
-    use crate::tokenizer::bytelevel::*;
-    use crate::tokenizer::post::*;
-    use crate::embedding::*;
-    use crate::embedding::pretrained::*;
+    use crate::compute::*;
+    use crate::config::*;
+    use crate::core::*;
     use crate::embedding::fasttext::*;
+    use crate::embedding::pretrained::*;
+    use crate::embedding::*;
+    use crate::features::*;
+    use crate::helper::*;
+    use crate::lm::*;
+    use crate::ops::*;
+    use crate::optimize::*;
+    use crate::process::*;
+    use crate::similarity::*;
+    use crate::text_ops::*;
+    use crate::tokenizer::bpe::*;
+    use crate::tokenizer::bytelevel::*;
+    use crate::tokenizer::char::*;
+    use crate::tokenizer::normalizer::*;
+    use crate::tokenizer::post::*;
+    use crate::tokenizer::pretokenizer::*;
+    use crate::tokenizer::sentencepiece::*;
+    use crate::tokenizer::trainer::*;
+    use crate::tokenizer::wordpiece::*;
+    use crate::tokenizer::*;
+    use crate::transform::*;
+    use crate::utils::*;
+    use crate::vocab::*;
     use crate::VERSION;
     use brain_core::Tensor;
 
     #[test]
     fn test_pretrained_embeddings_1() {
         let glove_sample = "king 0.5 0.5 0.5\nqueen 0.5 0.4 0.6\nman 0.4 0.5 0.2\nwoman 0.4 0.4 0.3\napple_1 0.0 0.1 0.2";
-        let cfg = PretrainedConfig { embedding_dim: 3, normalize: true, ..Default::default() };
+        let cfg = PretrainedConfig {
+            embedding_dim: 3,
+            normalize: true,
+            ..Default::default()
+        };
         let p_emb = PretrainedEmbedding::load_glove_str(glove_sample, &cfg).unwrap();
         assert_eq!(p_emb.vocab.len(), 5);
 

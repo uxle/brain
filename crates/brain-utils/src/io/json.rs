@@ -3,8 +3,8 @@
 //! Provides a complete, recursive descent JSON parser and pretty serializer
 //! supporting objects, arrays, strings with escapes, numbers, booleans, and null.
 
-use std::collections::BTreeMap;
 use crate::core::{UtilsError, UtilsResult};
+use std::collections::BTreeMap;
 
 /// JSON Value AST representation.
 #[derive(Debug, Clone, PartialEq)]
@@ -73,7 +73,13 @@ impl JsonValue {
     pub fn to_compact_string(&self) -> String {
         match self {
             Self::Null => "null".to_string(),
-            Self::Bool(b) => if *b { "true".to_string() } else { "false".to_string() },
+            Self::Bool(b) => {
+                if *b {
+                    "true".to_string()
+                } else {
+                    "false".to_string()
+                }
+            }
             Self::Number(n) => n.to_string(),
             Self::String(s) => format!("\"{}\"", s.replace('"', "\\\"")),
             Self::Array(arr) => {
@@ -83,7 +89,9 @@ impl JsonValue {
             Self::Object(map) => {
                 let items: Vec<String> = map
                     .iter()
-                    .map(|(k, v)| format!("\"{}\":{}", k.replace('"', "\\\""), v.to_compact_string()))
+                    .map(|(k, v)| {
+                        format!("\"{}\":{}", k.replace('"', "\\\""), v.to_compact_string())
+                    })
                     .collect();
                 format!("{{{}}}", items.join(","))
             }
@@ -98,7 +106,10 @@ pub fn parse_json(input: &str) -> UtilsResult<JsonValue> {
     let val = parse_value(&chars, &mut pos)?;
     skip_whitespace(&chars, &mut pos);
     if pos < chars.len() {
-        return Err(UtilsError::JsonError(format!("Trailing tokens at pos {}", pos)));
+        return Err(UtilsError::JsonError(format!(
+            "Trailing tokens at pos {}",
+            pos
+        )));
     }
     Ok(val)
 }
@@ -112,7 +123,9 @@ fn skip_whitespace(chars: &[char], pos: &mut usize) {
 fn parse_value(chars: &[char], pos: &mut usize) -> UtilsResult<JsonValue> {
     skip_whitespace(chars, pos);
     if *pos >= chars.len() {
-        return Err(UtilsError::JsonError("Unexpected EOF while parsing JSON".to_string()));
+        return Err(UtilsError::JsonError(
+            "Unexpected EOF while parsing JSON".to_string(),
+        ));
     }
     match chars[*pos] {
         'n' => parse_null(chars, pos),
@@ -121,7 +134,10 @@ fn parse_value(chars: &[char], pos: &mut usize) -> UtilsResult<JsonValue> {
         '[' => parse_array(chars, pos),
         '{' => parse_object(chars, pos),
         '-' | '0'..='9' => parse_number(chars, pos),
-        c => Err(UtilsError::JsonError(format!("Unexpected character '{}' at pos {}", c, pos))),
+        c => Err(UtilsError::JsonError(format!(
+            "Unexpected character '{}' at pos {}",
+            c, pos
+        ))),
     }
 }
 
@@ -157,7 +173,9 @@ fn parse_string(chars: &[char], pos: &mut usize) -> UtilsResult<String> {
         }
         if c == '\\' {
             if *pos >= chars.len() {
-                return Err(UtilsError::JsonError("Unterminated escape sequence".to_string()));
+                return Err(UtilsError::JsonError(
+                    "Unterminated escape sequence".to_string(),
+                ));
             }
             let esc = chars[*pos];
             *pos += 1;
@@ -181,7 +199,14 @@ fn parse_string(chars: &[char], pos: &mut usize) -> UtilsResult<String> {
 
 fn parse_number(chars: &[char], pos: &mut usize) -> UtilsResult<JsonValue> {
     let start = *pos;
-    while *pos < chars.len() && (chars[*pos].is_ascii_digit() || chars[*pos] == '.' || chars[*pos] == '-' || chars[*pos] == '+' || chars[*pos] == 'e' || chars[*pos] == 'E') {
+    while *pos < chars.len()
+        && (chars[*pos].is_ascii_digit()
+            || chars[*pos] == '.'
+            || chars[*pos] == '-'
+            || chars[*pos] == '+'
+            || chars[*pos] == 'e'
+            || chars[*pos] == 'E')
+    {
         *pos += 1;
     }
     let s: String = chars[start..*pos].iter().collect();
@@ -212,7 +237,10 @@ fn parse_array(chars: &[char], pos: &mut usize) -> UtilsResult<JsonValue> {
         if chars[*pos] == ',' {
             *pos += 1;
         } else {
-            return Err(UtilsError::JsonError(format!("Expected ',' or ']', found '{}'", chars[*pos])));
+            return Err(UtilsError::JsonError(format!(
+                "Expected ',' or ']', found '{}'",
+                chars[*pos]
+            )));
         }
     }
     Ok(JsonValue::Array(arr))
@@ -229,7 +257,9 @@ fn parse_object(chars: &[char], pos: &mut usize) -> UtilsResult<JsonValue> {
     loop {
         skip_whitespace(chars, pos);
         if *pos >= chars.len() || chars[*pos] != '"' {
-            return Err(UtilsError::JsonError("Expected string key in object".to_string()));
+            return Err(UtilsError::JsonError(
+                "Expected string key in object".to_string(),
+            ));
         }
         let key = parse_string(chars, pos)?;
         skip_whitespace(chars, pos);
@@ -250,7 +280,10 @@ fn parse_object(chars: &[char], pos: &mut usize) -> UtilsResult<JsonValue> {
         if chars[*pos] == ',' {
             *pos += 1;
         } else {
-            return Err(UtilsError::JsonError(format!("Expected ',' or '}}', found '{}'", chars[*pos])));
+            return Err(UtilsError::JsonError(format!(
+                "Expected ',' or '}}', found '{}'",
+                chars[*pos]
+            )));
         }
     }
     Ok(JsonValue::Object(map))
@@ -265,15 +298,15 @@ mod tests {
     fn test_json_parser_and_ast_1() {
         let json_text = "{\"name\":\"brain\",\"version\":0.2,\"active\":true,\"tags\":[\"rust\",\"deeplearning\"]}";
         let val = parse_json(json_text).unwrap();
-        
+
         assert_eq!(val.get("name").and_then(|v| v.as_str()), Some("brain"));
         assert_eq!(val.get("version").and_then(|v| v.as_f64()), Some(0.2));
         assert_eq!(val.get("active").and_then(|v| v.as_bool()), Some(true));
-        
+
         let tags = val.get("tags").and_then(|v| v.as_array()).unwrap();
         assert_eq!(tags.len(), 2);
         assert_eq!(tags[0].as_str(), Some("rust"));
-    
+
         let compact = val.to_compact_string();
         assert!(compact.contains("brain"));
     }

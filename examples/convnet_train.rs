@@ -50,10 +50,18 @@ fn main() {
         .expect("Trainer initialized");
 
     let before = trainer.evaluate(&batches).expect("Initial evaluation");
-    println!("Initial metrics: loss={:.4}, accuracy={:.1}%", before.loss, before.accuracy * 100.0);
+    println!(
+        "Initial metrics: loss={:.4}, accuracy={:.1}%",
+        before.loss,
+        before.accuracy * 100.0
+    );
 
     let after = trainer.fit(&batches, 20).expect("Training fit");
-    println!("Trained metrics: loss={:.4}, accuracy={:.1}%", after.loss, after.accuracy * 100.0);
+    println!(
+        "Trained metrics: loss={:.4}, accuracy={:.1}%",
+        after.loss,
+        after.accuracy * 100.0
+    );
 
     println!("ConvNet training completed successfully!");
 }

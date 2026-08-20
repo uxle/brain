@@ -3,8 +3,8 @@
 //! Flattening, reconstructing, and applying evolutionary genome weights to brain-core Tensors.
 #![allow(missing_docs)]
 
+use crate::core::{EvoError, EvoResult};
 use brain_core::Tensor;
-use crate::core::{EvoResult, EvoError};
 
 /// Converts a 1D genome slice into a Tensor of specified shape.
 pub fn genome_to_tensor(genes: &[f64], shape: Vec<usize>) -> EvoResult<Tensor> {
@@ -46,7 +46,13 @@ pub fn apply_to_weights(genome: &[f64], target_shapes: &[Vec<usize>]) -> EvoResu
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

@@ -16,11 +16,11 @@ pub mod sparse_grad;
 pub mod tensor_grad;
 pub mod unary;
 
+pub use activation_grad::{grad_gelu, grad_leaky_relu, grad_silu};
 pub use binary::{add, div, matmul, max_elem, min_elem, mul, pow, sub, where_cond};
 pub use conv_grad::{conv2d, conv_transpose2d};
 pub use pool_grad::{avg_pool2d, max_pool2d};
 pub use unary::{
-    abs, clamp, cos, exp, log, log_softmax, mean, neg, recip, relu, sign, sigmoid, sin, softmax,
+    abs, clamp, cos, exp, log, log_softmax, mean, neg, recip, relu, sigmoid, sign, sin, softmax,
     sqrt, square, sum, tanh,
 };
-pub use activation_grad::{grad_gelu, grad_leaky_relu, grad_silu};

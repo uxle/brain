@@ -17,7 +17,12 @@ pub struct OpRecord {
 
 impl OpRecord {
     /// Creates a new op record.
-    pub fn new(op_name: impl Into<String>, inputs: Vec<usize>, outputs: Vec<usize>, shapes: Vec<Vec<usize>>) -> Self {
+    pub fn new(
+        op_name: impl Into<String>,
+        inputs: Vec<usize>,
+        outputs: Vec<usize>,
+        shapes: Vec<Vec<usize>>,
+    ) -> Self {
         Self {
             op_name: op_name.into(),
             inputs,
@@ -32,9 +37,9 @@ mod tests {
     #[allow(unused_imports)]
     use super::*;
     #[allow(unused_imports)]
+    use crate::tape::OpRecord;
+    #[allow(unused_imports)]
     use crate::value::Value;
     #[allow(unused_imports)]
     use brain_core::Tensor;
-    #[allow(unused_imports)]
-    use crate::tape::OpRecord;
 }

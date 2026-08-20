@@ -22,42 +22,60 @@ fn test_onnx_mlp_roundtrip_eval() {
     let w_data = vec![0.5, -0.5, 1.0, 2.0]; // [2, 2]
     let b_data = vec![0.1, -0.1]; // [2]
 
-    model.graph.values.insert("X".into(), OnnxValue {
-        name: "X".into(),
-        shape: vec![1, 2],
-        is_initializer: false,
-        tensor_data: None,
-    });
-    model.graph.values.insert("W".into(), OnnxValue {
-        name: "W".into(),
-        shape: vec![2, 2],
-        is_initializer: true,
-        tensor_data: Some(Tensor::from_vec(w_data.clone(), vec![2, 2])),
-    });
-    model.graph.values.insert("B".into(), OnnxValue {
-        name: "B".into(),
-        shape: vec![1, 2],
-        is_initializer: true,
-        tensor_data: Some(Tensor::from_vec(b_data.clone(), vec![1, 2])),
-    });
-    model.graph.values.insert("MM".into(), OnnxValue {
-        name: "MM".into(),
-        shape: vec![1, 2],
-        is_initializer: false,
-        tensor_data: None,
-    });
-    model.graph.values.insert("ADD".into(), OnnxValue {
-        name: "ADD".into(),
-        shape: vec![1, 2],
-        is_initializer: false,
-        tensor_data: None,
-    });
-    model.graph.values.insert("Y".into(), OnnxValue {
-        name: "Y".into(),
-        shape: vec![1, 2],
-        is_initializer: false,
-        tensor_data: None,
-    });
+    model.graph.values.insert(
+        "X".into(),
+        OnnxValue {
+            name: "X".into(),
+            shape: vec![1, 2],
+            is_initializer: false,
+            tensor_data: None,
+        },
+    );
+    model.graph.values.insert(
+        "W".into(),
+        OnnxValue {
+            name: "W".into(),
+            shape: vec![2, 2],
+            is_initializer: true,
+            tensor_data: Some(Tensor::from_vec(w_data.clone(), vec![2, 2])),
+        },
+    );
+    model.graph.values.insert(
+        "B".into(),
+        OnnxValue {
+            name: "B".into(),
+            shape: vec![1, 2],
+            is_initializer: true,
+            tensor_data: Some(Tensor::from_vec(b_data.clone(), vec![1, 2])),
+        },
+    );
+    model.graph.values.insert(
+        "MM".into(),
+        OnnxValue {
+            name: "MM".into(),
+            shape: vec![1, 2],
+            is_initializer: false,
+            tensor_data: None,
+        },
+    );
+    model.graph.values.insert(
+        "ADD".into(),
+        OnnxValue {
+            name: "ADD".into(),
+            shape: vec![1, 2],
+            is_initializer: false,
+            tensor_data: None,
+        },
+    );
+    model.graph.values.insert(
+        "Y".into(),
+        OnnxValue {
+            name: "Y".into(),
+            shape: vec![1, 2],
+            is_initializer: false,
+            tensor_data: None,
+        },
+    );
 
     model.graph.nodes.push(OnnxNode {
         name: "mm_1".into(),
@@ -100,13 +118,23 @@ fn test_onnx_mlp_roundtrip_eval() {
     // Relu = [2.1, 0.9]
     assert_eq!(y.shape(), &[1, 2]);
     let y_vec = y.to_vec();
-    assert!((y_vec[0] - 2.1).abs() < 1e-5, "Expected 2.1, got {}", y_vec[0]);
-    assert!((y_vec[1] - 0.9).abs() < 1e-5, "Expected 0.9, got {}", y_vec[1]);
+    assert!(
+        (y_vec[0] - 2.1).abs() < 1e-5,
+        "Expected 2.1, got {}",
+        y_vec[0]
+    );
+    assert!(
+        (y_vec[1] - 0.9).abs() < 1e-5,
+        "Expected 0.9, got {}",
+        y_vec[1]
+    );
 
     // Test real export -> import binary round-trip:
     let bytes = brain_onnx::export::export_onnx_bytes(&model).unwrap();
     assert!(!bytes.is_empty());
-    let imported = brain_onnx::import::import_model(&bytes, &brain_onnx::config::ImportConfig::default()).unwrap();
+    let imported =
+        brain_onnx::import::import_model(&bytes, &brain_onnx::config::ImportConfig::default())
+            .unwrap();
     assert_eq!(imported.graph.nodes.len(), 3);
     assert_eq!(imported.graph.inputs, vec!["X".to_string()]);
     assert_eq!(imported.graph.outputs, vec!["Y".to_string()]);
@@ -131,12 +159,15 @@ fn test_onnx_eval_matmul_non_identity() {
     model.graph.outputs = vec!["Y".into()];
 
     let w_data = vec![3.0, 4.0, 5.0, 6.0]; // [2, 2]
-    model.graph.values.insert("W".into(), OnnxValue {
-        name: "W".into(),
-        shape: vec![2, 2],
-        is_initializer: true,
-        tensor_data: Some(Tensor::from_vec(w_data, vec![2, 2])),
-    });
+    model.graph.values.insert(
+        "W".into(),
+        OnnxValue {
+            name: "W".into(),
+            shape: vec![2, 2],
+            is_initializer: true,
+            tensor_data: Some(Tensor::from_vec(w_data, vec![2, 2])),
+        },
+    );
 
     model.graph.nodes.push(OnnxNode {
         name: "mm".into(),

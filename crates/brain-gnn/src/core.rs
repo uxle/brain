@@ -25,9 +25,15 @@ impl std::fmt::Display for GnnError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             GnnError::InvalidGraph(s) => write!(f, "Invalid graph: {}", s),
-            GnnError::NodeOutOfBounds { index, max } => write!(f, "Node index {} out of bounds (max {})", index, max),
-            GnnError::EdgeOutOfBounds { index, max } => write!(f, "Edge index {} out of bounds (max {})", index, max),
-            GnnError::DimensionMismatch { expected, got } => write!(f, "Dim mismatch: expected {}, got {}", expected, got),
+            GnnError::NodeOutOfBounds { index, max } => {
+                write!(f, "Node index {} out of bounds (max {})", index, max)
+            }
+            GnnError::EdgeOutOfBounds { index, max } => {
+                write!(f, "Edge index {} out of bounds (max {})", index, max)
+            }
+            GnnError::DimensionMismatch { expected, got } => {
+                write!(f, "Dim mismatch: expected {}, got {}", expected, got)
+            }
             GnnError::TrainingFailed(s) => write!(f, "Training failed: {}", s),
         }
     }
@@ -45,7 +51,11 @@ pub struct GraphTensor {
 
 impl GraphTensor {
     pub fn new(adj: Tensor, node_features: Tensor) -> Self {
-        Self { adj, node_features, edge_features: None }
+        Self {
+            adj,
+            node_features,
+            edge_features: None,
+        }
     }
 
     pub fn num_nodes(&self) -> usize {
@@ -79,7 +89,13 @@ impl BatchGraph {
         batch_offsets: Vec<usize>,
         graph_ids: Vec<usize>,
     ) -> Self {
-        Self { src_nodes, dst_nodes, node_features, batch_offsets, graph_ids }
+        Self {
+            src_nodes,
+            dst_nodes,
+            node_features,
+            batch_offsets,
+            graph_ids,
+        }
     }
 
     pub fn num_graphs(&self) -> usize {
@@ -93,7 +109,13 @@ impl BatchGraph {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

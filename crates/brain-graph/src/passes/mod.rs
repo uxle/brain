@@ -4,18 +4,18 @@
 #![allow(missing_docs)]
 
 pub mod const_fold;
-pub mod dead_code;
 pub mod cse;
+pub mod dead_code;
 pub mod fusion;
-pub mod layout;
 pub mod inplace;
+pub mod layout;
 
 pub use const_fold::{fold_constants, ConstFoldPass};
-pub use dead_code::{eliminate_dead_code, DeadCodeElimPass};
 pub use cse::{eliminate_cse, CsePass};
+pub use dead_code::{eliminate_dead_code, DeadCodeElimPass};
 pub use fusion::{plan_fusion, FusionPass, FusionPlan};
-pub use layout::{eliminate_layout_transforms, LayoutPass};
 pub use inplace::{plan_inplace_operations, InplacePass, InplacePlan};
+pub use layout::{eliminate_layout_transforms, LayoutPass};
 
 use crate::core::GraphResult;
 use crate::ir::GraphIr;
@@ -63,7 +63,13 @@ impl PassManager {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

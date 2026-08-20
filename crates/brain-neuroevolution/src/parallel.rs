@@ -3,8 +3,8 @@
 //! Scoped multi-threaded fitness evaluation using `std::thread::scope` for deterministic batch parallelism.
 #![allow(missing_docs)]
 
-use crate::genome::Genome;
 use crate::fitness::FitnessFn;
+use crate::genome::Genome;
 
 /// Configuration for parallel evaluation.
 #[derive(Debug, Clone, Default)]
@@ -19,7 +19,9 @@ pub fn evaluate_population_parallel<F: FitnessFn + Sync>(
     num_threads: usize,
 ) {
     let n = population.len();
-    if n == 0 { return; }
+    if n == 0 {
+        return;
+    }
 
     let chunk_size = (n + num_threads - 1) / num_threads.max(1);
 
@@ -36,7 +38,13 @@ pub fn evaluate_population_parallel<F: FitnessFn + Sync>(
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

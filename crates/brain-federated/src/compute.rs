@@ -7,16 +7,21 @@ use brain_core::Tensor;
 
 /// Performs element-wise multiply-accumulate across a list of tensors.
 pub fn multiply_accumulate(tensors: &[Tensor], scale: f64) -> Tensor {
-    if tensors.is_empty() { return Tensor::scalar(0.0); }
+    if tensors.is_empty() {
+        return Tensor::scalar(0.0);
+    }
     let s = Tensor::scalar(scale);
-    tensors.iter().fold(Tensor::zeros(tensors[0].shape().to_vec()), |acc, t| {
-        &acc + &(t * &s)
-    })
+    tensors
+        .iter()
+        .fold(Tensor::zeros(tensors[0].shape().to_vec()), |acc, t| {
+            &acc + &(t * &s)
+        })
 }
 
 /// Computes the global gradient norm across all tensors.
 pub fn global_grad_norm(tensors: &[Tensor]) -> f64 {
-    tensors.iter()
+    tensors
+        .iter()
         .flat_map(|t| t.to_vec())
         .map(|v| v * v)
         .sum::<f64>()

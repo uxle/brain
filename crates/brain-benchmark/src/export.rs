@@ -11,7 +11,9 @@ impl PrometheusExporter {
     /// Formats results into Prometheus gauge and summary metrics.
     pub fn export(results: &[BenchResult]) -> String {
         let mut out = String::new();
-        out.push_str("# HELP brain_benchmark_duration_seconds Average execution duration per iteration.\n");
+        out.push_str(
+            "# HELP brain_benchmark_duration_seconds Average execution duration per iteration.\n",
+        );
         out.push_str("# TYPE brain_benchmark_duration_seconds gauge\n");
 
         for r in results {

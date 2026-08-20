@@ -20,7 +20,11 @@ pub struct ModelDelta {
 
 impl ModelDelta {
     pub fn new(client_id: ClientId, weights: Vec<Tensor>, num_samples: usize) -> Self {
-        Self { client_id, weights, num_samples }
+        Self {
+            client_id,
+            weights,
+            num_samples,
+        }
     }
 }
 

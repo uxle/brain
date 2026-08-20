@@ -9,13 +9,13 @@
 pub mod blocks;
 pub mod heads;
 
-use std::collections::HashMap;
-use crate::core::{VitError, VitResult, VitOutput, VitState, Tensor3D, SimpleRng};
-use crate::config::{VitConfig, PosEmbedConfig, VitBlockConfig};
-use crate::patch::PatchEmbed;
+use crate::config::{PosEmbedConfig, VitBlockConfig, VitConfig};
+use crate::core::{SimpleRng, Tensor3D, VitError, VitOutput, VitResult, VitState};
 use crate::patch::pos_embed::PosEmbed;
+use crate::patch::PatchEmbed;
 use crate::vit::blocks::VitBlock;
 use crate::vit::heads::{ClsHead, VitHead};
+use std::collections::HashMap;
 
 /// Full Vision Transformer model.
 ///
@@ -60,7 +60,10 @@ impl ViT {
         config.validate()?;
         let mut rng = SimpleRng::new(seed);
 
-        let patch_embed = PatchEmbed::new(&config.patch_embed, rng.next_usize(u32::MAX as usize) as u64)?;
+        let patch_embed = PatchEmbed::new(
+            &config.patch_embed,
+            rng.next_usize(u32::MAX as usize) as u64,
+        )?;
         let embed_dim = config.embed_dim();
         let cls_token = rng.gen_vec(embed_dim, -0.02, 0.02);
 
@@ -89,11 +92,17 @@ impl ViT {
                 layer_norm_eps: config.block.layer_norm_eps,
                 qkv_bias: config.block.qkv_bias,
             };
-            blocks.push(VitBlock::new(&block_cfg, rng.next_usize(u32::MAX as usize) as u64)?);
+            blocks.push(VitBlock::new(
+                &block_cfg,
+                rng.next_usize(u32::MAX as usize) as u64,
+            )?);
         }
 
-        let head = ClsHead::new(embed_dim, config.num_classes,
-            rng.next_usize(u32::MAX as usize) as u64)?;
+        let head = ClsHead::new(
+            embed_dim,
+            config.num_classes,
+            rng.next_usize(u32::MAX as usize) as u64,
+        )?;
 
         let mut state = VitState::new();
         state.register_layer("patch_embed", patch_embed.num_params());
@@ -104,7 +113,15 @@ impl ViT {
         }
         state.register_layer("head", head.num_params());
 
-        Ok(Self { config, patch_embed, cls_token, pos_embed, blocks, head, state })
+        Ok(Self {
+            config,
+            patch_embed,
+            cls_token,
+            pos_embed,
+            blocks,
+            head,
+            state,
+        })
     }
 
     /// Full forward pass → [`VitOutput`].
@@ -113,7 +130,9 @@ impl ViT {
     /// - `pixels`: `[B, C, H, W]` flat image data.
     /// - `batch`: batch size.
     pub fn forward(&mut self, pixels: &[f64], batch: usize) -> VitResult<VitOutput> {
-        if batch == 0 { return Err(VitError::EmptyBatch); }
+        if batch == 0 {
+            return Err(VitError::EmptyBatch);
+        }
         let embed_dim = self.config.embed_dim();
         let num_patches = self.config.num_patches();
         let seq_len = self.config.seq_len();
@@ -124,7 +143,8 @@ impl ViT {
 
         // 2. Prepend CLS token
         if self.config.use_cls_token {
-            tokens = crate::ops::add_cls_token(&tokens, &self.cls_token, batch, num_patches, embed_dim)?;
+            tokens =
+                crate::ops::add_cls_token(&tokens, &self.cls_token, batch, num_patches, embed_dim)?;
         }
 
         // 3. Add position embedding
@@ -146,19 +166,26 @@ impl ViT {
         // 6. Head
         let logits_flat = self.head.forward(&pooled.data, batch)?;
         let logits: Vec<Vec<f64>> = (0..batch)
-            .map(|b| logits_flat[b * self.config.num_classes..(b + 1) * self.config.num_classes].to_vec())
+            .map(|b| {
+                logits_flat[b * self.config.num_classes..(b + 1) * self.config.num_classes].to_vec()
+            })
             .collect();
 
         let cls_token: Vec<Vec<f64>> = (0..batch)
             .map(|b| tokens_3d.batch_slice(b).data[..embed_dim].to_vec())
             .collect();
         let start = if self.config.use_cls_token { 1 } else { 0 };
-        let patch_tokens: Vec<Vec<Vec<f64>>> = (0..batch).map(|b| {
-            (start..seq_len).map(|s|
-                tokens_3d.data[b * seq_len * embed_dim + s * embed_dim
-                    ..b * seq_len * embed_dim + (s + 1) * embed_dim].to_vec()
-            ).collect()
-        }).collect();
+        let patch_tokens: Vec<Vec<Vec<f64>>> = (0..batch)
+            .map(|b| {
+                (start..seq_len)
+                    .map(|s| {
+                        tokens_3d.data[b * seq_len * embed_dim + s * embed_dim
+                            ..b * seq_len * embed_dim + (s + 1) * embed_dim]
+                            .to_vec()
+                    })
+                    .collect()
+            })
+            .collect();
 
         self.state.record_forward((batch * seq_len) as u64);
         self.state.step();
@@ -175,14 +202,17 @@ impl ViT {
 
     /// Forward features only (no head).
     pub fn forward_features(&self, pixels: &[f64], batch: usize) -> VitResult<Tensor3D> {
-        if batch == 0 { return Err(VitError::EmptyBatch); }
+        if batch == 0 {
+            return Err(VitError::EmptyBatch);
+        }
         let embed_dim = self.config.embed_dim();
         let num_patches = self.config.num_patches();
         let seq_len = self.config.seq_len();
 
         let mut tokens = self.patch_embed.forward(pixels, batch)?;
         if self.config.use_cls_token {
-            tokens = crate::ops::add_cls_token(&tokens, &self.cls_token, batch, num_patches, embed_dim)?;
+            tokens =
+                crate::ops::add_cls_token(&tokens, &self.cls_token, batch, num_patches, embed_dim)?;
         }
         let mut pos_tokens = tokens.clone();
         self.pos_embed.add_to(&mut pos_tokens, batch)?;
@@ -195,23 +225,33 @@ impl ViT {
     }
 
     /// Total trainable parameter count.
-    pub fn total_params(&self) -> usize { self.state.total_params() }
+    pub fn total_params(&self) -> usize {
+        self.state.total_params()
+    }
 
     /// Set train/eval mode on all blocks.
     pub fn train(&mut self) {
         self.state.set_training(true);
-        for b in &mut self.blocks { b.training = true; }
+        for b in &mut self.blocks {
+            b.training = true;
+        }
     }
 
     /// Set eval mode.
     pub fn eval(&mut self) {
         self.state.set_training(false);
-        for b in &mut self.blocks { b.training = false; }
+        for b in &mut self.blocks {
+            b.training = false;
+        }
     }
 
     /// Model summary string.
     pub fn summary(&self) -> String {
-        format!("{}\nTotal params: {}", self.config.summary(), self.total_params())
+        format!(
+            "{}\nTotal params: {}",
+            self.config.summary(),
+            self.total_params()
+        )
     }
 }
 
@@ -238,7 +278,9 @@ mod tests {
         cfg
     }
 
-    fn micro_pixels(batch: usize) -> Vec<f64> { vec![0.5f64; batch * 1 * 8 * 8] }
+    fn micro_pixels(batch: usize) -> Vec<f64> {
+        vec![0.5f64; batch * 1 * 8 * 8]
+    }
 
     #[test]
     fn test_vit_new() {
@@ -315,7 +357,9 @@ mod tests {
         let mut vit = ViT::new(cfg, 99).unwrap();
         let out = vit.forward(&micro_pixels(2), 2).unwrap();
         for row in &out.logits {
-            for &v in row { assert!(v.is_finite()); }
+            for &v in row {
+                assert!(v.is_finite());
+            }
         }
     }
 

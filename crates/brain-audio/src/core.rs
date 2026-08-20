@@ -113,10 +113,14 @@ impl Channels {
     /// Creates a Channels instance with validation.
     pub fn new(count: u16) -> BrainResult<Self> {
         if count == 0 {
-            return Err(BrainError::invalid_value("channel count must be at least 1"));
+            return Err(BrainError::invalid_value(
+                "channel count must be at least 1",
+            ));
         }
         if count > 256 {
-            return Err(BrainError::invalid_value("channel count exceeds maximum 256"));
+            return Err(BrainError::invalid_value(
+                "channel count exceeds maximum 256",
+            ));
         }
         Ok(Channels(count))
     }
@@ -211,12 +215,19 @@ pub struct AudioBuffer {
 
 impl AudioBuffer {
     /// Creates a new zero-initialized audio buffer.
-    pub fn zeros(channels: usize, num_samples: usize, sample_rate: SampleRate) -> BrainResult<Self> {
+    pub fn zeros(
+        channels: usize,
+        num_samples: usize,
+        sample_rate: SampleRate,
+    ) -> BrainResult<Self> {
         if channels == 0 || num_samples == 0 {
-            return Err(BrainError::invalid_value("channels and num_samples must be non-zero"));
+            return Err(BrainError::invalid_value(
+                "channels and num_samples must be non-zero",
+            ));
         }
-        let total = channels.checked_mul(num_samples)
-            .ok_or_else(|| BrainError::overflow("channels * samples", "usize", "AudioBuffer::zeros"))?;
+        let total = channels.checked_mul(num_samples).ok_or_else(|| {
+            BrainError::overflow("channels * samples", "usize", "AudioBuffer::zeros")
+        })?;
         Ok(AudioBuffer {
             data: vec![0.0; total],
             channels,
@@ -226,13 +237,25 @@ impl AudioBuffer {
     }
 
     /// Creates an audio buffer from planar slice data.
-    pub fn from_slice(data: &[f64], channels: usize, num_samples: usize, sample_rate: SampleRate) -> BrainResult<Self> {
+    pub fn from_slice(
+        data: &[f64],
+        channels: usize,
+        num_samples: usize,
+        sample_rate: SampleRate,
+    ) -> BrainResult<Self> {
         if channels == 0 || num_samples == 0 {
-            return Err(BrainError::invalid_value("channels and num_samples must be non-zero"));
+            return Err(BrainError::invalid_value(
+                "channels and num_samples must be non-zero",
+            ));
         }
         if data.len() != channels * num_samples {
             return Err(BrainError::shape_mismatch(
-                format!("channels({}) * samples({}) = {}", channels, num_samples, channels * num_samples),
+                format!(
+                    "channels({}) * samples({}) = {}",
+                    channels,
+                    num_samples,
+                    channels * num_samples
+                ),
                 data.len().to_string(),
                 "AudioBuffer::from_slice",
             ));
@@ -265,7 +288,12 @@ impl AudioBuffer {
         let (channels, num_samples) = match ndim {
             1 => (1, tensor.shape()[0]),
             2 => (tensor.shape()[0], tensor.shape()[1]),
-            _ => return Err(BrainError::invalid_value(format!("AudioBuffer requires 1D or 2D tensor, got {}D", ndim))),
+            _ => {
+                return Err(BrainError::invalid_value(format!(
+                    "AudioBuffer requires 1D or 2D tensor, got {}D",
+                    ndim
+                )))
+            }
         };
         Ok(AudioBuffer {
             data: tensor.data().to_vec(),
@@ -337,7 +365,12 @@ impl AudioBuffer {
     /// Returns a slice for a specific channel.
     pub fn channel(&self, ch: usize) -> BrainResult<&[f64]> {
         if ch >= self.channels {
-            return Err(BrainError::index_out_of_bounds(ch as isize, self.channels, Some(0), "AudioBuffer::channel"));
+            return Err(BrainError::index_out_of_bounds(
+                ch as isize,
+                self.channels,
+                Some(0),
+                "AudioBuffer::channel",
+            ));
         }
         let start = ch * self.num_samples;
         let end = start + self.num_samples;
@@ -347,7 +380,12 @@ impl AudioBuffer {
     /// Returns a mutable slice for a specific channel.
     pub fn channel_mut(&mut self, ch: usize) -> BrainResult<&mut [f64]> {
         if ch >= self.channels {
-            return Err(BrainError::index_out_of_bounds(ch as isize, self.channels, Some(0), "AudioBuffer::channel_mut"));
+            return Err(BrainError::index_out_of_bounds(
+                ch as isize,
+                self.channels,
+                Some(0),
+                "AudioBuffer::channel_mut",
+            ));
         }
         let start = ch * self.num_samples;
         let end = start + self.num_samples;
@@ -368,10 +406,20 @@ impl AudioBuffer {
     #[inline]
     pub fn set_sample(&mut self, ch: usize, idx: usize, val: f64) -> BrainResult<()> {
         if ch >= self.channels {
-            return Err(BrainError::index_out_of_bounds(ch as isize, self.channels, Some(0), "AudioBuffer::set_sample channel"));
+            return Err(BrainError::index_out_of_bounds(
+                ch as isize,
+                self.channels,
+                Some(0),
+                "AudioBuffer::set_sample channel",
+            ));
         }
         if idx >= self.num_samples {
-            return Err(BrainError::index_out_of_bounds(idx as isize, self.num_samples, Some(1), "AudioBuffer::set_sample sample_idx"));
+            return Err(BrainError::index_out_of_bounds(
+                idx as isize,
+                self.num_samples,
+                Some(1),
+                "AudioBuffer::set_sample sample_idx",
+            ));
         }
         self.data[ch * self.num_samples + idx] = val;
         Ok(())
@@ -380,7 +428,10 @@ impl AudioBuffer {
     /// Slices the audio buffer temporally across all channels `[start_sample..end_sample]`.
     pub fn slice(&self, start: usize, end: usize) -> BrainResult<Self> {
         if start > end || end > self.num_samples {
-            return Err(BrainError::invalid_value(format!("invalid slice range [{}..{}] for length {}", start, end, self.num_samples)));
+            return Err(BrainError::invalid_value(format!(
+                "invalid slice range [{}..{}] for length {}",
+                start, end, self.num_samples
+            )));
         }
         let sliced_samples = end - start;
         let mut sliced_data = Vec::with_capacity(self.channels * sliced_samples);
@@ -447,7 +498,9 @@ impl AudioBuffer {
             ));
         }
         if self.sample_rate != other.sample_rate {
-            return Err(BrainError::invalid_value("sample rates must match to concatenate"));
+            return Err(BrainError::invalid_value(
+                "sample rates must match to concatenate",
+            ));
         }
         let out_samples = self.num_samples + other.num_samples;
         let mut out_data = Vec::with_capacity(self.channels * out_samples);

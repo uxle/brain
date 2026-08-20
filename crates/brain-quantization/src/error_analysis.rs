@@ -3,8 +3,8 @@
 //! Numerical fidelity metrics including Mean Squared Error (MSE), SNR, PSNR, and Maximum Absolute Error (MAE).
 #![allow(missing_docs)]
 
-use brain_core::Tensor;
 use super::core::{QuantError, QuantResult};
+use brain_core::Tensor;
 
 /// Comprehensive report of quantization fidelity metrics.
 #[derive(Debug, Clone, PartialEq)]
@@ -17,7 +17,10 @@ pub struct QuantErrorReport {
 }
 
 /// Evaluates error metrics between original floating point tensor and dequantized tensor.
-pub fn analyze_quantization_error(original: &Tensor, dequantized: &Tensor) -> QuantResult<QuantErrorReport> {
+pub fn analyze_quantization_error(
+    original: &Tensor,
+    dequantized: &Tensor,
+) -> QuantResult<QuantErrorReport> {
     let orig_data = original.data();
     let deq_data = dequantized.data();
 
@@ -42,10 +45,14 @@ pub fn analyze_quantization_error(original: &Tensor, dequantized: &Tensor) -> Qu
 
         sum_sq_err += diff * diff;
         sum_abs_err += diff;
-        if diff > max_abs_diff { max_abs_diff = diff; }
+        if diff > max_abs_diff {
+            max_abs_diff = diff;
+        }
 
         signal_power += x * x;
-        if x.abs() > max_signal { max_signal = x.abs(); }
+        if x.abs() > max_signal {
+            max_signal = x.abs();
+        }
     }
 
     let mse = sum_sq_err / n as f64;
@@ -74,7 +81,13 @@ pub fn analyze_quantization_error(original: &Tensor, dequantized: &Tensor) -> Qu
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

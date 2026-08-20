@@ -39,28 +39,36 @@ pub mod utils;
 // ── Convenience re-exports ──────────────────────────────────────────────────
 pub use builder::GanBuilder;
 pub use config::{
-    ArchVariant, DiscriminatorConfig, GanConfig, GanTrainConfig, GeneratorConfig,
-    LatentType, LossVariant, OutputActivation,
+    ArchVariant, DiscriminatorConfig, GanConfig, GanTrainConfig, GeneratorConfig, LatentType,
+    LossVariant, OutputActivation,
 };
 pub use core::{EpochSummary, GanError, GanMetrics, GanResult, GanState};
-pub use cycle::{CycleConfig, CycleGanLite, cycle_consistency_loss, cycle_total_loss, identity_loss};
-pub use discriminator::{DcganDiscriminator, ConditionalDiscriminator, PatchDiscriminator};
-pub use eval::{GanEvalReport, eval_gan, fid_lite, is_lite};
-pub use eval::samples::{assemble_grid, fixed_latent_sample, interpolate_latents_batch};
-pub use gan::Gan;
-pub use generator::{DcganGenerator, ResnetGenerator, ConditionalGenerator, Generator, sample_latent};
-pub use losses::{hinge_loss_d, hinge_loss_g, wgan_loss_d, wgan_loss_g, lsgan_loss_d, bce_loss_d};
-pub use losses::perceptual::{PerceptualConfig, feature_matching_loss, gram_matrix, perceptual_loss};
-pub use ops::{
-    batch_norm, image_grid, interpolate_latents, leaky_relu, mix_style, relu,
-    resize_like, sigmoid_act, spectral_norm_apply, tanh_act, wgan_clip,
+pub use cycle::{
+    cycle_consistency_loss, cycle_total_loss, identity_loss, CycleConfig, CycleGanLite,
 };
-pub use stylegan_lite::{MappingConfig, MappingNetwork, StyleGanLite, adaptive_instance_norm, style_mix};
-pub use train::{GanTrainer, GanTrainStats, gradient_penalty, r1_penalty, PenaltyConfig};
+pub use discriminator::{ConditionalDiscriminator, DcganDiscriminator, PatchDiscriminator};
+pub use eval::samples::{assemble_grid, fixed_latent_sample, interpolate_latents_batch};
+pub use eval::{eval_gan, fid_lite, is_lite, GanEvalReport};
+pub use gan::Gan;
+pub use generator::{
+    sample_latent, ConditionalGenerator, DcganGenerator, Generator, ResnetGenerator,
+};
+pub use losses::perceptual::{
+    feature_matching_loss, gram_matrix, perceptual_loss, PerceptualConfig,
+};
+pub use losses::{bce_loss_d, hinge_loss_d, hinge_loss_g, lsgan_loss_d, wgan_loss_d, wgan_loss_g};
+pub use ops::{
+    batch_norm, image_grid, interpolate_latents, leaky_relu, mix_style, relu, resize_like,
+    sigmoid_act, spectral_norm_apply, tanh_act, wgan_clip,
+};
+pub use stylegan_lite::{
+    adaptive_instance_norm, style_mix, MappingConfig, MappingNetwork, StyleGanLite,
+};
 pub use train::loop_::TrainLoop;
+pub use train::{gradient_penalty, r1_penalty, GanTrainStats, GanTrainer, PenaltyConfig};
 pub use utils::{
-    bce_scalar, box_muller, clip_weights, l2_norm, log_gan, next_rand,
-    sample_gaussian, set_seed, sigmoid_vec, track_ema,
+    bce_scalar, box_muller, clip_weights, l2_norm, log_gan, next_rand, sample_gaussian, set_seed,
+    sigmoid_vec, track_ema,
 };
 
 /// GAN framework version.

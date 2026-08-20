@@ -157,9 +157,7 @@ pub enum BrainError {
     /// # Fields
     ///
     /// * `message` - Description of what was invalid and why
-    InvalidValue {
-        message: String,
-    },
+    InvalidValue { message: String },
 
     /// An I/O error occurred during file reading, writing, or other I/O operations.
     ///
@@ -168,18 +166,14 @@ pub enum BrainError {
     /// # Fields
     ///
     /// * `message` - Description of the I/O operation that failed
-    IoError {
-        message: String,
-    },
+    IoError { message: String },
 
     /// A requested feature or operation has not been implemented yet.
     ///
     /// # Fields
     ///
     /// * `feature` - Name of the unimplemented feature
-    NotImplemented {
-        feature: String,
-    },
+    NotImplemented { feature: String },
 
     /// A numeric overflow occurred during computation.
     ///
@@ -199,27 +193,21 @@ pub enum BrainError {
     /// # Fields
     ///
     /// * `context` - Description of the operation
-    DivisionByZero {
-        context: String,
-    },
+    DivisionByZero { context: String },
 
     /// A NaN (Not a Number) value was detected where a finite value was expected.
     ///
     /// # Fields
     ///
     /// * `context` - Description of where the NaN was detected
-    NanDetected {
-        context: String,
-    },
+    NanDetected { context: String },
 
     /// An infinity value was detected where a finite value was expected.
     ///
     /// # Fields
     ///
     /// * `context` - Description of where the infinity was detected
-    InfDetected {
-        context: String,
-    },
+    InfDetected { context: String },
 
     /// Memory allocation failed, possibly due to insufficient resources.
     ///
@@ -253,10 +241,7 @@ pub enum BrainError {
     ///
     /// * `message` - Description of the serialization operation
     /// * `format` - The format being used (e.g., "bincode", "json")
-    SerializationError {
-        message: String,
-        format: String,
-    },
+    SerializationError { message: String, format: String },
 
     /// An error occurred during parsing (e.g., parsing a shape string).
     ///
@@ -386,21 +371,13 @@ impl fmt::Display for BrainError {
                 message,
             } => {
                 if let Some(c) = code {
-                    write!(
-                        f,
-                        "Device error on {} (code {}): {}",
-                        device, c, message
-                    )
+                    write!(f, "Device error on {} (code {}): {}", device, c, message)
                 } else {
                     write!(f, "Device error on {}: {}", device, message)
                 }
             }
             BrainError::SerializationError { message, format } => {
-                write!(
-                    f,
-                    "Serialization error ({} format): {}",
-                    format, message
-                )
+                write!(f, "Serialization error ({} format): {}", format, message)
             }
             BrainError::ParseError {
                 input,
@@ -537,14 +514,10 @@ impl PartialEq for BrainError {
                     context: b4,
                 },
             ) => a1 == b1 && a2 == b2 && a3 == b3 && a4 == b4,
-            (
-                BrainError::InvalidValue { message: a },
-                BrainError::InvalidValue { message: b },
-            ) => a == b,
-            (
-                BrainError::IoError { message: a },
-                BrainError::IoError { message: b },
-            ) => a == b,
+            (BrainError::InvalidValue { message: a }, BrainError::InvalidValue { message: b }) => {
+                a == b
+            }
+            (BrainError::IoError { message: a }, BrainError::IoError { message: b }) => a == b,
             (
                 BrainError::NotImplemented { feature: a },
                 BrainError::NotImplemented { feature: b },
@@ -565,14 +538,12 @@ impl PartialEq for BrainError {
                 BrainError::DivisionByZero { context: a },
                 BrainError::DivisionByZero { context: b },
             ) => a == b,
-            (
-                BrainError::NanDetected { context: a },
-                BrainError::NanDetected { context: b },
-            ) => a == b,
-            (
-                BrainError::InfDetected { context: a },
-                BrainError::InfDetected { context: b },
-            ) => a == b,
+            (BrainError::NanDetected { context: a }, BrainError::NanDetected { context: b }) => {
+                a == b
+            }
+            (BrainError::InfDetected { context: a }, BrainError::InfDetected { context: b }) => {
+                a == b
+            }
             (
                 BrainError::AllocationFailed {
                     requested_bytes: a1,
@@ -1090,7 +1061,11 @@ impl BrainErrorContext {
 
 impl fmt::Display for BrainErrorContext {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        writeln!(f, "Error in {} ({}:{})", self.operation, self.file, self.line)?;
+        writeln!(
+            f,
+            "Error in {} ({}:{})",
+            self.operation, self.file, self.line
+        )?;
         writeln!(f, "  Module: {}", self.module_path)?;
         writeln!(f, "  {}", self.error)?;
         Ok(())
@@ -1147,9 +1122,7 @@ impl ErrorChain {
     ///
     /// * `root` - The first error in the chain
     pub fn new(root: BrainError) -> Self {
-        ErrorChain {
-            errors: vec![root],
-        }
+        ErrorChain { errors: vec![root] }
     }
 
     /// Creates an empty error chain.
@@ -1216,7 +1189,12 @@ impl ErrorChain {
         F: FnMut(&BrainError) -> bool,
     {
         ErrorChain {
-            errors: self.errors.iter().filter(|e| predicate(e)).cloned().collect(),
+            errors: self
+                .errors
+                .iter()
+                .filter(|e| predicate(e))
+                .cloned()
+                .collect(),
         }
     }
 
@@ -1320,11 +1298,7 @@ impl ErrorReport {
         output.push_str(&format!("Severity: {}\n", self.error.severity()));
         output.push_str(&format!("Error: {}\n", self.error));
         if let Some(ref ctx) = self.context {
-            output.push_str(&format!(
-                "Location: {}:{}\n",
-                ctx.file(),
-                ctx.line()
-            ));
+            output.push_str(&format!("Location: {}:{}\n", ctx.file(), ctx.line()));
             output.push_str(&format!("Module: {}\n", ctx.module_path()));
             output.push_str(&format!("Operation: {}\n", ctx.operation()));
         }
@@ -1620,7 +1594,10 @@ pub fn invalid_value_err(message: &str) -> BrainError {
 /// * `axis` - Which axis the dimension belongs to
 pub fn negative_dimension_err(dim: isize, axis: usize) -> BrainError {
     BrainError::InvalidValue {
-        message: format!("dimension {} has negative size {} on axis {}", dim, dim, axis),
+        message: format!(
+            "dimension {} has negative size {} on axis {}",
+            dim, dim, axis
+        ),
     }
 }
 
@@ -1875,7 +1852,10 @@ pub fn dimension_count_err(ndim: usize, expected_ndim: usize, op: &str) -> Brain
 /// * `reason` - Why the value is invalid
 pub fn conv_param_err(param: &str, value: usize, reason: &str) -> BrainError {
     BrainError::InvalidValue {
-        message: format!("invalid convolution parameter '{}': {} ({})", param, value, reason),
+        message: format!(
+            "invalid convolution parameter '{}': {} ({})",
+            param, value, reason
+        ),
     }
 }
 
@@ -1898,7 +1878,10 @@ pub fn zero_stride_err(dim: usize) -> BrainError {
 /// * `operation` - Name of the operation that is unsupported
 pub fn unsupported_dtype_err(dtype: &str, operation: &str) -> BrainError {
     BrainError::InvalidValue {
-        message: format!("operation '{}' is not supported for dtype {}", operation, dtype),
+        message: format!(
+            "operation '{}' is not supported for dtype {}",
+            operation, dtype
+        ),
     }
 }
 
@@ -2188,7 +2171,10 @@ mod tests {
             actual: "b".to_string(),
             context: "c".to_string(),
         };
-        assert_eq!(std::error::Error::description(&err), "shape mismatch between tensors");
+        assert_eq!(
+            std::error::Error::description(&err),
+            "shape mismatch between tensors"
+        );
     }
 
     #[test]
@@ -2706,21 +2692,114 @@ mod tests {
     #[test]
     fn test_all_variant_names() {
         let variants = vec![
-            ("ShapeMismatch", BrainError::ShapeMismatch { expected: String::new(), actual: String::new(), context: String::new() }),
-            ("DeviceMismatch", BrainError::DeviceMismatch { expected: String::new(), actual: String::new(), context: String::new() }),
-            ("DTypeMismatch", BrainError::DTypeMismatch { expected: String::new(), actual: String::new(), context: String::new() }),
-            ("IndexOutOfBounds", BrainError::IndexOutOfBounds { index: 0, bound: 0, dimension: None, context: String::new() }),
-            ("InvalidValue", BrainError::InvalidValue { message: String::new() }),
-            ("IoError", BrainError::IoError { message: String::new() }),
-            ("NotImplemented", BrainError::NotImplemented { feature: String::new() }),
-            ("Overflow", BrainError::Overflow { value: String::new(), target_type: String::new(), context: String::new() }),
-            ("DivisionByZero", BrainError::DivisionByZero { context: String::new() }),
-            ("NanDetected", BrainError::NanDetected { context: String::new() }),
-            ("InfDetected", BrainError::InfDetected { context: String::new() }),
-            ("AllocationFailed", BrainError::AllocationFailed { requested_bytes: 0, available_bytes: None, context: String::new() }),
-            ("DeviceError", BrainError::DeviceError { device: String::new(), code: None, message: String::new() }),
-            ("SerializationError", BrainError::SerializationError { message: String::new(), format: String::new() }),
-            ("ParseError", BrainError::ParseError { input: String::new(), expected: String::new(), context: String::new() }),
+            (
+                "ShapeMismatch",
+                BrainError::ShapeMismatch {
+                    expected: String::new(),
+                    actual: String::new(),
+                    context: String::new(),
+                },
+            ),
+            (
+                "DeviceMismatch",
+                BrainError::DeviceMismatch {
+                    expected: String::new(),
+                    actual: String::new(),
+                    context: String::new(),
+                },
+            ),
+            (
+                "DTypeMismatch",
+                BrainError::DTypeMismatch {
+                    expected: String::new(),
+                    actual: String::new(),
+                    context: String::new(),
+                },
+            ),
+            (
+                "IndexOutOfBounds",
+                BrainError::IndexOutOfBounds {
+                    index: 0,
+                    bound: 0,
+                    dimension: None,
+                    context: String::new(),
+                },
+            ),
+            (
+                "InvalidValue",
+                BrainError::InvalidValue {
+                    message: String::new(),
+                },
+            ),
+            (
+                "IoError",
+                BrainError::IoError {
+                    message: String::new(),
+                },
+            ),
+            (
+                "NotImplemented",
+                BrainError::NotImplemented {
+                    feature: String::new(),
+                },
+            ),
+            (
+                "Overflow",
+                BrainError::Overflow {
+                    value: String::new(),
+                    target_type: String::new(),
+                    context: String::new(),
+                },
+            ),
+            (
+                "DivisionByZero",
+                BrainError::DivisionByZero {
+                    context: String::new(),
+                },
+            ),
+            (
+                "NanDetected",
+                BrainError::NanDetected {
+                    context: String::new(),
+                },
+            ),
+            (
+                "InfDetected",
+                BrainError::InfDetected {
+                    context: String::new(),
+                },
+            ),
+            (
+                "AllocationFailed",
+                BrainError::AllocationFailed {
+                    requested_bytes: 0,
+                    available_bytes: None,
+                    context: String::new(),
+                },
+            ),
+            (
+                "DeviceError",
+                BrainError::DeviceError {
+                    device: String::new(),
+                    code: None,
+                    message: String::new(),
+                },
+            ),
+            (
+                "SerializationError",
+                BrainError::SerializationError {
+                    message: String::new(),
+                    format: String::new(),
+                },
+            ),
+            (
+                "ParseError",
+                BrainError::ParseError {
+                    input: String::new(),
+                    expected: String::new(),
+                    context: String::new(),
+                },
+            ),
         ];
         for (name, err) in variants {
             assert_eq!(err.variant_name(), name);
@@ -2730,21 +2809,69 @@ mod tests {
     #[test]
     fn test_all_errors_implement_debug() {
         let errors = vec![
-            BrainError::ShapeMismatch { expected: "[1]".into(), actual: "[2]".into(), context: "test".into() },
-            BrainError::DeviceMismatch { expected: "Cpu".into(), actual: "Cuda(0)".into(), context: "test".into() },
-            BrainError::DTypeMismatch { expected: "F32".into(), actual: "I32".into(), context: "test".into() },
-            BrainError::IndexOutOfBounds { index: -1, bound: 0, dimension: Some(0), context: "test".into() },
-            BrainError::InvalidValue { message: "test".into() },
-            BrainError::IoError { message: "test".into() },
-            BrainError::NotImplemented { feature: "test".into() },
-            BrainError::Overflow { value: "1".into(), target_type: "u8".into(), context: "test".into() },
-            BrainError::DivisionByZero { context: "test".into() },
-            BrainError::NanDetected { context: "test".into() },
-            BrainError::InfDetected { context: "test".into() },
-            BrainError::AllocationFailed { requested_bytes: 100, available_bytes: Some(50), context: "test".into() },
-            BrainError::DeviceError { device: "Cuda(0)".into(), code: Some(1), message: "test".into() },
-            BrainError::SerializationError { message: "test".into(), format: "json".into() },
-            BrainError::ParseError { input: "bad".into(), expected: "good".into(), context: "test".into() },
+            BrainError::ShapeMismatch {
+                expected: "[1]".into(),
+                actual: "[2]".into(),
+                context: "test".into(),
+            },
+            BrainError::DeviceMismatch {
+                expected: "Cpu".into(),
+                actual: "Cuda(0)".into(),
+                context: "test".into(),
+            },
+            BrainError::DTypeMismatch {
+                expected: "F32".into(),
+                actual: "I32".into(),
+                context: "test".into(),
+            },
+            BrainError::IndexOutOfBounds {
+                index: -1,
+                bound: 0,
+                dimension: Some(0),
+                context: "test".into(),
+            },
+            BrainError::InvalidValue {
+                message: "test".into(),
+            },
+            BrainError::IoError {
+                message: "test".into(),
+            },
+            BrainError::NotImplemented {
+                feature: "test".into(),
+            },
+            BrainError::Overflow {
+                value: "1".into(),
+                target_type: "u8".into(),
+                context: "test".into(),
+            },
+            BrainError::DivisionByZero {
+                context: "test".into(),
+            },
+            BrainError::NanDetected {
+                context: "test".into(),
+            },
+            BrainError::InfDetected {
+                context: "test".into(),
+            },
+            BrainError::AllocationFailed {
+                requested_bytes: 100,
+                available_bytes: Some(50),
+                context: "test".into(),
+            },
+            BrainError::DeviceError {
+                device: "Cuda(0)".into(),
+                code: Some(1),
+                message: "test".into(),
+            },
+            BrainError::SerializationError {
+                message: "test".into(),
+                format: "json".into(),
+            },
+            BrainError::ParseError {
+                input: "bad".into(),
+                expected: "good".into(),
+                context: "test".into(),
+            },
         ];
         for err in &errors {
             let _ = format!("{:?}", err);
@@ -2825,14 +2952,18 @@ mod tests {
 
     #[test]
     fn test_error_context_is_std_error() {
-        let err = BrainError::InvalidValue { message: "test".into() };
+        let err = BrainError::InvalidValue {
+            message: "test".into(),
+        };
         let ctx = BrainErrorContext::new(err, "f.rs", 1, "m", "op");
         let _: &dyn std::error::Error = &ctx;
     }
 
     #[test]
     fn test_error_context_source() {
-        let err = BrainError::IoError { message: "fail".into() };
+        let err = BrainError::IoError {
+            message: "fail".into(),
+        };
         let ctx = BrainErrorContext::new(err, "f.rs", 1, "m", "op");
         let source = ctx.source();
         assert!(source.is_some());
@@ -2840,7 +2971,9 @@ mod tests {
 
     #[test]
     fn test_error_context_clone() {
-        let err = BrainError::InvalidValue { message: "test".into() };
+        let err = BrainError::InvalidValue {
+            message: "test".into(),
+        };
         let ctx = BrainErrorContext::new(err, "f.rs", 1, "m", "op");
         let ctx2 = ctx.clone();
         assert_eq!(ctx.file(), ctx2.file());
@@ -2853,7 +2986,9 @@ mod tests {
 
     #[test]
     fn test_error_chain_new() {
-        let err = BrainError::InvalidValue { message: "root".into() };
+        let err = BrainError::InvalidValue {
+            message: "root".into(),
+        };
         let chain = ErrorChain::new(err);
         assert_eq!(chain.len(), 1);
         assert!(!chain.is_empty());
@@ -2869,9 +3004,15 @@ mod tests {
     #[test]
     fn test_error_chain_push() {
         let mut chain = ErrorChain::empty();
-        chain.push(BrainError::InvalidValue { message: "first".into() });
-        chain.push(BrainError::InvalidValue { message: "second".into() });
-        chain.push(BrainError::InvalidValue { message: "third".into() });
+        chain.push(BrainError::InvalidValue {
+            message: "first".into(),
+        });
+        chain.push(BrainError::InvalidValue {
+            message: "second".into(),
+        });
+        chain.push(BrainError::InvalidValue {
+            message: "third".into(),
+        });
         assert_eq!(chain.len(), 3);
     }
 
@@ -2894,8 +3035,12 @@ mod tests {
 
     #[test]
     fn test_error_chain_last() {
-        let mut chain = ErrorChain::new(BrainError::InvalidValue { message: "first".into() });
-        chain.push(BrainError::DivisionByZero { context: "second".into() });
+        let mut chain = ErrorChain::new(BrainError::InvalidValue {
+            message: "first".into(),
+        });
+        chain.push(BrainError::DivisionByZero {
+            context: "second".into(),
+        });
         assert!(chain.last().is_some());
         assert_eq!(chain.last().unwrap().variant_name(), "DivisionByZero");
     }
@@ -2903,9 +3048,15 @@ mod tests {
     #[test]
     fn test_error_chain_iter() {
         let mut chain = ErrorChain::empty();
-        chain.push(BrainError::InvalidValue { message: "a".into() });
-        chain.push(BrainError::InvalidValue { message: "b".into() });
-        chain.push(BrainError::InvalidValue { message: "c".into() });
+        chain.push(BrainError::InvalidValue {
+            message: "a".into(),
+        });
+        chain.push(BrainError::InvalidValue {
+            message: "b".into(),
+        });
+        chain.push(BrainError::InvalidValue {
+            message: "c".into(),
+        });
         let names: Vec<&str> = chain.iter().map(|e| e.variant_name()).collect();
         assert_eq!(names, vec!["InvalidValue", "InvalidValue", "InvalidValue"]);
     }
@@ -2913,8 +3064,12 @@ mod tests {
     #[test]
     fn test_error_chain_display() {
         let mut chain = ErrorChain::empty();
-        chain.push(BrainError::InvalidValue { message: "root".into() });
-        chain.push(BrainError::DivisionByZero { context: "derived".into() });
+        chain.push(BrainError::InvalidValue {
+            message: "root".into(),
+        });
+        chain.push(BrainError::DivisionByZero {
+            context: "derived".into(),
+        });
         let display = format!("{}", chain);
         assert!(display.contains("[root]"));
         assert!(display.contains("[1]"));
@@ -2930,7 +3085,9 @@ mod tests {
     #[test]
     fn test_error_chain_has_critical() {
         let mut chain = ErrorChain::empty();
-        chain.push(BrainError::InvalidValue { message: "ok".into() });
+        chain.push(BrainError::InvalidValue {
+            message: "ok".into(),
+        });
         assert!(!chain.has_critical());
         chain.push(BrainError::AllocationFailed {
             requested_bytes: 100,
@@ -2943,18 +3100,30 @@ mod tests {
     #[test]
     fn test_error_chain_has_recoverable() {
         let mut chain = ErrorChain::empty();
-        chain.push(BrainError::InvalidValue { message: "ok".into() });
+        chain.push(BrainError::InvalidValue {
+            message: "ok".into(),
+        });
         assert!(!chain.has_recoverable());
-        chain.push(BrainError::NanDetected { context: "loss".into() });
+        chain.push(BrainError::NanDetected {
+            context: "loss".into(),
+        });
         assert!(chain.has_recoverable());
     }
 
     #[test]
     fn test_error_chain_filter() {
         let mut chain = ErrorChain::empty();
-        chain.push(BrainError::InvalidValue { message: "a".into() });
-        chain.push(BrainError::ShapeMismatch { expected: "b".into(), actual: "c".into(), context: "d".into() });
-        chain.push(BrainError::InvalidValue { message: "e".into() });
+        chain.push(BrainError::InvalidValue {
+            message: "a".into(),
+        });
+        chain.push(BrainError::ShapeMismatch {
+            expected: "b".into(),
+            actual: "c".into(),
+            context: "d".into(),
+        });
+        chain.push(BrainError::InvalidValue {
+            message: "e".into(),
+        });
         let filtered = chain.filter(|e| e.variant_name() == "InvalidValue");
         assert_eq!(filtered.len(), 2);
     }
@@ -2962,9 +3131,15 @@ mod tests {
     #[test]
     fn test_error_chain_summary() {
         let mut chain = ErrorChain::empty();
-        chain.push(BrainError::InvalidValue { message: "a".into() });
-        chain.push(BrainError::InvalidValue { message: "b".into() });
-        chain.push(BrainError::DivisionByZero { context: "c".into() });
+        chain.push(BrainError::InvalidValue {
+            message: "a".into(),
+        });
+        chain.push(BrainError::InvalidValue {
+            message: "b".into(),
+        });
+        chain.push(BrainError::DivisionByZero {
+            context: "c".into(),
+        });
         let summary = chain.summary();
         assert!(summary.contains("DivisionByZero"));
         assert!(summary.contains("InvalidValue"));
@@ -2973,15 +3148,21 @@ mod tests {
     #[test]
     fn test_error_chain_into_iter() {
         let mut chain = ErrorChain::empty();
-        chain.push(BrainError::InvalidValue { message: "a".into() });
-        chain.push(BrainError::InvalidValue { message: "b".into() });
+        chain.push(BrainError::InvalidValue {
+            message: "a".into(),
+        });
+        chain.push(BrainError::InvalidValue {
+            message: "b".into(),
+        });
         let vec: Vec<BrainError> = chain.into_iter().collect();
         assert_eq!(vec.len(), 2);
     }
 
     #[test]
     fn test_error_chain_clone() {
-        let chain = ErrorChain::new(BrainError::InvalidValue { message: "test".into() });
+        let chain = ErrorChain::new(BrainError::InvalidValue {
+            message: "test".into(),
+        });
         let chain2 = chain.clone();
         assert_eq!(chain.len(), chain2.len());
     }
@@ -3025,9 +3206,16 @@ mod tests {
 
     #[test]
     fn test_error_report_display_with_context() {
-        let err = BrainError::InvalidValue { message: "bad".into() };
+        let err = BrainError::InvalidValue {
+            message: "bad".into(),
+        };
         let ctx = BrainErrorContext::new(err, "test.rs", 99, "mod", "op");
-        let report = ErrorReport::with_context(BrainError::InvalidValue { message: "bad".into() }, ctx);
+        let report = ErrorReport::with_context(
+            BrainError::InvalidValue {
+                message: "bad".into(),
+            },
+            ctx,
+        );
         let display = format!("{}", report);
         assert!(display.contains("test.rs"));
         assert!(display.contains("99"));
@@ -3048,27 +3236,35 @@ mod tests {
 
     #[test]
     fn test_error_report_is_std_error() {
-        let report = ErrorReport::new(BrainError::InvalidValue { message: "test".into() });
+        let report = ErrorReport::new(BrainError::InvalidValue {
+            message: "test".into(),
+        });
         let _: &dyn std::error::Error = &report;
     }
 
     #[test]
     fn test_error_report_source() {
-        let report = ErrorReport::new(BrainError::IoError { message: "fail".into() });
+        let report = ErrorReport::new(BrainError::IoError {
+            message: "fail".into(),
+        });
         assert!(report.source().is_some());
     }
 
     #[test]
     fn test_error_report_is_critical_via_chain() {
         let mut chain = ErrorChain::empty();
-        chain.push(BrainError::InvalidValue { message: "normal".into() });
+        chain.push(BrainError::InvalidValue {
+            message: "normal".into(),
+        });
         chain.push(BrainError::AllocationFailed {
             requested_bytes: 100,
             available_bytes: None,
             context: "alloc".into(),
         });
         let report = ErrorReport {
-            error: BrainError::InvalidValue { message: "normal".into() },
+            error: BrainError::InvalidValue {
+                message: "normal".into(),
+            },
             context: None,
             chain,
             timestamp: 0,
@@ -3084,7 +3280,11 @@ mod tests {
     fn test_shape_mismatch_err_helper() {
         let err = shape_mismatch_err(&[2, 3], &[3, 2], "matmul");
         match err {
-            BrainError::ShapeMismatch { expected, actual, context } => {
+            BrainError::ShapeMismatch {
+                expected,
+                actual,
+                context,
+            } => {
                 assert_eq!(expected, "[2, 3]");
                 assert_eq!(actual, "[3, 2]");
                 assert_eq!(context, "matmul");
@@ -3097,7 +3297,11 @@ mod tests {
     fn test_device_mismatch_err_helper() {
         let err = device_mismatch_err("Cpu", "Cuda(0)", "add");
         match err {
-            BrainError::DeviceMismatch { expected, actual, context } => {
+            BrainError::DeviceMismatch {
+                expected,
+                actual,
+                context,
+            } => {
                 assert_eq!(expected, "Cpu");
                 assert_eq!(actual, "Cuda(0)");
                 assert_eq!(context, "add");
@@ -3110,7 +3314,11 @@ mod tests {
     fn test_dtype_mismatch_err_helper() {
         let err = dtype_mismatch_err("F32", "I32", "cast");
         match err {
-            BrainError::DTypeMismatch { expected, actual, context } => {
+            BrainError::DTypeMismatch {
+                expected,
+                actual,
+                context,
+            } => {
                 assert_eq!(expected, "F32");
                 assert_eq!(actual, "I32");
                 assert_eq!(context, "cast");
@@ -3123,7 +3331,12 @@ mod tests {
     fn test_index_out_of_bounds_err_helper() {
         let err = index_out_of_bounds_err(10, 5, Some(2), "access");
         match err {
-            BrainError::IndexOutOfBounds { index, bound, dimension, context } => {
+            BrainError::IndexOutOfBounds {
+                index,
+                bound,
+                dimension,
+                context,
+            } => {
                 assert_eq!(index, 10);
                 assert_eq!(bound, 5);
                 assert_eq!(dimension, Some(2));
@@ -3175,7 +3388,11 @@ mod tests {
     fn test_overflow_err_helper() {
         let err = overflow_err("999", "u8", "cast");
         match err {
-            BrainError::Overflow { value, target_type, context } => {
+            BrainError::Overflow {
+                value,
+                target_type,
+                context,
+            } => {
                 assert_eq!(value, "999");
                 assert_eq!(target_type, "u8");
                 assert_eq!(context, "cast");
@@ -3221,7 +3438,11 @@ mod tests {
     fn test_allocation_failed_err_helper() {
         let err = allocation_failed_err(1024, Some(512), "alloc");
         match err {
-            BrainError::AllocationFailed { requested_bytes, available_bytes, context } => {
+            BrainError::AllocationFailed {
+                requested_bytes,
+                available_bytes,
+                context,
+            } => {
                 assert_eq!(requested_bytes, 1024);
                 assert_eq!(available_bytes, Some(512));
                 assert_eq!(context, "alloc");
@@ -3234,7 +3455,9 @@ mod tests {
     fn test_allocation_failed_err_no_available() {
         let err = allocation_failed_err(1024, None, "alloc");
         match err {
-            BrainError::AllocationFailed { available_bytes, .. } => {
+            BrainError::AllocationFailed {
+                available_bytes, ..
+            } => {
                 assert!(available_bytes.is_none());
             }
             _ => panic!("expected AllocationFailed"),
@@ -3245,7 +3468,11 @@ mod tests {
     fn test_device_error_err_helper() {
         let err = device_error_err("Cuda(0)", Some(2), "out of memory");
         match err {
-            BrainError::DeviceError { device, code, message } => {
+            BrainError::DeviceError {
+                device,
+                code,
+                message,
+            } => {
                 assert_eq!(device, "Cuda(0)");
                 assert_eq!(code, Some(2));
                 assert_eq!(message, "out of memory");
@@ -3270,7 +3497,11 @@ mod tests {
     fn test_parse_err_helper() {
         let err = parse_err("abc", "number", "parsing");
         match err {
-            BrainError::ParseError { input, expected, context } => {
+            BrainError::ParseError {
+                input,
+                expected,
+                context,
+            } => {
                 assert_eq!(input, "abc");
                 assert_eq!(expected, "number");
                 assert_eq!(context, "parsing");
@@ -3351,7 +3582,11 @@ mod tests {
     fn test_axis_mismatch_err_helper() {
         let err = axis_mismatch_err(4, 2, "conv2d");
         match err {
-            BrainError::ShapeMismatch { expected, actual, context } => {
+            BrainError::ShapeMismatch {
+                expected,
+                actual,
+                context,
+            } => {
                 assert!(expected.contains("4"));
                 assert!(actual.contains("2"));
                 assert_eq!(context, "conv2d");
@@ -3364,7 +3599,11 @@ mod tests {
     fn test_tensor_alloc_err_helper() {
         let err = tensor_alloc_err("F32", 1000, 4);
         match err {
-            BrainError::AllocationFailed { requested_bytes, context, .. } => {
+            BrainError::AllocationFailed {
+                requested_bytes,
+                context,
+                ..
+            } => {
                 assert_eq!(requested_bytes, 4000);
                 assert!(context.contains("F32"));
                 assert!(context.contains("1000"));
@@ -3385,7 +3624,11 @@ mod tests {
     fn test_shape_parse_err_helper() {
         let err = shape_parse_err("2x3xabc");
         match err {
-            BrainError::ParseError { input, expected, context } => {
+            BrainError::ParseError {
+                input,
+                expected,
+                context,
+            } => {
                 assert_eq!(input, "2x3xabc");
                 assert!(expected.contains("2x3x4"));
                 assert_eq!(context, "shape parsing");
@@ -3416,7 +3659,10 @@ mod tests {
     #[test]
     fn test_io_wrap_error() {
         let result: BrainResult<String> = io_wrap(|| {
-            Err(std::io::Error::new(std::io::ErrorKind::NotFound, "not found"))
+            Err(std::io::Error::new(
+                std::io::ErrorKind::NotFound,
+                "not found",
+            ))
         });
         assert!(result.is_err());
     }
@@ -3470,7 +3716,6 @@ mod tests {
         assert_eq!(result.unwrap(), 24);
     }
 
-
     #[test]
     fn test_format_bytes() {
         assert_eq!(format_bytes(500), "500 B");
@@ -3487,7 +3732,9 @@ mod tests {
         let result = String::from_utf8(bad_bytes);
         let brain_err: BrainError = result.unwrap_err().into();
         match brain_err {
-            BrainError::ParseError { expected, context, .. } => {
+            BrainError::ParseError {
+                expected, context, ..
+            } => {
                 assert!(expected.contains("UTF-8"));
                 assert_eq!(context, "string conversion");
             }
@@ -3523,9 +3770,18 @@ mod tests {
 
     #[test]
     fn test_brain_err_macro_shape_mismatch() {
-        let err = brain_err!(ShapeMismatch, expected="[2,3]", actual="[3,2]", context="matmul");
+        let err = brain_err!(
+            ShapeMismatch,
+            expected = "[2,3]",
+            actual = "[3,2]",
+            context = "matmul"
+        );
         match err {
-            BrainError::ShapeMismatch { expected, actual, context } => {
+            BrainError::ShapeMismatch {
+                expected,
+                actual,
+                context,
+            } => {
                 assert_eq!(expected, "[2,3]");
                 assert_eq!(actual, "[3,2]");
                 assert_eq!(context, "matmul");
@@ -3536,9 +3792,18 @@ mod tests {
 
     #[test]
     fn test_brain_err_macro_device_mismatch() {
-        let err = brain_err!(DeviceMismatch, expected="Cpu", actual="Cuda(0)", context="add");
+        let err = brain_err!(
+            DeviceMismatch,
+            expected = "Cpu",
+            actual = "Cuda(0)",
+            context = "add"
+        );
         match err {
-            BrainError::DeviceMismatch { expected, actual, context } => {
+            BrainError::DeviceMismatch {
+                expected,
+                actual,
+                context,
+            } => {
                 assert_eq!(expected, "Cpu");
                 assert_eq!(actual, "Cuda(0)");
                 assert_eq!(context, "add");
@@ -3549,9 +3814,18 @@ mod tests {
 
     #[test]
     fn test_brain_err_macro_dtype_mismatch() {
-        let err = brain_err!(DTypeMismatch, expected="F32", actual="I32", context="cast");
+        let err = brain_err!(
+            DTypeMismatch,
+            expected = "F32",
+            actual = "I32",
+            context = "cast"
+        );
         match err {
-            BrainError::DTypeMismatch { expected, actual, context } => {
+            BrainError::DTypeMismatch {
+                expected,
+                actual,
+                context,
+            } => {
                 assert_eq!(expected, "F32");
                 assert_eq!(actual, "I32");
                 assert_eq!(context, "cast");
@@ -3595,9 +3869,13 @@ mod tests {
 
     #[test]
     fn test_brain_err_macro_overflow() {
-        let err = brain_err!(Overflow, value="999", target="u8", context="cast");
+        let err = brain_err!(Overflow, value = "999", target = "u8", context = "cast");
         match err {
-            BrainError::Overflow { value, target_type, context } => {
+            BrainError::Overflow {
+                value,
+                target_type,
+                context,
+            } => {
                 assert_eq!(value, "999");
                 assert_eq!(target_type, "u8");
                 assert_eq!(context, "cast");
@@ -3619,9 +3897,18 @@ mod tests {
 
     #[test]
     fn test_brain_err_macro_device_error() {
-        let err = brain_err!(DeviceError, device="Cuda(0)", code=Some(2), message="OOM");
+        let err = brain_err!(
+            DeviceError,
+            device = "Cuda(0)",
+            code = Some(2),
+            message = "OOM"
+        );
         match err {
-            BrainError::DeviceError { device, code, message } => {
+            BrainError::DeviceError {
+                device,
+                code,
+                message,
+            } => {
                 assert_eq!(device, "Cuda(0)");
                 assert_eq!(code, Some(2));
                 assert_eq!(message, "OOM");
@@ -3632,7 +3919,7 @@ mod tests {
 
     #[test]
     fn test_brain_err_macro_serialization_error() {
-        let err = brain_err!(SerializationError, message="bad data", format="json");
+        let err = brain_err!(SerializationError, message = "bad data", format = "json");
         match err {
             BrainError::SerializationError { message, format } => {
                 assert_eq!(message, "bad data");
@@ -3644,9 +3931,18 @@ mod tests {
 
     #[test]
     fn test_brain_err_macro_parse_error() {
-        let err = brain_err!(ParseError, input="abc", expected="number", context="parsing");
+        let err = brain_err!(
+            ParseError,
+            input = "abc",
+            expected = "number",
+            context = "parsing"
+        );
         match err {
-            BrainError::ParseError { input, expected, context } => {
+            BrainError::ParseError {
+                input,
+                expected,
+                context,
+            } => {
                 assert_eq!(input, "abc");
                 assert_eq!(expected, "number");
                 assert_eq!(context, "parsing");
@@ -3657,9 +3953,18 @@ mod tests {
 
     #[test]
     fn test_brain_err_macro_allocation_failed() {
-        let err = brain_err!(AllocationFailed, requested=1024, available=Some(512), context="tensor alloc");
+        let err = brain_err!(
+            AllocationFailed,
+            requested = 1024,
+            available = Some(512),
+            context = "tensor alloc"
+        );
         match err {
-            BrainError::AllocationFailed { requested_bytes, available_bytes, context } => {
+            BrainError::AllocationFailed {
+                requested_bytes,
+                available_bytes,
+                context,
+            } => {
                 assert_eq!(requested_bytes, 1024);
                 assert_eq!(available_bytes, Some(512));
                 assert_eq!(context, "tensor alloc");
@@ -3670,9 +3975,20 @@ mod tests {
 
     #[test]
     fn test_brain_err_macro_index_out_of_bounds() {
-        let err = brain_err!(IndexOutOfBounds, index=10, bound=5, dimension=Some(0), context="access");
+        let err = brain_err!(
+            IndexOutOfBounds,
+            index = 10,
+            bound = 5,
+            dimension = Some(0),
+            context = "access"
+        );
         match err {
-            BrainError::IndexOutOfBounds { index, bound, dimension, context } => {
+            BrainError::IndexOutOfBounds {
+                index,
+                bound,
+                dimension,
+                context,
+            } => {
                 assert_eq!(index, 10);
                 assert_eq!(bound, 5);
                 assert_eq!(dimension, Some(0));
@@ -3688,7 +4004,9 @@ mod tests {
 
     #[test]
     fn test_empty_string_messages() {
-        let err = BrainError::InvalidValue { message: String::new() };
+        let err = BrainError::InvalidValue {
+            message: String::new(),
+        };
         let msg = format!("{}", err);
         assert!(msg.contains("Invalid value:"));
     }
@@ -3751,7 +4069,9 @@ mod tests {
     fn test_error_chain_summary_single_type() {
         let mut chain = ErrorChain::empty();
         for _ in 0..5 {
-            chain.push(BrainError::InvalidValue { message: "test".into() });
+            chain.push(BrainError::InvalidValue {
+                message: "test".into(),
+            });
         }
         let summary = chain.summary();
         assert!(summary.contains("InvalidValue"));
@@ -3760,16 +4080,24 @@ mod tests {
     #[test]
     fn test_error_chain_summary_mixed_types() {
         let mut chain = ErrorChain::empty();
-        chain.push(BrainError::InvalidValue { message: "a".into() });
-        chain.push(BrainError::DivisionByZero { context: "b".into() });
-        chain.push(BrainError::InvalidValue { message: "c".into() });
+        chain.push(BrainError::InvalidValue {
+            message: "a".into(),
+        });
+        chain.push(BrainError::DivisionByZero {
+            context: "b".into(),
+        });
+        chain.push(BrainError::InvalidValue {
+            message: "c".into(),
+        });
         let summary = chain.summary();
         assert!(summary.contains("DivisionByZero"));
     }
 
     #[test]
     fn test_error_context_with_long_paths() {
-        let err = BrainError::InvalidValue { message: "test".into() };
+        let err = BrainError::InvalidValue {
+            message: "test".into(),
+        };
         let long_path = "very/deep/nested/module/path/brain_core/tensor/ops/arithmetic/mod";
         let ctx = BrainErrorContext::new(err, long_path, 999999, long_path, "deep_op");
         assert_eq!(ctx.file(), long_path);
@@ -3778,7 +4106,9 @@ mod tests {
 
     #[test]
     fn test_error_report_clone() {
-        let report = ErrorReport::new(BrainError::InvalidValue { message: "test".into() });
+        let report = ErrorReport::new(BrainError::InvalidValue {
+            message: "test".into(),
+        });
         let report2 = report.clone();
         assert_eq!(report.error.variant_name(), report2.error.variant_name());
     }
@@ -3792,27 +4122,37 @@ mod tests {
         };
         assert_eq!(critical.severity(), "Critical");
 
-        let error = BrainError::InvalidValue { message: "test".into() };
+        let error = BrainError::InvalidValue {
+            message: "test".into(),
+        };
         assert_eq!(error.severity(), "Error");
 
-        let warning = BrainError::NanDetected { context: "test".into() };
+        let warning = BrainError::NanDetected {
+            context: "test".into(),
+        };
         assert_eq!(warning.severity(), "Warning");
     }
 
     #[test]
     fn test_all_error_categories() {
         let shape = BrainError::ShapeMismatch {
-            expected: "a".into(), actual: "b".into(), context: "c".into(),
+            expected: "a".into(),
+            actual: "b".into(),
+            context: "c".into(),
         };
         assert!(shape.is_shape_error());
 
         let device = BrainError::DeviceMismatch {
-            expected: "a".into(), actual: "b".into(), context: "c".into(),
+            expected: "a".into(),
+            actual: "b".into(),
+            context: "c".into(),
         };
         assert!(device.is_device_error());
 
         let dtype = BrainError::DTypeMismatch {
-            expected: "a".into(), actual: "b".into(), context: "c".into(),
+            expected: "a".into(),
+            actual: "b".into(),
+            context: "c".into(),
         };
         assert!(dtype.is_dtype_error());
     }
@@ -3820,7 +4160,11 @@ mod tests {
     #[test]
     fn test_recoverability() {
         let recoverable = vec![
-            BrainError::AllocationFailed { requested_bytes: 0, available_bytes: None, context: "".into() },
+            BrainError::AllocationFailed {
+                requested_bytes: 0,
+                available_bytes: None,
+                context: "".into(),
+            },
             BrainError::NanDetected { context: "".into() },
             BrainError::InfDetected { context: "".into() },
         ];
@@ -3831,7 +4175,11 @@ mod tests {
         let unrecoverable = vec![
             BrainError::InvalidValue { message: "".into() },
             BrainError::NotImplemented { feature: "".into() },
-            BrainError::ShapeMismatch { expected: "".into(), actual: "".into(), context: "".into() },
+            BrainError::ShapeMismatch {
+                expected: "".into(),
+                actual: "".into(),
+                context: "".into(),
+            },
         ];
         for err in &unrecoverable {
             assert!(!err.is_recoverable());

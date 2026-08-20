@@ -1,7 +1,15 @@
 //! # Transformer Encoder Block
 //!
 //! Unified self-attention and feed-forward sub-layer with Pre-LN / Post-LN normalization placement and residual skip connections.
-#![allow(missing_docs, unused_imports, unused_variables, dead_code, unused_mut, unused_comparisons, clippy::all)]
+#![allow(
+    missing_docs,
+    unused_imports,
+    unused_variables,
+    dead_code,
+    unused_mut,
+    unused_comparisons,
+    clippy::all
+)]
 
 use crate::attention::multi_head::{MhaConfig, MultiHeadAttention};
 use crate::config::{ActivationType, FfnConfig, NormPosition, NormType};
@@ -108,8 +116,14 @@ impl TransformerEncoderBlock {
 
         let (layer_scale1, layer_scale2) = if let Some(init_val) = config.layer_scale_init {
             (
-                Some(Tensor::from_vec(vec![init_val; config.hidden_dim], vec![config.hidden_dim])),
-                Some(Tensor::from_vec(vec![init_val; config.hidden_dim], vec![config.hidden_dim])),
+                Some(Tensor::from_vec(
+                    vec![init_val; config.hidden_dim],
+                    vec![config.hidden_dim],
+                )),
+                Some(Tensor::from_vec(
+                    vec![init_val; config.hidden_dim],
+                    vec![config.hidden_dim],
+                )),
             )
         } else {
             (None, None)
@@ -128,7 +142,12 @@ impl TransformerEncoderBlock {
         }
     }
 
-    fn apply_norm(&self, x: &Tensor, gamma: &Tensor, beta: Option<&Tensor>) -> TransformerResult<Tensor> {
+    fn apply_norm(
+        &self,
+        x: &Tensor,
+        gamma: &Tensor,
+        beta: Option<&Tensor>,
+    ) -> TransformerResult<Tensor> {
         match self.config.norm_type {
             NormType::LayerNorm => layer_norm(x, Some(gamma), beta, self.config.norm_eps),
             NormType::RmsNorm => rms_norm(x, Some(gamma), self.config.norm_eps),
@@ -136,11 +155,16 @@ impl TransformerEncoderBlock {
     }
 
     /// Executes encoder block forward pass with residual connections.
-    pub fn forward(&self, hidden_states: &Tensor, mask: &AttentionMask) -> TransformerResult<Tensor> {
+    pub fn forward(
+        &self,
+        hidden_states: &Tensor,
+        mask: &AttentionMask,
+    ) -> TransformerResult<Tensor> {
         match self.config.norm_position {
             NormPosition::PreNorm => {
                 // 1. Self-Attention with Pre-LN
-                let norm_x1 = self.apply_norm(hidden_states, &self.norm1_gamma, self.norm1_beta.as_ref())?;
+                let norm_x1 =
+                    self.apply_norm(hidden_states, &self.norm1_gamma, self.norm1_beta.as_ref())?;
                 let attn_out = self.self_attn.forward_mha(&norm_x1, None, mask)?;
 
                 // Residual 1
@@ -186,7 +210,8 @@ impl TransformerEncoderBlock {
             }
             NormPosition::SandwichNorm => {
                 // Pre-norm then Post-norm
-                let norm_pre1 = self.apply_norm(hidden_states, &self.norm1_gamma, self.norm1_beta.as_ref())?;
+                let norm_pre1 =
+                    self.apply_norm(hidden_states, &self.norm1_gamma, self.norm1_beta.as_ref())?;
                 let attn_out = self.self_attn.forward_mha(&norm_pre1, None, mask)?;
                 let mut h1_data = hidden_states.data().to_vec();
                 let attn_data = attn_out.data();
@@ -196,7 +221,8 @@ impl TransformerEncoderBlock {
                 let h1_res = Tensor::from_vec(h1_data, hidden_states.shape().to_vec());
                 let h1 = self.apply_norm(&h1_res, &self.norm1_gamma, self.norm1_beta.as_ref())?;
 
-                let norm_pre2 = self.apply_norm(&h1, &self.norm2_gamma, self.norm2_beta.as_ref())?;
+                let norm_pre2 =
+                    self.apply_norm(&h1, &self.norm2_gamma, self.norm2_beta.as_ref())?;
                 let ffn_out = self.ffn.forward(&norm_pre2)?;
                 let mut h2_data = h1.data().to_vec();
                 let ffn_data = ffn_out.data();
@@ -212,40 +238,55 @@ impl TransformerEncoderBlock {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant, clippy::needless_range_loop, clippy::manual_div_ceil, clippy::manual_is_multiple_of, clippy::too_many_arguments, clippy::doc_markdown, clippy::excessive_precision, clippy::float_cmp, clippy::len_zero, clippy::all)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant,
+        clippy::needless_range_loop,
+        clippy::manual_div_ceil,
+        clippy::manual_is_multiple_of,
+        clippy::too_many_arguments,
+        clippy::doc_markdown,
+        clippy::excessive_precision,
+        clippy::float_cmp,
+        clippy::len_zero,
+        clippy::all
+    )]
     use super::*;
-    use crate::core::*;
-    use crate::config::*;
-    use crate::utils::*;
-    use crate::ops::*;
-    use crate::attention::*;
-    use crate::attention::scaled::*;
-    use crate::attention::multi_head::*;
-    use crate::attention::relative::*;
     use crate::attention::flash_lite::*;
+    use crate::attention::multi_head::*;
     use crate::attention::multi_query::*;
+    use crate::attention::relative::*;
+    use crate::attention::scaled::*;
     use crate::attention::xformers_lite::*;
-    use crate::position::*;
-    use crate::position::rope::*;
-    use crate::position::alibi::*;
-    use crate::position::learned::*;
+    use crate::attention::*;
+    use crate::builder::*;
+    use crate::config::*;
+    use crate::core::*;
+    use crate::decoder::cross::*;
+    use crate::decoder::layer::*;
+    use crate::decoder::*;
     use crate::embedding_layers::*;
-    use crate::ffn::*;
-    use crate::encoder::*;
     use crate::encoder::block::*;
     use crate::encoder::layer::*;
-    use crate::decoder::*;
-    use crate::decoder::layer::*;
-    use crate::decoder::cross::*;
+    use crate::encoder::*;
+    use crate::ffn::*;
+    use crate::generate::*;
     use crate::head::*;
     use crate::kv_cache::*;
-    use crate::generate::*;
-    use crate::models::*;
     use crate::models::bert_lite::*;
     use crate::models::gpt_lite::*;
-    use crate::models::t5_lite::*;
     use crate::models::llama_lite::*;
-    use crate::builder::*;
+    use crate::models::t5_lite::*;
+    use crate::models::*;
+    use crate::ops::*;
+    use crate::position::alibi::*;
+    use crate::position::learned::*;
+    use crate::position::rope::*;
+    use crate::position::*;
+    use crate::utils::*;
     use brain_core::Tensor;
 
     #[test]

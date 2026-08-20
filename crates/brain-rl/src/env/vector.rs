@@ -1,11 +1,20 @@
 //! # Vectorized Parallel Environments
 //!
 //! Synchronous batched stepping across multiple parallel environment instances.
-#![allow(missing_docs, clippy::excessive_precision, clippy::approx_constant, clippy::needless_range_loop, clippy::too_many_arguments, clippy::manual_is_multiple_of, clippy::manual_div_ceil, clippy::doc_markdown)]
+#![allow(
+    missing_docs,
+    clippy::excessive_precision,
+    clippy::approx_constant,
+    clippy::needless_range_loop,
+    clippy::too_many_arguments,
+    clippy::manual_is_multiple_of,
+    clippy::manual_div_ceil,
+    clippy::doc_markdown
+)]
 
-use brain_core::Tensor;
 use super::super::core::{RlError, RlResult};
 use super::{Env, EnvStep};
+use brain_core::Tensor;
 
 /// Synchronous dummy vectorized environment runner.
 pub struct DummyVecEnv<E: Env> {
@@ -33,7 +42,9 @@ impl<E: Env> DummyVecEnv<E> {
     /// Synchronously steps all environments given an array of actions.
     pub fn step_all(&mut self, actions: &[usize]) -> RlResult<Vec<EnvStep>> {
         if actions.len() != self.envs.len() {
-            return Err(RlError::EnvironmentError("Action count != Env count".into()));
+            return Err(RlError::EnvironmentError(
+                "Action count != Env count".into(),
+            ));
         }
 
         let mut steps = Vec::with_capacity(self.envs.len());
@@ -52,23 +63,35 @@ pub type VecEnv<E> = DummyVecEnv<E>;
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant, clippy::needless_range_loop, clippy::manual_div_ceil, clippy::manual_is_multiple_of, clippy::too_many_arguments, clippy::doc_markdown, clippy::excessive_precision)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant,
+        clippy::needless_range_loop,
+        clippy::manual_div_ceil,
+        clippy::manual_is_multiple_of,
+        clippy::too_many_arguments,
+        clippy::doc_markdown,
+        clippy::excessive_precision
+    )]
     use super::*;
-    use crate::core::*;
-    use crate::env::*;
-    use crate::policy::*;
-    use crate::value::*;
-    use crate::buffer::*;
-    use crate::dqn::*;
-    use crate::ppo::*;
     use crate::a2c::*;
     use crate::actor_critic::*;
-    use crate::sac::*;
     use crate::agents::*;
-    use crate::trainer::*;
-    use crate::eval::*;
+    use crate::buffer::*;
     use crate::checkpoint::*;
+    use crate::core::*;
+    use crate::dqn::*;
+    use crate::env::*;
+    use crate::eval::*;
+    use crate::policy::*;
+    use crate::ppo::*;
+    use crate::sac::*;
+    use crate::trainer::*;
     use crate::utils::*;
+    use crate::value::*;
     use crate::VERSION;
     use brain_core::Tensor;
 }

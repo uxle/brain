@@ -4,8 +4,8 @@
 #![allow(missing_docs)]
 
 pub use super::conv::{Conv2d, ConvConfig};
+use crate::module::{Module, ModuleError, ModuleResult};
 use brain_core::Tensor;
-use crate::module::{Module, ModuleResult, ModuleError};
 
 /// 1D Convolution module: [batch, in_channels, length].
 #[derive(Debug, Clone)]
@@ -45,7 +45,11 @@ impl Module for Conv1d {
         let shape = input.shape();
         if shape.len() < 3 || shape[1] != self.in_channels {
             return Err(ModuleError::ShapeMismatch {
-                expected: vec![shape.first().copied().unwrap_or(1), self.in_channels, self.kernel_size],
+                expected: vec![
+                    shape.first().copied().unwrap_or(1),
+                    self.in_channels,
+                    self.kernel_size,
+                ],
                 got: shape.to_vec(),
             });
         }
@@ -104,7 +108,10 @@ mod tests {
         let mut c1 = Conv1d::new(1, 1, 3);
         c1.weight = Tensor::from_slice(&[1.0, 2.0, 1.0], vec![1, 1, 3]);
         c1.bias = Some(Tensor::from_slice(&[0.5], vec![1]));
-        let x = Value::new(Tensor::from_slice(&[1.0, 2.0, 3.0, 4.0, 5.0], vec![1, 1, 5]), false);
+        let x = Value::new(
+            Tensor::from_slice(&[1.0, 2.0, 3.0, 4.0, 5.0], vec![1, 1, 5]),
+            false,
+        );
         let out = c1.forward(&x).unwrap();
         assert_eq!(out.shape(), &[1, 1, 3]);
         // Pos 0: 1*1 + 2*2 + 3*1 + 0.5 = 8.5

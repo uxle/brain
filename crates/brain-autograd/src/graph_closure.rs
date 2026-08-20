@@ -38,7 +38,9 @@ where
     let leaf = Value::new(x.data().clone(), true);
     let out = f(&leaf);
     out.backward_with_grad(v)?;
-    let g = leaf.grad().ok_or_else(|| BrainError::invalid_value("No gradient accumulated on leaf"))?;
+    let g = leaf
+        .grad()
+        .ok_or_else(|| BrainError::invalid_value("No gradient accumulated on leaf"))?;
     Ok((out, g))
 }
 
@@ -77,7 +79,9 @@ where
         let leaf = Value::new(x.data().clone(), true);
         let out = f(&leaf);
         out.backward_with_grad(&v)?;
-        let g = leaf.grad().ok_or_else(|| BrainError::invalid_value("Jacobian grad missing"))?;
+        let g = leaf
+            .grad()
+            .ok_or_else(|| BrainError::invalid_value("Jacobian grad missing"))?;
         let g_slice = g.data();
         for j in 0..n {
             jac[i * n + j] = g_slice[j];
@@ -123,7 +127,8 @@ pub fn grad_and_hess<F>(f: F, x: &Value) -> BrainResult<(Tensor, Tensor)>
 where
     F: Fn(&Value) -> Value,
 {
-    let g = grad(&f, x)?.ok_or_else(|| BrainError::invalid_value("Grad missing in grad_and_hess"))?;
+    let g =
+        grad(&f, x)?.ok_or_else(|| BrainError::invalid_value("Grad missing in grad_and_hess"))?;
     let h = hessian(f, x)?;
     Ok((g, h))
 }
@@ -133,9 +138,9 @@ mod tests {
     #[allow(unused_imports)]
     use super::*;
     #[allow(unused_imports)]
+    use crate::tape::OpRecord;
+    #[allow(unused_imports)]
     use crate::value::Value;
     #[allow(unused_imports)]
     use brain_core::Tensor;
-    #[allow(unused_imports)]
-    use crate::tape::OpRecord;
 }

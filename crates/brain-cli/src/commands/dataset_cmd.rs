@@ -24,7 +24,13 @@ pub fn run_dataset_command(args: &[String], sink: &OutputSink) -> ExitCode {
         match load(path, true) {
             Ok(dataset) => {
                 let n_samples = dataset.features.len();
-                let n_classes = dataset.labels.iter().copied().max().map(|m| m + 1).unwrap_or(0);
+                let n_classes = dataset
+                    .labels
+                    .iter()
+                    .copied()
+                    .max()
+                    .map(|m| m + 1)
+                    .unwrap_or(0);
                 sink.println(&format!(
                     "Dataset Info: {} samples, {} features, {} classes, cache status: up-to-date",
                     n_samples, dataset.n_features, n_classes
@@ -32,7 +38,10 @@ pub fn run_dataset_command(args: &[String], sink: &OutputSink) -> ExitCode {
                 ExitCode::SUCCESS
             }
             Err(err) => {
-                sink.println(&format!("error: could not load dataset '{}': {}", path, err));
+                sink.println(&format!(
+                    "error: could not load dataset '{}': {}",
+                    path, err
+                ));
                 ExitCode::IO_ERROR
             }
         }

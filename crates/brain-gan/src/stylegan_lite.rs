@@ -3,8 +3,8 @@
 //! Mapping network, modulated convolutions (AdaIN-style), style mixing.
 #![allow(missing_docs)]
 
+use crate::ops::{batch_norm, leaky_relu, relu};
 use brain_core::Tensor;
-use crate::ops::{relu, leaky_relu, batch_norm};
 
 /// Mapping network configuration.
 #[derive(Debug, Clone)]
@@ -17,7 +17,12 @@ pub struct MappingConfig {
 
 impl Default for MappingConfig {
     fn default() -> Self {
-        Self { latent_dim: 512, style_dim: 512, num_layers: 8, lr_multiplier: 0.01 }
+        Self {
+            latent_dim: 512,
+            style_dim: 512,
+            num_layers: 8,
+            lr_multiplier: 0.01,
+        }
     }
 }
 
@@ -59,24 +64,29 @@ pub fn adaptive_instance_norm(x: &Tensor, style_scale: &Tensor, style_bias: &Ten
     let sd = style_scale.to_vec();
     let bd = style_bias.to_vec();
     let n = nd.len();
-    let data: Vec<f64> = nd.iter().enumerate().map(|(i, v)| {
-        let s = sd.get(i % sd.len().max(1)).copied().unwrap_or(1.0);
-        let b = bd.get(i % bd.len().max(1)).copied().unwrap_or(0.0);
-        v * s + b
-    }).collect();
+    let data: Vec<f64> = nd
+        .iter()
+        .enumerate()
+        .map(|(i, v)| {
+            let s = sd.get(i % sd.len().max(1)).copied().unwrap_or(1.0);
+            let b = bd.get(i % bd.len().max(1)).copied().unwrap_or(0.0);
+            v * s + b
+        })
+        .collect();
     Tensor::from_vec(data, vec![n])
 }
 
 /// Style mixing: applies style1 to early layers, style2 to later layers.
-pub fn style_mix(
-    w1: &Tensor,
-    w2: &Tensor,
-    mix_layer: usize,
-    num_layers: usize,
-) -> Vec<Tensor> {
-    (0..num_layers).map(|l| {
-        if l < mix_layer { w1.clone() } else { w2.clone() }
-    }).collect()
+pub fn style_mix(w1: &Tensor, w2: &Tensor, mix_layer: usize, num_layers: usize) -> Vec<Tensor> {
+    (0..num_layers)
+        .map(|l| {
+            if l < mix_layer {
+                w1.clone()
+            } else {
+                w2.clone()
+            }
+        })
+        .collect()
 }
 
 /// StyleGAN-lite generator producing a tensor from latent z.
@@ -88,13 +98,22 @@ pub struct StyleGanLite {
 
 impl StyleGanLite {
     pub fn new(latent_dim: usize, style_dim: usize, output_size: usize, num_layers: usize) -> Self {
-        let cfg = MappingConfig { latent_dim, style_dim, num_layers, lr_multiplier: 0.01 };
+        let cfg = MappingConfig {
+            latent_dim,
+            style_dim,
+            num_layers,
+            lr_multiplier: 0.01,
+        };
         let mapping = MappingNetwork::new(cfg);
         let mut synthesis_weights = Vec::new();
         for _ in 0..num_layers {
             synthesis_weights.push(Tensor::zeros(vec![style_dim, style_dim]));
         }
-        Self { mapping, synthesis_weights, output_size }
+        Self {
+            mapping,
+            synthesis_weights,
+            output_size,
+        }
     }
 
     pub fn forward(&self, z: &Tensor) -> Tensor {
@@ -107,14 +126,23 @@ impl StyleGanLite {
             let t = Tensor::zeros(vec![out_dim]);
             x = relu(&t);
         }
-        Tensor::from_vec(x.to_vec(), vec![self.output_size.min(x.to_vec().len()).max(1)])
+        Tensor::from_vec(
+            x.to_vec(),
+            vec![self.output_size.min(x.to_vec().len()).max(1)],
+        )
     }
 }
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
-    use brain_core::Tensor;
     use crate::utils::sample_gaussian;
+    use brain_core::Tensor;
 }

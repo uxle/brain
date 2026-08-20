@@ -29,7 +29,10 @@ impl CpuOffloader {
     pub fn restore(&self, tensor_id: usize) -> BrainResult<Tensor> {
         let mut guard = self.storage.lock().unwrap();
         guard.remove(&tensor_id).ok_or_else(|| {
-            BrainError::invalid_value(format!("Offloaded tensor {} not found in host storage", tensor_id))
+            BrainError::invalid_value(format!(
+                "Offloaded tensor {} not found in host storage",
+                tensor_id
+            ))
         })
     }
 
@@ -44,9 +47,9 @@ mod tests {
     #[allow(unused_imports)]
     use super::*;
     #[allow(unused_imports)]
+    use crate::tape::OpRecord;
+    #[allow(unused_imports)]
     use crate::value::Value;
     #[allow(unused_imports)]
     use brain_core::Tensor;
-    #[allow(unused_imports)]
-    use crate::tape::OpRecord;
 }

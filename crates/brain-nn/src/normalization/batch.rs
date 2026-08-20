@@ -3,8 +3,8 @@
 //! Normalizes mini-batches over spatial dimensions with learned affine scale/bias and running statistics tracking.
 #![allow(missing_docs)]
 
-use brain_core::Tensor;
 use crate::module::{Module, ModuleResult};
+use brain_core::Tensor;
 use std::sync::RwLock;
 
 /// 2D Batch Normalization layer.
@@ -44,7 +44,10 @@ impl BatchNorm2d {
             weight: Tensor::from_vec(vec![1.0; num_features], vec![num_features]),
             bias: Tensor::zeros(vec![num_features]),
             running_mean: RwLock::new(Tensor::zeros(vec![num_features])),
-            running_var: RwLock::new(Tensor::from_vec(vec![1.0; num_features], vec![num_features])),
+            running_var: RwLock::new(Tensor::from_vec(
+                vec![1.0; num_features],
+                vec![num_features],
+            )),
             training: true,
         }
     }
@@ -165,7 +168,10 @@ impl Module for BatchNorm2d {
     }
 
     fn parameters(&self) -> Vec<Value> {
-        vec![Value::new(self.weight.clone(), true), Value::new(self.bias.clone(), true)]
+        vec![
+            Value::new(self.weight.clone(), true),
+            Value::new(self.bias.clone(), true),
+        ]
     }
 
     fn set_training(&mut self, training: bool) {
@@ -181,7 +187,10 @@ mod tests {
     #[test]
     fn test_batchnorm_train_updates_stats() {
         let bn = BatchNorm2d::new(2);
-        let x = Value::new(Tensor::from_vec(vec![10.0, 20.0, 10.0, 20.0], vec![2, 2, 1, 1]), false);
+        let x = Value::new(
+            Tensor::from_vec(vec![10.0, 20.0, 10.0, 20.0], vec![2, 2, 1, 1]),
+            false,
+        );
         let out = bn.forward(&x).unwrap();
         assert_eq!(out.shape(), &[2, 2, 1, 1]);
 
@@ -194,7 +203,10 @@ mod tests {
     fn test_batchnorm_eval_mode() {
         let mut bn = BatchNorm2d::new(2);
         bn.set_training(false);
-        let x = Value::new(Tensor::from_vec(vec![10.0, 20.0, 10.0, 20.0], vec![2, 2, 1, 1]), false);
+        let x = Value::new(
+            Tensor::from_vec(vec![10.0, 20.0, 10.0, 20.0], vec![2, 2, 1, 1]),
+            false,
+        );
         let out = bn.forward(&x).unwrap();
         assert_eq!(out.shape(), &[2, 2, 1, 1]);
 

@@ -3,7 +3,6 @@
 //! Fundamental IDs, data types, device kinds, shapes, and error models.
 #![allow(missing_docs)]
 
-
 /// Unique identifier for a graph node.
 pub type NodeId = usize;
 
@@ -49,7 +48,11 @@ impl Shape {
     }
 
     pub fn num_elements(&self) -> usize {
-        if self.dims.is_empty() { 0 } else { self.dims.iter().product() }
+        if self.dims.is_empty() {
+            0
+        } else {
+            self.dims.iter().product()
+        }
     }
 }
 
@@ -59,8 +62,14 @@ pub enum GraphError {
     NodeNotFound(NodeId),
     ValueNotFound(ValueId),
     CyclicDependency(String),
-    TypeMismatch { expected: DType, got: DType },
-    ShapeMismatch { expected: Vec<usize>, got: Vec<usize> },
+    TypeMismatch {
+        expected: DType,
+        got: DType,
+    },
+    ShapeMismatch {
+        expected: Vec<usize>,
+        got: Vec<usize>,
+    },
     VerificationFailed(String),
     PassFailed(String),
 }
@@ -71,8 +80,12 @@ impl std::fmt::Display for GraphError {
             GraphError::NodeNotFound(id) => write!(f, "Node {} not found in graph", id),
             GraphError::ValueNotFound(id) => write!(f, "Value {} not found in graph", id),
             GraphError::CyclicDependency(msg) => write!(f, "Cycle detected: {}", msg),
-            GraphError::TypeMismatch { expected, got } => write!(f, "Type mismatch: expected {:?}, got {:?}", expected, got),
-            GraphError::ShapeMismatch { expected, got } => write!(f, "Shape mismatch: expected {:?}, got {:?}", expected, got),
+            GraphError::TypeMismatch { expected, got } => {
+                write!(f, "Type mismatch: expected {:?}, got {:?}", expected, got)
+            }
+            GraphError::ShapeMismatch { expected, got } => {
+                write!(f, "Shape mismatch: expected {:?}, got {:?}", expected, got)
+            }
             GraphError::VerificationFailed(msg) => write!(f, "Verification failed: {}", msg),
             GraphError::PassFailed(msg) => write!(f, "Pass failed: {}", msg),
         }
@@ -92,6 +105,12 @@ pub struct GraphMetadata {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
 }

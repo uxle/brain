@@ -3,10 +3,10 @@
 //! `load_onnx`, `load_onnx_bytes`, `save_onnx`, and `import_and_optimize` workflow helpers.
 #![allow(missing_docs)]
 
-use super::core::OnnxResult;
 use super::config::{ImportConfig, OptimizeConfig};
-use super::ir::OnnxModel;
+use super::core::OnnxResult;
 use super::import::import_model;
+use super::ir::OnnxModel;
 use super::optimize::optimize_model;
 use brain_graph::GraphIr;
 
@@ -30,7 +30,13 @@ pub fn load_onnx(path: &str) -> OnnxResult<(OnnxModel, GraphIr)> {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

@@ -12,8 +12,8 @@ pub mod softmax;
 pub mod swish;
 
 pub use extended::{
-    celu, elu, glu, hard_sigmoid, hard_swish, selu, softplus, softsign, swiglu, CELU, ELU,
-    HardSigmoid, HardSwish, HardTanh, SELU, Softplus, Softsign,
+    celu, elu, glu, hard_sigmoid, hard_swish, selu, softplus, softsign, swiglu, HardSigmoid,
+    HardSwish, HardTanh, Softplus, Softsign, CELU, ELU, SELU,
 };
 pub use extra::{
     hard_shrink, log_sigmoid, prelu, quiet_softmax, relu6, shrink, soft_shrink, softmin,
@@ -36,7 +36,13 @@ pub trait Activation: Send + Sync {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

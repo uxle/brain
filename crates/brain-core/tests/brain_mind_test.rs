@@ -4,7 +4,8 @@ use std::path::PathBuf;
 use brain_core::brain_mind::BrainMind;
 
 fn temp_file(name: &str, content: &str) -> PathBuf {
-    let path = std::env::temp_dir().join(format!("brain_mind_test_{}_{}", std::process::id(), name));
+    let path =
+        std::env::temp_dir().join(format!("brain_mind_test_{}_{}", std::process::id(), name));
     fs::write(&path, content).unwrap();
     path
 }
@@ -28,7 +29,11 @@ fn colon_prose_lines_are_not_indexed_as_facts() {
         "colon-prose line was indexed as a fact: {}",
         resp
     );
-    assert!(resp.contains("don't know"), "expected humble response, got: {}", resp);
+    assert!(
+        resp.contains("don't know"),
+        "expected humble response, got: {}",
+        resp
+    );
 }
 
 #[test]
@@ -64,7 +69,11 @@ fn analogy_question_not_hijacked_by_unrelated_fact() {
         "question hijacked by unrelated fact: {}",
         resp
     );
-    assert!(resp.contains("don't know"), "expected humble response, got: {}", resp);
+    assert!(
+        resp.contains("don't know"),
+        "expected humble response, got: {}",
+        resp
+    );
 }
 
 #[test]
@@ -72,7 +81,11 @@ fn gibberish_question_gets_humble_response() {
     let mut brain = fresh_brain();
     let resp = brain.talk("what is naun");
     assert!(resp.contains("don't know"), "got: {}", resp);
-    assert!(resp.contains("naun"), "expected keyword in response: {}", resp);
+    assert!(
+        resp.contains("naun"),
+        "expected keyword in response: {}",
+        resp
+    );
 }
 
 #[test]
@@ -90,11 +103,7 @@ fn neural_adam_reduces_loss_and_learns() {
         first,
         last
     );
-    assert!(
-        last < 0.05,
-        "Adam stalled far above zero loss: {:.4}",
-        last
-    );
+    assert!(last < 0.05, "Adam stalled far above zero loss: {:.4}", last);
 
     let gen = brain.neural_generate("the cat sat", 16, 0.05);
     assert!(
@@ -121,7 +130,11 @@ fn percentage_math_still_works() {
     let mut brain = fresh_brain();
     let resp = brain.talk("what is 20% of 150?");
     assert!(resp.contains("30"), "percentage math broken: {}", resp);
-    assert!(!resp.contains("don't know"), "percentage math fell through: {}", resp);
+    assert!(
+        !resp.contains("don't know"),
+        "percentage math fell through: {}",
+        resp
+    );
 }
 
 #[test]
@@ -129,7 +142,11 @@ fn name_learning_still_works() {
     let mut brain = fresh_brain();
     brain.talk("my name is alice");
     let resp = brain.talk("who am i");
-    assert!(resp.contains("alice"), "brain did not remember the name: {}", resp);
+    assert!(
+        resp.contains("alice"),
+        "brain did not remember the name: {}",
+        resp
+    );
 }
 
 #[test]
@@ -141,10 +158,18 @@ fn newborn_echo_is_gated_to_statements() {
         "newborn echo missing for statement: {}",
         resp
     );
-    assert!(!resp.contains("don't know"), "unexpected humble reply for a statement: {}", resp);
+    assert!(
+        !resp.contains("don't know"),
+        "unexpected humble reply for a statement: {}",
+        resp
+    );
 
     let resp = brain.talk("what is a bird?");
-    assert!(resp.contains("don't know"), "question echoed like a statement: {}", resp);
+    assert!(
+        resp.contains("don't know"),
+        "question echoed like a statement: {}",
+        resp
+    );
 }
 
 #[test]
@@ -158,7 +183,15 @@ fn end_bounds_records() {
     brain.teach_file(&path).unwrap();
 
     let resp = brain.talk("what is alpha");
-    assert!(resp.contains("first letter"), "alpha definition wrong: {}", resp);
+    assert!(
+        resp.contains("first letter"),
+        "alpha definition wrong: {}",
+        resp
+    );
     let resp = brain.talk("what is beta");
-    assert!(resp.contains("second letter"), "beta definition wrong: {}", resp);
+    assert!(
+        resp.contains("second letter"),
+        "beta definition wrong: {}",
+        resp
+    );
 }

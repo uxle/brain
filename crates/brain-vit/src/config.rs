@@ -9,9 +9,9 @@
 //! - Serializable to/from key-value strings for checkpointing
 //! - Preset constructors for ViT-Tiny, Small, Base, Large
 
+use crate::core::VitError;
 use std::collections::HashMap;
 use std::fmt;
-use crate::core::VitError;
 
 /// Result type for configuration operations.
 pub type CfgResult<T> = Result<T, VitError>;
@@ -50,7 +50,10 @@ impl PosEmbedType {
             "learned_2d" | "2d" => Ok(PosEmbedType::Learned2D),
             "sinusoidal" | "sin" => Ok(PosEmbedType::Sinusoidal),
             "none" => Ok(PosEmbedType::None),
-            other => Err(VitError::Config(format!("Unknown pos_embed_type: {}", other))),
+            other => Err(VitError::Config(format!(
+                "Unknown pos_embed_type: {}",
+                other
+            ))),
         }
     }
 }
@@ -163,10 +166,14 @@ impl Default for PatchEmbedConfig {
 
 impl PatchEmbedConfig {
     /// Number of patches along one axis.
-    pub fn grid_size(&self) -> usize { self.image_size / self.patch_size }
+    pub fn grid_size(&self) -> usize {
+        self.image_size / self.patch_size
+    }
 
     /// Total number of patches.
-    pub fn num_patches(&self) -> usize { self.grid_size() * self.grid_size() }
+    pub fn num_patches(&self) -> usize {
+        self.grid_size() * self.grid_size()
+    }
 
     /// Validate patch embedding config.
     pub fn validate(&self) -> CfgResult<()> {
@@ -211,7 +218,7 @@ pub struct PosEmbedConfig {
 impl Default for PosEmbedConfig {
     fn default() -> Self {
         Self {
-            seq_len: 197,   // 196 patches + 1 CLS
+            seq_len: 197, // 196 patches + 1 CLS
             embed_dim: 768,
             embed_type: PosEmbedType::Learned1D,
             has_cls_token: true,
@@ -226,10 +233,14 @@ impl PosEmbedConfig {
     /// Validate position embedding config.
     pub fn validate(&self) -> CfgResult<()> {
         if self.embed_dim == 0 {
-            return Err(VitError::Config("pos_embed: embed_dim must be > 0".to_string()));
+            return Err(VitError::Config(
+                "pos_embed: embed_dim must be > 0".to_string(),
+            ));
         }
         if self.seq_len == 0 {
-            return Err(VitError::Config("pos_embed: seq_len must be > 0".to_string()));
+            return Err(VitError::Config(
+                "pos_embed: seq_len must be > 0".to_string(),
+            ));
         }
         Ok(())
     }
@@ -361,7 +372,9 @@ impl VitConfig {
     }
 
     /// Number of patch tokens.
-    pub fn num_patches(&self) -> usize { self.patch_embed.num_patches() }
+    pub fn num_patches(&self) -> usize {
+        self.patch_embed.num_patches()
+    }
 
     /// Total sequence length (patches + optional CLS).
     pub fn seq_len(&self) -> usize {
@@ -369,7 +382,9 @@ impl VitConfig {
     }
 
     /// Embedding dimension.
-    pub fn embed_dim(&self) -> usize { self.patch_embed.embed_dim }
+    pub fn embed_dim(&self) -> usize {
+        self.patch_embed.embed_dim
+    }
 
     /// Per-block drop path rate using linear scaling.
     pub fn block_drop_path_rate(&self, block_idx: usize) -> f64 {
@@ -398,9 +413,18 @@ impl VitConfig {
     /// Serialize to key-value map.
     pub fn to_map(&self) -> HashMap<String, String> {
         let mut m = HashMap::new();
-        m.insert("image_size".to_string(), self.patch_embed.image_size.to_string());
-        m.insert("patch_size".to_string(), self.patch_embed.patch_size.to_string());
-        m.insert("embed_dim".to_string(), self.patch_embed.embed_dim.to_string());
+        m.insert(
+            "image_size".to_string(),
+            self.patch_embed.image_size.to_string(),
+        );
+        m.insert(
+            "patch_size".to_string(),
+            self.patch_embed.patch_size.to_string(),
+        );
+        m.insert(
+            "embed_dim".to_string(),
+            self.patch_embed.embed_dim.to_string(),
+        );
         m.insert("depth".to_string(), self.depth.to_string());
         m.insert("num_heads".to_string(), self.block.num_heads.to_string());
         m.insert("mlp_ratio".to_string(), self.block.mlp_ratio.to_string());
@@ -432,7 +456,9 @@ impl VitConfig {
     }
 
     /// ViT-Base: D=12 H=12 d=768.
-    pub fn base() -> Self { Self::default() }
+    pub fn base() -> Self {
+        Self::default()
+    }
 
     /// ViT-Large: D=24 H=16 d=1024.
     pub fn large() -> Self {
@@ -461,8 +487,14 @@ mod tests {
 
     #[test]
     fn test_pos_embed_type_from_str() {
-        assert_eq!(PosEmbedType::from_str("learned_1d").unwrap(), PosEmbedType::Learned1D);
-        assert_eq!(PosEmbedType::from_str("sin").unwrap(), PosEmbedType::Sinusoidal);
+        assert_eq!(
+            PosEmbedType::from_str("learned_1d").unwrap(),
+            PosEmbedType::Learned1D
+        );
+        assert_eq!(
+            PosEmbedType::from_str("sin").unwrap(),
+            PosEmbedType::Sinusoidal
+        );
         assert_eq!(PosEmbedType::from_str("none").unwrap(), PosEmbedType::None);
         assert!(PosEmbedType::from_str("xyz").is_err());
     }

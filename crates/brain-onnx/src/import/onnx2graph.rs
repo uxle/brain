@@ -3,11 +3,11 @@
 //! Transforms `ModelProto` structures into verified `OnnxModel` graphs with tensor shapes and initializers.
 #![allow(missing_docs)]
 
-use crate::core::OnnxResult;
-use crate::config::ImportConfig;
-use crate::ir::{OnnxModel, OnnxGraph, OnnxValue};
-use crate::proto::ModelProto;
 use super::ops::translate_op;
+use crate::config::ImportConfig;
+use crate::core::OnnxResult;
+use crate::ir::{OnnxGraph, OnnxModel, OnnxValue};
+use crate::proto::ModelProto;
 
 /// Converts a decoded ModelProto into an OnnxModel IR.
 pub fn proto_to_ir(proto: &ModelProto, _config: &ImportConfig) -> OnnxResult<OnnxModel> {
@@ -27,32 +27,41 @@ pub fn proto_to_ir(proto: &ModelProto, _config: &ImportConfig) -> OnnxResult<Onn
 
         for inp in &g.input {
             model.graph.inputs.push(inp.name.clone());
-            model.graph.values.insert(inp.name.clone(), OnnxValue {
-                name: inp.name.clone(),
-                shape: inp.shape.clone(),
-                is_initializer: false,
-                tensor_data: None,
-            });
+            model.graph.values.insert(
+                inp.name.clone(),
+                OnnxValue {
+                    name: inp.name.clone(),
+                    shape: inp.shape.clone(),
+                    is_initializer: false,
+                    tensor_data: None,
+                },
+            );
         }
 
         for out in &g.output {
             model.graph.outputs.push(out.name.clone());
-            model.graph.values.insert(out.name.clone(), OnnxValue {
-                name: out.name.clone(),
-                shape: out.shape.clone(),
-                is_initializer: false,
-                tensor_data: None,
-            });
+            model.graph.values.insert(
+                out.name.clone(),
+                OnnxValue {
+                    name: out.name.clone(),
+                    shape: out.shape.clone(),
+                    is_initializer: false,
+                    tensor_data: None,
+                },
+            );
         }
 
         for init in &g.initializer {
             let tensor = init.to_tensor().ok();
-            model.graph.values.insert(init.name.clone(), OnnxValue {
-                name: init.name.clone(),
-                shape: init.dims.clone(),
-                is_initializer: true,
-                tensor_data: tensor,
-            });
+            model.graph.values.insert(
+                init.name.clone(),
+                OnnxValue {
+                    name: init.name.clone(),
+                    shape: init.dims.clone(),
+                    is_initializer: true,
+                    tensor_data: tensor,
+                },
+            );
         }
     }
 
@@ -61,7 +70,13 @@ pub fn proto_to_ir(proto: &ModelProto, _config: &ImportConfig) -> OnnxResult<Onn
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

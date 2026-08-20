@@ -1,11 +1,11 @@
 //! Python bindings for the Brain Framework.
 #![allow(missing_docs)]
 
-pub mod error;
-pub mod tensor;
 pub mod autograd;
+pub mod error;
 pub mod nn;
 pub mod optim;
+pub mod tensor;
 
 #[cfg(feature = "extension-module")]
 use pyo3::prelude::*;

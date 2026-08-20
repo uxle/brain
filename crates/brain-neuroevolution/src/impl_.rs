@@ -3,7 +3,7 @@
 //! Convenient evolutionary loop runner: `run_evolution`, `evolve_generation`, `best_genome`.
 #![allow(missing_docs)]
 
-use crate::core::{EvoConfig, EvoResult, EvoError};
+use crate::core::{EvoConfig, EvoError, EvoResult};
 use crate::fitness::FitnessFn;
 use crate::ga::Ga;
 
@@ -22,7 +22,13 @@ pub fn run_evolution<F: FitnessFn>(
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

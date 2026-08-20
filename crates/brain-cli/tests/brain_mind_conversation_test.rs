@@ -10,16 +10,28 @@ fn test_newborn_baby_imitation_and_growth() {
 
     // Turn 1 (Newborn baby stage): echoes greeting
     let resp1 = brain.talk("hi");
-    assert!(resp1.contains("hi"), "Newborn brain must mimic greeting: got '{}'", resp1);
+    assert!(
+        resp1.contains("hi"),
+        "Newborn brain must mimic greeting: got '{}'",
+        resp1
+    );
     assert_eq!(brain.age_steps, 1);
 
     // Turn 2: learns nickname
     let resp2 = brain.talk("my name is Lion");
-    assert!(resp2.contains("Lion"), "Brain must recognize user's name: got '{}'", resp2);
+    assert!(
+        resp2.contains("Lion"),
+        "Brain must recognize user's name: got '{}'",
+        resp2
+    );
 
     // Turn 3: recalls user's identity
     let resp3 = brain.talk("who am I?");
-    assert!(resp3.contains("Lion"), "Brain must recall teacher's name: got '{}'", resp3);
+    assert!(
+        resp3.contains("Lion"),
+        "Brain must recall teacher's name: got '{}'",
+        resp3
+    );
 
     // Turn 4: basic mathematics
     let resp4 = brain.talk("what is 2 + 2");

@@ -20,7 +20,9 @@ use brain_autograd::Value;
 
 impl SequentialNamed {
     pub fn new() -> Self {
-        Self { children: Vec::new() }
+        Self {
+            children: Vec::new(),
+        }
     }
 
     pub fn add<M: Module + 'static>(&mut self, name: impl Into<String>, module: M) {
@@ -51,13 +53,22 @@ impl Module for SequentialNamed {
     }
 
     fn parameters(&self) -> Vec<Value> {
-        self.children.iter().flat_map(|c| c.module.parameters()).collect()
+        self.children
+            .iter()
+            .flat_map(|c| c.module.parameters())
+            .collect()
     }
 }
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

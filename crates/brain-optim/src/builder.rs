@@ -3,8 +3,8 @@
 //! Declarative builder API for instantiating and configuring any optimizer in the Brain suite.
 #![allow(missing_docs)]
 
-use std::collections::HashMap;
 use super::optimizer::param_group::ParamGroup;
+use std::collections::HashMap;
 
 /// Supported optimizer algorithm variants in builder.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -176,7 +176,13 @@ impl OptimizerBuilder {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

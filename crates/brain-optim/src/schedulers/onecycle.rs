@@ -3,10 +3,10 @@
 //! Anneals learning rate and momentum through rapid warm-up and cosine/linear cool-down phases (Leslie Smith).
 #![allow(missing_docs)]
 
+use super::LrScheduler;
+use crate::optimizer::{OptimResult, Optimizer};
 use std::collections::HashMap;
 use std::f64::consts::PI;
-use crate::optimizer::{Optimizer, OptimResult};
-use super::LrScheduler;
 
 /// Annealing curvature strategy for 1cycle policy.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -161,7 +161,13 @@ impl LrScheduler for OneCycleLR {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

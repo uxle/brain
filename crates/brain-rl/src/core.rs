@@ -1,16 +1,29 @@
 //! # Reinforcement Learning Core Primitives
 //!
 //! Space representations, State-Action transitions, Trajectory collections, and Error types.
-#![allow(missing_docs, clippy::excessive_precision, clippy::approx_constant, clippy::needless_range_loop, clippy::too_many_arguments, clippy::manual_is_multiple_of, clippy::manual_div_ceil, clippy::doc_markdown)]
+#![allow(
+    missing_docs,
+    clippy::excessive_precision,
+    clippy::approx_constant,
+    clippy::needless_range_loop,
+    clippy::too_many_arguments,
+    clippy::manual_is_multiple_of,
+    clippy::manual_div_ceil,
+    clippy::doc_markdown
+)]
 
-use std::fmt;
 use brain_core::Tensor;
+use std::fmt;
 
 /// Distinct environment space representations.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Space {
     Discrete(usize),
-    Continuous { shape: Vec<usize>, low: f64, high: f64 },
+    Continuous {
+        shape: Vec<usize>,
+        low: f64,
+        high: f64,
+    },
 }
 
 /// State-Action-Reward-NextState-Done transition tuple.
@@ -65,7 +78,10 @@ impl Trajectory {
 #[derive(Debug, Clone, PartialEq)]
 pub enum RlError {
     InvalidAction(usize),
-    InvalidStateShape { expected: Vec<usize>, found: Vec<usize> },
+    InvalidStateShape {
+        expected: Vec<usize>,
+        found: Vec<usize>,
+    },
     BufferFull,
     EmptyBuffer,
     InvalidDiscount(f64),
@@ -78,7 +94,11 @@ impl fmt::Display for RlError {
         match self {
             RlError::InvalidAction(a) => write!(f, "Action out of valid range: {}", a),
             RlError::InvalidStateShape { expected, found } => {
-                write!(f, "Invalid state shape: expected {:?}, found {:?}", expected, found)
+                write!(
+                    f,
+                    "Invalid state shape: expected {:?}, found {:?}",
+                    expected, found
+                )
             }
             RlError::BufferFull => write!(f, "Replay buffer is at maximum capacity"),
             RlError::EmptyBuffer => write!(f, "Replay buffer is empty"),
@@ -95,23 +115,35 @@ pub type RlResult<T> = Result<T, RlError>;
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant, clippy::needless_range_loop, clippy::manual_div_ceil, clippy::manual_is_multiple_of, clippy::too_many_arguments, clippy::doc_markdown, clippy::excessive_precision)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant,
+        clippy::needless_range_loop,
+        clippy::manual_div_ceil,
+        clippy::manual_is_multiple_of,
+        clippy::too_many_arguments,
+        clippy::doc_markdown,
+        clippy::excessive_precision
+    )]
     use super::*;
-    use crate::core::*;
-    use crate::env::*;
-    use crate::policy::*;
-    use crate::value::*;
-    use crate::buffer::*;
-    use crate::dqn::*;
-    use crate::ppo::*;
     use crate::a2c::*;
     use crate::actor_critic::*;
-    use crate::sac::*;
     use crate::agents::*;
-    use crate::trainer::*;
-    use crate::eval::*;
+    use crate::buffer::*;
     use crate::checkpoint::*;
+    use crate::core::*;
+    use crate::dqn::*;
+    use crate::env::*;
+    use crate::eval::*;
+    use crate::policy::*;
+    use crate::ppo::*;
+    use crate::sac::*;
+    use crate::trainer::*;
     use crate::utils::*;
+    use crate::value::*;
     use crate::VERSION;
     use brain_core::Tensor;
 }

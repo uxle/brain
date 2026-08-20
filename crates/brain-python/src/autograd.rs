@@ -1,10 +1,10 @@
 //! Python wrapper for autograd and gradient tape operations.
 
-#[cfg(feature = "extension-module")]
-use pyo3::prelude::*;
+use crate::tensor::PyTensor;
 use brain_autograd::Value;
 use brain_core::Tensor;
-use crate::tensor::PyTensor;
+#[cfg(feature = "extension-module")]
+use pyo3::prelude::*;
 
 #[cfg_attr(feature = "extension-module", pyclass(name = "Value"))]
 #[derive(Clone)]
@@ -23,13 +23,18 @@ impl PyValue {
 impl PyValue {
     #[new]
     #[pyo3(signature = (data, shape=None, requires_grad=true))]
-    pub fn py_new(data: Vec<f64>, shape: Option<Vec<usize>>, requires_grad: bool) -> PyResult<Self> {
+    pub fn py_new(
+        data: Vec<f64>,
+        shape: Option<Vec<usize>>,
+        requires_grad: bool,
+    ) -> PyResult<Self> {
         let shape = shape.unwrap_or_else(|| vec![data.len()]);
         let total: usize = shape.iter().product();
         if total != data.len() {
             return Err(pyo3::exceptions::PyValueError::new_err(format!(
                 "Data elements ({}) does not match shape total ({})",
-                data.len(), total
+                data.len(),
+                total
             )));
         }
         let t = Tensor::from_vec(data, shape);
@@ -57,18 +62,22 @@ impl PyValue {
     }
 
     pub fn backward(&self) -> PyResult<()> {
-        self.inner.backward()
-            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(format!("Autograd backward error: {:?}", e)))
+        self.inner.backward().map_err(|e| {
+            pyo3::exceptions::PyRuntimeError::new_err(format!("Autograd backward error: {:?}", e))
+        })
     }
 
     pub fn backward_with_grad(&self, seed: &PyTensor) -> PyResult<()> {
-        self.inner.backward_with_grad(&seed.inner)
-            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(format!("Autograd backward error: {:?}", e)))
+        self.inner.backward_with_grad(&seed.inner).map_err(|e| {
+            pyo3::exceptions::PyRuntimeError::new_err(format!("Autograd backward error: {:?}", e))
+        })
     }
 
     pub fn item(&self) -> PyResult<f64> {
         if self.inner.data().numel() != 1 {
-            return Err(pyo3::exceptions::PyValueError::new_err("item() only valid for scalar values"));
+            return Err(pyo3::exceptions::PyValueError::new_err(
+                "item() only valid for scalar values",
+            ));
         }
         Ok(self.inner.data().item())
     }
@@ -134,7 +143,8 @@ impl PyValue {
     }
 
     pub fn __repr__(&self) -> String {
-        format!("brain.Value(shape={:?}, requires_grad={}, data={:?})",
+        format!(
+            "brain.Value(shape={:?}, requires_grad={}, data={:?})",
             self.inner.data().shape(),
             self.inner.requires_grad(),
             self.inner.data().to_vec()

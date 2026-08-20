@@ -1,10 +1,19 @@
 //! # Layer Normalization (LayerNorm & RMSNorm)
 //!
 //! Independent feature normalization over normalized dimensions with affine parameters and RMSNorm variants.
-#![allow(missing_docs, clippy::excessive_precision, clippy::approx_constant, clippy::needless_range_loop, clippy::too_many_arguments, clippy::manual_is_multiple_of, clippy::manual_div_ceil, clippy::doc_markdown)]
+#![allow(
+    missing_docs,
+    clippy::excessive_precision,
+    clippy::approx_constant,
+    clippy::needless_range_loop,
+    clippy::too_many_arguments,
+    clippy::manual_is_multiple_of,
+    clippy::manual_div_ceil,
+    clippy::doc_markdown
+)]
 
-use brain_core::Tensor;
 use super::super::core::{RegError, RegKind, RegResult, Regularization};
+use brain_core::Tensor;
 
 /// Configuration settings for LayerNorm.
 #[derive(Debug, Clone, PartialEq)]
@@ -35,8 +44,16 @@ pub struct LayerNorm {
 impl LayerNorm {
     pub fn new(config: LayerNormConfig) -> Self {
         let num_elements: usize = config.normalized_shape.iter().product();
-        let weight = if config.elementwise_affine { Some(vec![1.0; num_elements]) } else { None };
-        let bias = if config.elementwise_affine { Some(vec![0.0; num_elements]) } else { None };
+        let weight = if config.elementwise_affine {
+            Some(vec![1.0; num_elements])
+        } else {
+            None
+        };
+        let bias = if config.elementwise_affine {
+            Some(vec![0.0; num_elements])
+        } else {
+            None
+        };
 
         Self {
             config,
@@ -84,7 +101,9 @@ impl LayerNorm {
             let slice = &data[start..end];
 
             let mut sum = 0.0;
-            for &v in slice { sum += v; }
+            for &v in slice {
+                sum += v;
+            }
             let mean = sum / norm_size as f64;
 
             let mut sq_diff = 0.0;
@@ -153,7 +172,9 @@ impl RMSNorm {
             let slice = &data[start..end];
 
             let mut sum_sq = 0.0;
-            for &v in slice { sum_sq += v * v; }
+            for &v in slice {
+                sum_sq += v * v;
+            }
             let rms = (sum_sq / self.dim as f64 + self.eps).sqrt();
             let rms_inv = 1.0 / rms;
 
@@ -168,28 +189,39 @@ impl RMSNorm {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant, clippy::needless_range_loop, clippy::manual_div_ceil, clippy::manual_is_multiple_of, clippy::too_many_arguments, clippy::doc_markdown)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant,
+        clippy::needless_range_loop,
+        clippy::manual_div_ceil,
+        clippy::manual_is_multiple_of,
+        clippy::too_many_arguments,
+        clippy::doc_markdown
+    )]
     use super::*;
-    use crate::core::*;
-    use crate::config::*;
-    use crate::utils::*;
-    use crate::dropout::*;
-    use crate::normalization::*;
-    use crate::regularizers::*;
-    use crate::decay::*;
-    use crate::earlystop::*;
-    use crate::stopping::*;
     use crate::augment::*;
-    use crate::perturb::*;
-    use crate::dropout_uncertainty::*;
-    use crate::label_smooth::*;
-    use crate::curriculum::*;
+    use crate::config::*;
     use crate::consistency::*;
-    use crate::rules::*;
-    use crate::registry::*;
-    use crate::train_hooks::*;
+    use crate::core::*;
+    use crate::curriculum::*;
+    use crate::decay::*;
+    use crate::dropout::*;
+    use crate::dropout_uncertainty::*;
+    use crate::earlystop::*;
+    use crate::label_smooth::*;
+    use crate::normalization::*;
     use crate::ops::*;
+    use crate::perturb::*;
     use crate::r#impl::*;
+    use crate::registry::*;
+    use crate::regularizers::*;
+    use crate::rules::*;
+    use crate::stopping::*;
+    use crate::train_hooks::*;
+    use crate::utils::*;
     use crate::VERSION;
     use brain_core::Tensor;
 }

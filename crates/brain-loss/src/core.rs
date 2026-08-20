@@ -41,7 +41,10 @@ pub enum LossKind {
 /// Error type for loss computations.
 #[derive(Debug, Clone, PartialEq)]
 pub enum LossError {
-    ShapeMismatch { expected: Vec<usize>, got: Vec<usize> },
+    ShapeMismatch {
+        expected: Vec<usize>,
+        got: Vec<usize>,
+    },
     InvalidTarget(String),
     NumericalInstability(String),
     InvalidParameter(String),
@@ -50,7 +53,9 @@ pub enum LossError {
 impl std::fmt::Display for LossError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            LossError::ShapeMismatch { expected, got } => write!(f, "Shape mismatch: expected {:?}, got {:?}", expected, got),
+            LossError::ShapeMismatch { expected, got } => {
+                write!(f, "Shape mismatch: expected {:?}, got {:?}", expected, got)
+            }
             LossError::InvalidTarget(msg) => write!(f, "Invalid target: {}", msg),
             LossError::NumericalInstability(msg) => write!(f, "Numerical instability: {}", msg),
             LossError::InvalidParameter(msg) => write!(f, "Invalid parameter: {}", msg),
@@ -69,11 +74,17 @@ pub struct LossValue {
 
 impl LossValue {
     pub fn new(scalar: f64) -> Self {
-        Self { scalar, per_sample: None }
+        Self {
+            scalar,
+            per_sample: None,
+        }
     }
 
     pub fn with_per_sample(scalar: f64, per_sample: Tensor) -> Self {
-        Self { scalar, per_sample: Some(per_sample) }
+        Self {
+            scalar,
+            per_sample: Some(per_sample),
+        }
     }
 }
 
@@ -94,7 +105,13 @@ pub trait Loss: Send + Sync {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

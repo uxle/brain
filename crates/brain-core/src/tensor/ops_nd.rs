@@ -16,7 +16,11 @@ pub fn cat(tensors: &[&Tensor], dim: usize) -> Tensor {
         assert_eq!(t.ndim(), rank, "cat: all tensors must have same rank");
         for d in 0..rank {
             if d != dim {
-                assert_eq!(t.shape()[d], out_shape[d], "cat: non-concatenating dimension sizes must match");
+                assert_eq!(
+                    t.shape()[d],
+                    out_shape[d],
+                    "cat: non-concatenating dimension sizes must match"
+                );
             }
         }
         total_dim += t.shape()[dim];
@@ -92,8 +96,17 @@ pub fn roll(input: &Tensor, shift: isize, dim: usize) -> Tensor {
 
 /// Tiles the tensor along each dimension by the given repeat counts (torch `repeat` semantics).
 pub fn repeat(input: &Tensor, repeats: &[usize]) -> Tensor {
-    assert_eq!(repeats.len(), input.ndim(), "repeat counts must match tensor rank");
-    let out_shape: Vec<usize> = input.shape().iter().zip(repeats).map(|(&s, &r)| s * r).collect();
+    assert_eq!(
+        repeats.len(),
+        input.ndim(),
+        "repeat counts must match tensor rank"
+    );
+    let out_shape: Vec<usize> = input
+        .shape()
+        .iter()
+        .zip(repeats)
+        .map(|(&s, &r)| s * r)
+        .collect();
     let rank = input.ndim();
     let mut out_data = vec![0.0; out_shape.iter().product()];
     let mut coords = vec![0usize; rank];
@@ -104,7 +117,11 @@ pub fn repeat(input: &Tensor, repeats: &[usize]) -> Tensor {
             coords[d] = rem % out_shape[d];
             rem /= out_shape[d];
         }
-        let src_coords: Vec<usize> = coords.iter().zip(input.shape()).map(|(&c, &s)| c % s).collect();
+        let src_coords: Vec<usize> = coords
+            .iter()
+            .zip(input.shape())
+            .map(|(&c, &s)| c % s)
+            .collect();
         out_data[flat] = input.get_index(&src_coords);
     }
 
@@ -160,7 +177,7 @@ mod tests {
     fn test_cat_and_stack_edge_cases() {
         let a = Tensor::from_slice(&[1.0, 2.0], vec![1, 2]);
         let b = Tensor::from_slice(&[3.0, 4.0], vec![1, 2]);
-        
+
         let cat0 = cat(&[&a, &b], 0);
         assert_eq!(cat0.shape(), &[2, 2]);
         assert_eq!(cat0.to_vec(), vec![1.0, 2.0, 3.0, 4.0]);

@@ -51,7 +51,10 @@ impl LogFormatter for TimestampedFormatter {
         } else {
             String::new()
         };
-        format!("[ts:{}] [{}] [{}]{} {}", record.timestamp_ms, record.level, record.target, loc, record.message)
+        format!(
+            "[ts:{}] [{}] [{}]{} {}",
+            record.timestamp_ms, record.level, record.target, loc, record.message
+        )
     }
 }
 
@@ -133,18 +136,18 @@ mod tests {
         let rec = LogRecord::new(crate::log::LogLevel::Info, "network", "packet received")
             .with_location("net.rs", 1)
             .with_field("bytes", "64");
-    
+
         let plain = PlainFormatter::new().format(&rec);
         assert_eq!(plain, "[INFO] [network] packet received");
-    
+
         let ts = TimestampedFormatter::new(true).format(&rec);
         assert!(ts.contains("[INFO]"));
         assert!(ts.contains("net.rs:"));
-    
+
         let kv = KeyValueFormatter::new().format(&rec);
         assert!(kv.contains("level=INFO"));
         assert!(kv.contains("bytes="));
-    
+
         let json = JsonFormatter::new().format(&rec);
         assert!(json.contains("target"));
         assert!(json.contains("network"));

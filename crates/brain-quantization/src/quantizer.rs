@@ -3,9 +3,9 @@
 //! Affine, symmetric, and per-channel quantizers transforming continuous tensors to discrete representations.
 #![allow(missing_docs)]
 
-use brain_core::Tensor;
 use super::core::{QParams, QuantDType, QuantResult, QuantScheme, QuantTensor};
 use super::utils::{compute_scale_zero_point, minmax, quantize_val};
+use brain_core::Tensor;
 
 /// Architectural kind of quantizer.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -61,7 +61,11 @@ impl Quantizer for AffineQuantizer {
             q_data.push(quantize_val(v, scale, zp, qmin, qmax));
         }
 
-        Ok(QuantTensor::new(q_data, tensor.shape().to_vec(), self.params.clone()))
+        Ok(QuantTensor::new(
+            q_data,
+            tensor.shape().to_vec(),
+            self.params.clone(),
+        ))
     }
 
     fn dequantize(&self, qtensor: &QuantTensor) -> QuantResult<Tensor> {
@@ -104,7 +108,11 @@ impl Quantizer for SymmetricQuantizer {
             q_data.push(quantize_val(v, scale, 0, qmin, qmax));
         }
 
-        Ok(QuantTensor::new(q_data, tensor.shape().to_vec(), self.params.clone()))
+        Ok(QuantTensor::new(
+            q_data,
+            tensor.shape().to_vec(),
+            self.params.clone(),
+        ))
     }
 
     fn dequantize(&self, qtensor: &QuantTensor) -> QuantResult<Tensor> {
@@ -118,7 +126,13 @@ impl Quantizer for SymmetricQuantizer {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

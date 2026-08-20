@@ -206,7 +206,8 @@ impl Value {
         match g.as_mut() {
             Some(existing) => {
                 if existing.shape() != incoming.shape() {
-                    let unbroadcasted = crate::grad_fns::util::sum_to_shape(incoming, existing.shape())?;
+                    let unbroadcasted =
+                        crate::grad_fns::util::sum_to_shape(incoming, existing.shape())?;
                     *existing = arith_t::add(existing, &unbroadcasted);
                 } else {
                     *existing = arith_t::add(existing, incoming);
@@ -214,7 +215,8 @@ impl Value {
             }
             None => {
                 if incoming.shape() != self.shape() {
-                    let unbroadcasted = crate::grad_fns::util::sum_to_shape(incoming, self.shape())?;
+                    let unbroadcasted =
+                        crate::grad_fns::util::sum_to_shape(incoming, self.shape())?;
                     *g = Some(unbroadcasted);
                 } else {
                     *g = Some(incoming.clone());
@@ -426,7 +428,8 @@ impl Value {
 
     /// Linear transformation `input * weight^T + bias` or `input * weight + bias`.
     pub fn linear(&self, weight: &Value, bias: Option<&Value>) -> Value {
-        let out = if weight.ndim() == 2 && self.ndim() == 2 && self.shape()[1] == weight.shape()[1] {
+        let out = if weight.ndim() == 2 && self.ndim() == 2 && self.shape()[1] == weight.shape()[1]
+        {
             let w_t = weight.transpose(0, 1);
             self.matmul(&w_t)
         } else {
@@ -550,7 +553,10 @@ pub fn values_close(a: &Value, b: &Value, tol: f64) -> bool {
     }
     let a_data = a.data().data();
     let b_data = b.data().data();
-    a_data.iter().zip(b_data.iter()).all(|(&x, &y)| (x - y).abs() <= tol)
+    a_data
+        .iter()
+        .zip(b_data.iter())
+        .all(|(&x, &y)| (x - y).abs() <= tol)
 }
 
 #[cfg(test)]
@@ -558,9 +564,9 @@ mod tests {
     #[allow(unused_imports)]
     use super::*;
     #[allow(unused_imports)]
+    use crate::tape::OpRecord;
+    #[allow(unused_imports)]
     use crate::value::Value;
     #[allow(unused_imports)]
     use brain_core::Tensor;
-    #[allow(unused_imports)]
-    use crate::tape::OpRecord;
 }

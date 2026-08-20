@@ -19,7 +19,11 @@ pub fn estimate_total_flops(graph: &IrGraph) -> u64 {
             OpKind::MatMul => {
                 let k = if node.inputs.len() >= 2 {
                     let in0_shape = &graph.values[node.inputs[0]].shape;
-                    if in0_shape.len() >= 2 { in0_shape[1] as u64 } else { 1 }
+                    if in0_shape.len() >= 2 {
+                        in0_shape[1] as u64
+                    } else {
+                        1
+                    }
                 } else {
                     1
                 };

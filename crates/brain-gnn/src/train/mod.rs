@@ -59,7 +59,11 @@ impl GnnTrainer {
         let logits = model.forward_node(graph);
         let log_data = logits.to_vec();
         let num_nodes = graph.num_nodes;
-        let num_classes = if logits.shape().len() > 1 { logits.shape()[1] } else { 1 };
+        let num_classes = if logits.shape().len() > 1 {
+            logits.shape()[1]
+        } else {
+            1
+        };
 
         let mut correct = 0usize;
         let mut total_loss = 0.0f64;
@@ -83,8 +87,16 @@ impl GnnTrainer {
             total_loss += (1.0 - (max_val.max(0.0) / (max_val.abs() + 1.0))).powi(2);
         }
 
-        let acc = if num_nodes > 0 { correct as f64 / num_nodes as f64 } else { 0.0 };
-        let avg_loss = if num_nodes > 0 { total_loss / num_nodes as f64 } else { 0.0 };
+        let acc = if num_nodes > 0 {
+            correct as f64 / num_nodes as f64
+        } else {
+            0.0
+        };
+        let avg_loss = if num_nodes > 0 {
+            total_loss / num_nodes as f64
+        } else {
+            0.0
+        };
 
         GnnTrainStats {
             epoch: 1,
@@ -98,7 +110,13 @@ impl GnnTrainer {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

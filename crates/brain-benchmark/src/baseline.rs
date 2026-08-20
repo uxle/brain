@@ -42,7 +42,9 @@ impl BaselineStore {
         for current in current_runs {
             if let Some(base) = self.get(&current.config.name) {
                 let comp = compare_runs(base, current, 0.05);
-                if comp.verdict == ComparisonVerdict::Regression && comp.percent_change > max_regression_pct {
+                if comp.verdict == ComparisonVerdict::Regression
+                    && comp.percent_change > max_regression_pct
+                {
                     failures.push(format!(
                         "Benchmark '{}' regressed by {:.2}% (threshold: {:.2}%)",
                         comp.name, comp.percent_change, max_regression_pct

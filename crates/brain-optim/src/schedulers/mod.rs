@@ -3,22 +3,22 @@
 //! Unified trait and abstractions for dynamic learning rate decay, cycling, warmup, and adaptivity.
 #![allow(missing_docs)]
 
-pub mod step;
 pub mod cosine;
 pub mod cyclic;
 pub mod onecycle;
-pub mod warmup;
 pub mod plateau;
+pub mod step;
+pub mod warmup;
 
+use crate::optimizer::{OptimResult, Optimizer};
 use std::collections::HashMap;
-use crate::optimizer::{Optimizer, OptimResult};
 
-pub use step::{StepLR, MultiStepLR, ExponentialLR, PolynomialLR, StepSchedulerConfig};
 pub use cosine::{CosineAnnealingLR, CosineAnnealingWarmRestarts, CosineConfig};
-pub use cyclic::{CyclicLR, CyclicMode, CyclicConfig};
-pub use onecycle::{OneCycleLR, AnnealStrategy, OneCycleConfig};
-pub use warmup::{LinearWarmup, ConstantWarmup, ExponentialWarmup, WarmupConfig, NoamLR};
-pub use plateau::{ReduceLROnPlateau, PlateauMode, PlateauConfig};
+pub use cyclic::{CyclicConfig, CyclicLR, CyclicMode};
+pub use onecycle::{AnnealStrategy, OneCycleConfig, OneCycleLR};
+pub use plateau::{PlateauConfig, PlateauMode, ReduceLROnPlateau};
+pub use step::{ExponentialLR, MultiStepLR, PolynomialLR, StepLR, StepSchedulerConfig};
+pub use warmup::{ConstantWarmup, ExponentialWarmup, LinearWarmup, NoamLR, WarmupConfig};
 
 /// Execution mode for scheduler stepping.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -115,7 +115,13 @@ impl LrScheduler for ChainedScheduler {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

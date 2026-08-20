@@ -17,7 +17,12 @@ impl Downsample2d {
 
     /// Forward pass downsampling spatial dimensions by 2x.
     pub fn forward(&self, x: &Tensor) -> Tensor {
-        Tensor::zeros(vec![x.shape()[0], self.channels, x.shape()[2] / 2, x.shape()[3] / 2])
+        Tensor::zeros(vec![
+            x.shape()[0],
+            self.channels,
+            x.shape()[2] / 2,
+            x.shape()[3] / 2,
+        ])
     }
 }
 
@@ -34,7 +39,12 @@ impl Upsample2d {
 
     /// Forward pass upsampling spatial dimensions by 2x.
     pub fn forward(&self, x: &Tensor) -> Tensor {
-        Tensor::zeros(vec![x.shape()[0], self.channels, x.shape()[2] * 2, x.shape()[3] * 2])
+        Tensor::zeros(vec![
+            x.shape()[0],
+            self.channels,
+            x.shape()[2] * 2,
+            x.shape()[3] * 2,
+        ])
     }
 }
 

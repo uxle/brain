@@ -43,7 +43,10 @@ pub mod pooling;
 pub mod segmentation;
 
 // Re-exports
-pub use conv::{Conv2d, Conv2dConfig, ConvTranspose2d, DeformableConv2d, DepthwiseSeparableConv2d, GhostModule, GroupedConv2d};
+pub use conv::{
+    Conv2d, Conv2dConfig, ConvTranspose2d, DeformableConv2d, DepthwiseSeparableConv2d, GhostModule,
+    GroupedConv2d,
+};
 pub use detection::{AnchorGenerator, BBoxFormat, DetectionHead, NmsConfig, RoIAlign};
 pub use feature::{BackboneZoo, Fpn};
 pub use pooling::{AvgPool2d, MaxPool2d};
@@ -83,7 +86,10 @@ pub fn version_string() -> String {
 /// assert_eq!(cfg.in_channels, 1);
 /// ```
 pub mod prelude {
-    pub use crate::conv::{Conv2d, Conv2dConfig, ConvTranspose2d, DeformableConv2d, DepthwiseSeparableConv2d, GhostModule, GroupedConv2d};
+    pub use crate::conv::{
+        Conv2d, Conv2dConfig, ConvTranspose2d, DeformableConv2d, DepthwiseSeparableConv2d,
+        GhostModule, GroupedConv2d,
+    };
     pub use crate::detection::{AnchorGenerator, BBoxFormat, DetectionHead, NmsConfig, RoIAlign};
     pub use crate::feature::{BackboneZoo, Fpn};
     pub use crate::pooling::{AvgPool2d, MaxPool2d};

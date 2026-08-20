@@ -38,7 +38,9 @@ impl<'a, D: Dataset> Dataset for Subset<'a, D> {
     }
 
     fn get(&self, idx: usize) -> Option<Item> {
-        self.indices.get(idx).and_then(|&real_idx| self.dataset.get(real_idx))
+        self.indices
+            .get(idx)
+            .and_then(|&real_idx| self.dataset.get(real_idx))
     }
 }
 

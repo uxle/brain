@@ -3,11 +3,11 @@
 //! Neighborhood aggregation with self-connection concatenation: h_v = W * [h_v || agg(h_u)].
 #![allow(missing_docs)]
 
-use brain_core::Tensor;
 use super::GnnLayer;
 use crate::graph::Graph;
-use crate::ops::aggregate_mean;
 use crate::impl_::transform_node_features;
+use crate::ops::aggregate_mean;
+use brain_core::Tensor;
 
 /// GraphSAGE Layer struct.
 #[derive(Debug, Clone)]
@@ -22,7 +22,12 @@ impl SageLayer {
     pub fn new(in_dim: usize, out_dim: usize) -> Self {
         let weight_self = Tensor::zeros(vec![out_dim, in_dim]);
         let weight_neigh = Tensor::zeros(vec![out_dim, in_dim]);
-        Self { in_dim, out_dim, weight_self, weight_neigh }
+        Self {
+            in_dim,
+            out_dim,
+            weight_self,
+            weight_neigh,
+        }
     }
 }
 
@@ -37,13 +42,23 @@ impl GnnLayer for SageLayer {
         Tensor::from_vec(data, combined.shape().to_vec())
     }
 
-    fn in_dim(&self) -> usize { self.in_dim }
-    fn out_dim(&self) -> usize { self.out_dim }
+    fn in_dim(&self) -> usize {
+        self.in_dim
+    }
+    fn out_dim(&self) -> usize {
+        self.out_dim
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

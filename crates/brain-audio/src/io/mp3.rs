@@ -48,7 +48,9 @@ impl Mp3FrameHeader {
             _ => return Err(BrainError::invalid_value("unsupported MPEG layer")),
         };
 
-        const BITRATES_V1_L3: [u32; 16] = [0, 32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320, 0];
+        const BITRATES_V1_L3: [u32; 16] = [
+            0, 32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320, 0,
+        ];
         let bitrate_kbps = BITRATES_V1_L3[bitrate_idx as usize];
         if bitrate_kbps == 0 {
             return Err(BrainError::invalid_value("invalid bitrate index"));
@@ -62,7 +64,8 @@ impl Mp3FrameHeader {
 
         let padding = padding_bit == 1;
         let channels = if channel_bits == 3 { 1 } else { 2 };
-        let frame_size = ((144 * bitrate_kbps * 1000) / sample_rate + if padding { 1 } else { 0 }) as usize;
+        let frame_size =
+            ((144 * bitrate_kbps * 1000) / sample_rate + if padding { 1 } else { 0 }) as usize;
 
         Ok(Mp3FrameHeader {
             version,

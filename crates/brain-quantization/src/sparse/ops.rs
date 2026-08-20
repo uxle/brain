@@ -1,11 +1,18 @@
 //! # Sparse Linear Algebra Operations
 //!
 //! SpMV (Sparse Matrix-Vector multiplication) and SpMM (Sparse Matrix-Matrix multiplication).
-#![allow(missing_docs, clippy::needless_range_loop, clippy::too_many_arguments, clippy::manual_is_multiple_of, clippy::manual_div_ceil, clippy::doc_markdown)]
+#![allow(
+    missing_docs,
+    clippy::needless_range_loop,
+    clippy::too_many_arguments,
+    clippy::manual_is_multiple_of,
+    clippy::manual_div_ceil,
+    clippy::doc_markdown
+)]
 
-use brain_core::Tensor;
-use super::CsrMatrix;
 use super::super::core::{QuantError, QuantResult};
+use super::CsrMatrix;
+use brain_core::Tensor;
 
 /// Evaluates Sparse Matrix-Vector multiplication: $y = A x$.
 pub fn spmv(a: &CsrMatrix, x: &Tensor) -> QuantResult<Tensor> {
@@ -68,7 +75,13 @@ pub fn spmm(a: &CsrMatrix, b: &Tensor) -> QuantResult<Tensor> {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

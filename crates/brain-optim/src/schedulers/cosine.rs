@@ -3,10 +3,10 @@
 //! Standard cosine annealing and cosine annealing with warm restarts (SGDR).
 #![allow(missing_docs)]
 
+use super::LrScheduler;
+use crate::optimizer::{OptimResult, Optimizer};
 use std::collections::HashMap;
 use std::f64::consts::PI;
-use crate::optimizer::{Optimizer, OptimResult};
-use super::LrScheduler;
 
 /// Configuration settings for cosine annealing.
 #[derive(Debug, Clone, PartialEq)]
@@ -182,7 +182,13 @@ impl LrScheduler for CosineAnnealingWarmRestarts {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

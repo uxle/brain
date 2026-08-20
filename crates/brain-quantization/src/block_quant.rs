@@ -1,12 +1,19 @@
 //! # Block and Group-wise Quantization
 //!
 //! GPTQ & AWQ style fine-grained sub-tensor group scaling (group sizes 32, 64, 128) for LLM compression.
-#![allow(missing_docs, clippy::needless_range_loop, clippy::too_many_arguments, clippy::manual_is_multiple_of, clippy::manual_div_ceil, clippy::doc_markdown)]
+#![allow(
+    missing_docs,
+    clippy::needless_range_loop,
+    clippy::too_many_arguments,
+    clippy::manual_is_multiple_of,
+    clippy::manual_div_ceil,
+    clippy::doc_markdown
+)]
 
-use brain_core::Tensor;
 use super::config::BlockQuantConfig;
 use super::core::{QParams, QuantResult, QuantScheme, QuantTensor};
 use super::utils::{compute_scale_zero_point, minmax, quantize_val};
+use brain_core::Tensor;
 
 /// Block/Group-wise Quantizer.
 #[derive(Debug, Clone)]
@@ -36,7 +43,8 @@ impl BlockQuantizer {
             let slice = &data[start..end];
 
             let (min_v, max_v) = minmax(slice)?;
-            let (scale, zp) = compute_scale_zero_point(min_v, max_v, self.config.dtype, self.config.symmetric)?;
+            let (scale, zp) =
+                compute_scale_zero_point(min_v, max_v, self.config.dtype, self.config.symmetric)?;
 
             scales.push(scale);
             zero_points.push(zp);
@@ -64,31 +72,40 @@ impl BlockQuantizer {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant, clippy::needless_range_loop, clippy::manual_div_ceil, clippy::manual_is_multiple_of)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant,
+        clippy::needless_range_loop,
+        clippy::manual_div_ceil,
+        clippy::manual_is_multiple_of
+    )]
     use super::*;
-    use crate::core::*;
-    use crate::config::*;
-    use crate::calibration::*;
-    use crate::quantizer::*;
-    use crate::prune::*;
-    use crate::sparse::*;
+    use crate::act_quant::*;
+    use crate::bench_quant::*;
+    use crate::block_quant::*;
     use crate::builder::*;
-    use crate::ops::*;
-    use crate::utils::*;
+    use crate::calibration::*;
+    use crate::config::*;
+    use crate::core::*;
     use crate::dtype_map::*;
     use crate::error_analysis::*;
-    use crate::bench_quant::*;
-    use crate::runtime::*;
-    use crate::helper::*;
-    use crate::r#impl::*;
-    use crate::act_quant::*;
-    use crate::block_quant::*;
-    use crate::mixed::*;
-    use crate::graph_quant::*;
     use crate::fake_quant::*;
-    use crate::qlinear::*;
+    use crate::graph_quant::*;
+    use crate::helper::*;
+    use crate::mixed::*;
+    use crate::ops::*;
+    use crate::prune::*;
     use crate::qconv::*;
+    use crate::qlinear::*;
     use crate::qmatmul::*;
+    use crate::quantizer::*;
+    use crate::r#impl::*;
+    use crate::runtime::*;
+    use crate::sparse::*;
+    use crate::utils::*;
     use crate::VERSION;
     use brain_core::Tensor;
 }

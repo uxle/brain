@@ -3,10 +3,10 @@
 //! ProGAN-era upsample+conv+resblock generator with skip connections.
 #![allow(missing_docs)]
 
-use brain_core::Tensor;
-use crate::config::GeneratorConfig;
-use crate::ops::{relu, tanh_act, batch_norm};
 use super::Generator;
+use crate::config::GeneratorConfig;
+use crate::ops::{batch_norm, relu, tanh_act};
+use brain_core::Tensor;
 
 /// Residual block: F(x) + x.
 fn res_block(x: &Tensor) -> Tensor {
@@ -53,16 +53,28 @@ impl Generator for ResnetGenerator {
         tanh_act(&x)
     }
 
-    fn latent_dim(&self) -> usize { self.config.latent_dim }
+    fn latent_dim(&self) -> usize {
+        self.config.latent_dim
+    }
 
     fn output_shape(&self) -> Vec<usize> {
-        vec![self.config.output_channels, self.config.image_size, self.config.image_size]
+        vec![
+            self.config.output_channels,
+            self.config.image_size,
+            self.config.image_size,
+        ]
     }
 }
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

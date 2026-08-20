@@ -3,8 +3,8 @@
 //! Maintains shadow parameter copies with exponential smoothing for test-time evaluation stability.
 #![allow(missing_docs)]
 
-use std::collections::HashMap;
 use brain_core::Tensor;
+use std::collections::HashMap;
 
 /// Configuration container for Model EMA.
 #[derive(Debug, Clone, PartialEq)]
@@ -60,7 +60,10 @@ impl ModelEma {
 
         for (idx, p) in params.iter().enumerate() {
             let p_data = p.data();
-            let shadow = self.shadow_params.entry(idx).or_insert_with(|| p_data.to_vec());
+            let shadow = self
+                .shadow_params
+                .entry(idx)
+                .or_insert_with(|| p_data.to_vec());
             if shadow.len() != p_data.len() {
                 *shadow = p_data.to_vec();
             }
@@ -85,7 +88,13 @@ impl ModelEma {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

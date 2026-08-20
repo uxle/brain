@@ -26,12 +26,16 @@ impl Genome {
     }
 
     pub fn random_uniform(dim: usize, min_val: f64, max_val: f64, rng: &mut FastRng) -> Self {
-        let genes: Vec<f64> = (0..dim).map(|_| rng.sample_range(min_val, max_val)).collect();
+        let genes: Vec<f64> = (0..dim)
+            .map(|_| rng.sample_range(min_val, max_val))
+            .collect();
         Self::new(genes)
     }
 
     pub fn random_gaussian(dim: usize, mean: f64, std_dev: f64, rng: &mut FastRng) -> Self {
-        let genes: Vec<f64> = (0..dim).map(|_| rng.sample_gaussian(mean, std_dev)).collect();
+        let genes: Vec<f64> = (0..dim)
+            .map(|_| rng.sample_gaussian(mean, std_dev))
+            .collect();
         Self::new(genes)
     }
 
@@ -46,7 +50,13 @@ impl Genome {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

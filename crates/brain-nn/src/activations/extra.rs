@@ -13,8 +13,8 @@
 //! - `Softmin` (softmax over -x)
 //! - `QuietSoftmax` (per-element temperature softmax from DeepSeek-R1)
 
-use brain_core::Tensor;
 use crate::activations::Activation;
+use brain_core::Tensor;
 
 /// Parametric ReLU: x for x >= 0, weight * x otherwise.
 #[derive(Debug, Clone, Copy)]
@@ -159,7 +159,10 @@ pub struct Shrink {
 
 impl Default for Shrink {
     fn default() -> Self {
-        Self { lambda: 0.5, bias: 0.5 }
+        Self {
+            lambda: 0.5,
+            bias: 0.5,
+        }
     }
 }
 
@@ -228,7 +231,10 @@ pub struct Threshold {
 
 impl Default for Threshold {
     fn default() -> Self {
-        Self { threshold: 0.0, value: 0.0 }
+        Self {
+            threshold: 0.0,
+            value: 0.0,
+        }
     }
 }
 
@@ -330,7 +336,13 @@ pub fn quiet_softmax(input: &Tensor) -> Tensor {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 
@@ -349,7 +361,10 @@ mod tests {
         let o = log_sigmoid(&t);
         let expect = |x: f64| -(1.0 + (-x).exp()).ln();
         for i in 0..5 {
-            assert!((o.get(i) - expect(t.get(i))).abs() < 1e-9, "mismatch at {i}");
+            assert!(
+                (o.get(i) - expect(t.get(i))).abs() < 1e-9,
+                "mismatch at {i}"
+            );
         }
         // saturation: log-sigmoid(-10) close to -10
         assert!((o.get(4) + 10.0).abs() < 1e-3);

@@ -24,7 +24,8 @@ unsafe fn simd_fma_avx2(a: &[f64], b: &[f64], c: &[f64], out: &mut [f64]) {
             i += 4;
         }
         while i < len {
-            *out.get_unchecked_mut(i) = *a.get_unchecked(i) * *b.get_unchecked(i) + *c.get_unchecked(i);
+            *out.get_unchecked_mut(i) =
+                *a.get_unchecked(i) * *b.get_unchecked(i) + *c.get_unchecked(i);
             i += 1;
         }
     }

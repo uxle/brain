@@ -3,10 +3,10 @@
 //! Label embedding + projection for class-conditional GAN generation.
 #![allow(missing_docs)]
 
-use brain_core::Tensor;
-use crate::config::GeneratorConfig;
-use crate::ops::{relu, tanh_act, batch_norm};
 use super::Generator;
+use crate::config::GeneratorConfig;
+use crate::ops::{batch_norm, relu, tanh_act};
+use brain_core::Tensor;
 
 /// Conditional generator with class embedding.
 #[derive(Debug, Clone)]
@@ -29,7 +29,11 @@ impl ConditionalGenerator {
             layer_weights.push(Tensor::zeros(vec![ch, ch]));
         }
         layer_weights.push(Tensor::zeros(vec![config.output_channels, ch]));
-        Self { config, embed_weight, layer_weights }
+        Self {
+            config,
+            embed_weight,
+            layer_weights,
+        }
     }
 
     pub fn embed_class(&self, class_id: usize) -> Tensor {
@@ -63,16 +67,28 @@ impl Generator for ConditionalGenerator {
         tanh_act(&x)
     }
 
-    fn latent_dim(&self) -> usize { self.config.latent_dim }
+    fn latent_dim(&self) -> usize {
+        self.config.latent_dim
+    }
 
     fn output_shape(&self) -> Vec<usize> {
-        vec![self.config.output_channels, self.config.image_size, self.config.image_size]
+        vec![
+            self.config.output_channels,
+            self.config.image_size,
+            self.config.image_size,
+        ]
     }
 }
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

@@ -3,11 +3,11 @@
 //! Focal Loss addressing class imbalance by down-weighting easy examples: FL(p_t) = -alpha * (1 - p_t)^gamma * log(p_t).
 #![allow(missing_docs)]
 
-use brain_core::Tensor;
+use super::ClassificationLoss;
 use crate::core::{LossResult, Reduction};
 use crate::ops::{log_softmax, softmax};
 use crate::utils::reduction_apply;
-use super::ClassificationLoss;
+use brain_core::Tensor;
 
 /// Configuration for Focal Loss.
 #[derive(Debug, Clone)]
@@ -74,7 +74,13 @@ impl ClassificationLoss for FocalLoss {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

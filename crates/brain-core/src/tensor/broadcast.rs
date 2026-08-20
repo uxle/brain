@@ -25,7 +25,11 @@ pub struct BroadcastInfo {
 
 impl BroadcastInfo {
     /// Computes broadcast mapping from source shape and strides to a target shape.
-    pub fn new(src_shape: &[usize], src_strides: &[usize], target_shape: &[usize]) -> BrainResult<Self> {
+    pub fn new(
+        src_shape: &[usize],
+        src_strides: &[usize],
+        target_shape: &[usize],
+    ) -> BrainResult<Self> {
         let src_rank = src_shape.len();
         let tgt_rank = target_shape.len();
         if src_rank > tgt_rank {

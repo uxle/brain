@@ -1,10 +1,10 @@
 //! Neural network modules in Python.
 
+use crate::autograd::PyValue;
+use crate::tensor::PyTensor;
+use brain_nn::{Conv2d, LayerNorm, Linear, Module};
 #[cfg(feature = "extension-module")]
 use pyo3::prelude::*;
-use brain_nn::{Linear, Conv2d, LayerNorm, Module};
-use crate::tensor::PyTensor;
-use crate::autograd::PyValue;
 
 #[cfg_attr(feature = "extension-module", pyclass(name = "Linear"))]
 pub struct PyLinear {
@@ -23,13 +23,18 @@ impl PyLinear {
     }
 
     pub fn forward(&self, x: &PyTensor) -> PyResult<PyTensor> {
-        let out = self.inner.forward_tensor(&x.inner)
-            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(format!("Linear forward error: {:?}", e)))?;
+        let out = self.inner.forward_tensor(&x.inner).map_err(|e| {
+            pyo3::exceptions::PyRuntimeError::new_err(format!("Linear forward error: {:?}", e))
+        })?;
         Ok(PyTensor::new(out))
     }
 
     pub fn parameters(&self) -> Vec<PyValue> {
-        self.inner.parameters().into_iter().map(PyValue::new).collect()
+        self.inner
+            .parameters()
+            .into_iter()
+            .map(PyValue::new)
+            .collect()
     }
 }
 
@@ -50,13 +55,18 @@ impl PyConv2d {
     }
 
     pub fn forward(&self, x: &PyTensor) -> PyResult<PyTensor> {
-        let out = self.inner.forward_tensor(&x.inner)
-            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(format!("Conv2d forward error: {:?}", e)))?;
+        let out = self.inner.forward_tensor(&x.inner).map_err(|e| {
+            pyo3::exceptions::PyRuntimeError::new_err(format!("Conv2d forward error: {:?}", e))
+        })?;
         Ok(PyTensor::new(out))
     }
 
     pub fn parameters(&self) -> Vec<PyValue> {
-        self.inner.parameters().into_iter().map(PyValue::new).collect()
+        self.inner
+            .parameters()
+            .into_iter()
+            .map(PyValue::new)
+            .collect()
     }
 }
 
@@ -82,7 +92,11 @@ impl PyLayerNorm {
     }
 
     pub fn parameters(&self) -> Vec<PyValue> {
-        self.inner.parameters().into_iter().map(PyValue::new).collect()
+        self.inner
+            .parameters()
+            .into_iter()
+            .map(PyValue::new)
+            .collect()
     }
 }
 

@@ -20,22 +20,39 @@ pub struct FitnessStats {
 
 impl FitnessStats {
     pub fn from_fitnesses(mut fits: Vec<f64>) -> Self {
-        if fits.is_empty() { return Self::default(); }
+        if fits.is_empty() {
+            return Self::default();
+        }
         fits.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
 
         let n = fits.len();
         let best = fits[n - 1];
         let worst = fits[0];
         let mean = fits.iter().sum::<f64>() / n as f64;
-        let median = if n % 2 == 1 { fits[n / 2] } else { (fits[n / 2 - 1] + fits[n / 2]) * 0.5 };
+        let median = if n % 2 == 1 {
+            fits[n / 2]
+        } else {
+            (fits[n / 2 - 1] + fits[n / 2]) * 0.5
+        };
 
-        Self { best, mean, median, worst }
+        Self {
+            best,
+            mean,
+            median,
+            worst,
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

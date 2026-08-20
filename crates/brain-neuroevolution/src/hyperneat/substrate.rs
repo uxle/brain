@@ -27,8 +27,16 @@ impl SubstrateGrid2D {
         let mut in_coords = Vec::with_capacity(in_w * in_h);
         for y in 0..in_h {
             for x in 0..in_w {
-                let norm_x = if in_w > 1 { (x as f64 / (in_w - 1) as f64) * 2.0 - 1.0 } else { 0.0 };
-                let norm_y = if in_h > 1 { (y as f64 / (in_h - 1) as f64) * 2.0 - 1.0 } else { 0.0 };
+                let norm_x = if in_w > 1 {
+                    (x as f64 / (in_w - 1) as f64) * 2.0 - 1.0
+                } else {
+                    0.0
+                };
+                let norm_y = if in_h > 1 {
+                    (y as f64 / (in_h - 1) as f64) * 2.0 - 1.0
+                } else {
+                    0.0
+                };
                 in_coords.push((norm_x, norm_y));
             }
         }
@@ -36,13 +44,24 @@ impl SubstrateGrid2D {
         let mut out_coords = Vec::with_capacity(out_w * out_h);
         for y in 0..out_h {
             for x in 0..out_w {
-                let norm_x = if out_w > 1 { (x as f64 / (out_w - 1) as f64) * 2.0 - 1.0 } else { 0.0 };
-                let norm_y = if out_h > 1 { (y as f64 / (out_h - 1) as f64) * 2.0 - 1.0 } else { 0.0 };
+                let norm_x = if out_w > 1 {
+                    (x as f64 / (out_w - 1) as f64) * 2.0 - 1.0
+                } else {
+                    0.0
+                };
+                let norm_y = if out_h > 1 {
+                    (y as f64 / (out_h - 1) as f64) * 2.0 - 1.0
+                } else {
+                    0.0
+                };
                 out_coords.push((norm_x, norm_y));
             }
         }
 
-        Self { in_coords, out_coords }
+        Self {
+            in_coords,
+            out_coords,
+        }
     }
 
     /// Queries a CPPN to generate the full weight connection matrix [num_outputs, num_inputs].
@@ -63,7 +82,13 @@ impl SubstrateGrid2D {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

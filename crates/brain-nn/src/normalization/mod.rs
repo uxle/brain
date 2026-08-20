@@ -4,16 +4,16 @@
 #![allow(missing_docs)]
 
 pub mod batch;
-pub mod layer;
 pub mod group;
-pub mod rms;
 pub mod instance;
+pub mod layer;
+pub mod rms;
 
 pub use batch::BatchNorm2d;
-pub use layer::LayerNorm;
 pub use group::GroupNorm;
-pub use rms::{RMSNorm, RMSNormConfig};
 pub use instance::InstanceNorm2d;
+pub use layer::LayerNorm;
+pub use rms::{RMSNorm, RMSNormConfig};
 
 use brain_core::Tensor;
 
@@ -25,7 +25,13 @@ pub trait NormalizationLayer: Send + Sync {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

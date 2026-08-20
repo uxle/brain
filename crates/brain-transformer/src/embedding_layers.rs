@@ -1,7 +1,15 @@
 //! # Transformer Token, Positional, and Segment Embedding Layers
 //!
 //! Embedding lookup tables, additive positional embeddings, segment token type embeddings, and dropout.
-#![allow(missing_docs, unused_imports, unused_variables, dead_code, unused_mut, unused_comparisons, clippy::all)]
+#![allow(
+    missing_docs,
+    unused_imports,
+    unused_variables,
+    dead_code,
+    unused_mut,
+    unused_comparisons,
+    clippy::all
+)]
 
 use crate::config::{NormType, PositionEncodingType};
 use crate::core::{TransformerError, TransformerResult};
@@ -89,10 +97,16 @@ impl TransformerEmbedding {
                         p_data.push(val);
                     }
                 }
-                Some(Tensor::from_vec(p_data, vec![config.max_position_embeddings, config.hidden_dim]))
+                Some(Tensor::from_vec(
+                    p_data,
+                    vec![config.max_position_embeddings, config.hidden_dim],
+                ))
             }
             PositionEncodingType::Sinusoidal => {
-                let sin_pe = SinusoidalPositionalEmbedding::generate(config.max_position_embeddings, config.hidden_dim);
+                let sin_pe = SinusoidalPositionalEmbedding::generate(
+                    config.max_position_embeddings,
+                    config.hidden_dim,
+                );
                 Some(sin_pe)
             }
             _ => None,
@@ -106,7 +120,10 @@ impl TransformerEmbedding {
                     tt_data[i * config.hidden_dim + j] = (s.sin() * 43758.5453).fract() * 0.02;
                 }
             }
-            Some(Tensor::from_vec(tt_data, vec![type_size, config.hidden_dim]))
+            Some(Tensor::from_vec(
+                tt_data,
+                vec![type_size, config.hidden_dim],
+            ))
         } else {
             None
         };
@@ -202,9 +219,12 @@ impl TransformerEmbedding {
 
         // Apply post-embedding normalization if configured
         match self.config.norm_type {
-            Some(NormType::LayerNorm) => {
-                layer_norm(&tensor, self.norm_gamma.as_ref(), self.norm_beta.as_ref(), self.config.norm_eps)
-            }
+            Some(NormType::LayerNorm) => layer_norm(
+                &tensor,
+                self.norm_gamma.as_ref(),
+                self.norm_beta.as_ref(),
+                self.config.norm_eps,
+            ),
             Some(NormType::RmsNorm) => {
                 rms_norm(&tensor, self.norm_gamma.as_ref(), self.config.norm_eps)
             }
@@ -215,40 +235,55 @@ impl TransformerEmbedding {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant, clippy::needless_range_loop, clippy::manual_div_ceil, clippy::manual_is_multiple_of, clippy::too_many_arguments, clippy::doc_markdown, clippy::excessive_precision, clippy::float_cmp, clippy::len_zero, clippy::all)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant,
+        clippy::needless_range_loop,
+        clippy::manual_div_ceil,
+        clippy::manual_is_multiple_of,
+        clippy::too_many_arguments,
+        clippy::doc_markdown,
+        clippy::excessive_precision,
+        clippy::float_cmp,
+        clippy::len_zero,
+        clippy::all
+    )]
     use super::*;
-    use crate::core::*;
-    use crate::config::*;
-    use crate::utils::*;
-    use crate::ops::*;
-    use crate::attention::*;
-    use crate::attention::scaled::*;
-    use crate::attention::multi_head::*;
-    use crate::attention::relative::*;
     use crate::attention::flash_lite::*;
+    use crate::attention::multi_head::*;
     use crate::attention::multi_query::*;
+    use crate::attention::relative::*;
+    use crate::attention::scaled::*;
     use crate::attention::xformers_lite::*;
-    use crate::position::*;
-    use crate::position::rope::*;
-    use crate::position::alibi::*;
-    use crate::position::learned::*;
+    use crate::attention::*;
+    use crate::builder::*;
+    use crate::config::*;
+    use crate::core::*;
+    use crate::decoder::cross::*;
+    use crate::decoder::layer::*;
+    use crate::decoder::*;
     use crate::embedding_layers::*;
-    use crate::ffn::*;
-    use crate::encoder::*;
     use crate::encoder::block::*;
     use crate::encoder::layer::*;
-    use crate::decoder::*;
-    use crate::decoder::layer::*;
-    use crate::decoder::cross::*;
+    use crate::encoder::*;
+    use crate::ffn::*;
+    use crate::generate::*;
     use crate::head::*;
     use crate::kv_cache::*;
-    use crate::generate::*;
-    use crate::models::*;
     use crate::models::bert_lite::*;
     use crate::models::gpt_lite::*;
-    use crate::models::t5_lite::*;
     use crate::models::llama_lite::*;
-    use crate::builder::*;
+    use crate::models::t5_lite::*;
+    use crate::models::*;
+    use crate::ops::*;
+    use crate::position::alibi::*;
+    use crate::position::learned::*;
+    use crate::position::rope::*;
+    use crate::position::*;
+    use crate::utils::*;
     use brain_core::Tensor;
 
     #[test]

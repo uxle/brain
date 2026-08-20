@@ -11,7 +11,9 @@ pub struct OptimizeReport {
 impl OptimizeReport {
     /// Creates a default `OptimizeReport`.
     pub fn new(suggested_num_workers: usize) -> Self {
-        Self { suggested_num_workers }
+        Self {
+            suggested_num_workers,
+        }
     }
 }
 

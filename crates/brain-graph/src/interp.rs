@@ -3,11 +3,11 @@
 //! Pure Rust reference execution runtime interpreting `GraphIr` against `brain_core::Tensor`.
 #![allow(missing_docs)]
 
-use std::collections::HashMap;
-use brain_core::Tensor;
-use crate::core::{GraphResult, GraphError};
+use crate::core::{GraphError, GraphResult};
 use crate::ir::GraphIr;
 use crate::ops::op_apply;
+use brain_core::Tensor;
+use std::collections::HashMap;
 
 /// Execution context maintaining intermediate tensor values.
 #[derive(Default)]
@@ -17,7 +17,9 @@ pub struct GraphInterpreter {
 
 impl GraphInterpreter {
     pub fn new() -> Self {
-        Self { values: HashMap::new() }
+        Self {
+            values: HashMap::new(),
+        }
     }
 
     pub fn run(&mut self, graph: &GraphIr, inputs: &[Tensor]) -> GraphResult<Vec<Tensor>> {
@@ -25,7 +27,9 @@ impl GraphInterpreter {
 
         if inputs.len() != graph.inputs.len() {
             return Err(GraphError::VerificationFailed(format!(
-                "Expected {} inputs, got {}", graph.inputs.len(), inputs.len()
+                "Expected {} inputs, got {}",
+                graph.inputs.len(),
+                inputs.len()
             )));
         }
 
@@ -37,7 +41,8 @@ impl GraphInterpreter {
         // Bind constants
         for (id, val) in graph.values.iter().enumerate() {
             if let Some(ref data) = val.constant_data {
-                self.values.insert(id, Tensor::from_vec(data.clone(), val.shape.dims.clone()));
+                self.values
+                    .insert(id, Tensor::from_vec(data.clone(), val.shape.dims.clone()));
             }
         }
 
@@ -74,7 +79,13 @@ impl GraphInterpreter {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

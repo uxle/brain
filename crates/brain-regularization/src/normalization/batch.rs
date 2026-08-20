@@ -1,10 +1,19 @@
 //! # Batch Normalization Layers (BatchNorm1d / BatchNorm2d / BatchNorm3d)
 //!
 //! Tracks running mean and variance across batches with exponential momentum and affine scale/shift.
-#![allow(missing_docs, clippy::excessive_precision, clippy::approx_constant, clippy::needless_range_loop, clippy::too_many_arguments, clippy::manual_is_multiple_of, clippy::manual_div_ceil, clippy::doc_markdown)]
+#![allow(
+    missing_docs,
+    clippy::excessive_precision,
+    clippy::approx_constant,
+    clippy::needless_range_loop,
+    clippy::too_many_arguments,
+    clippy::manual_is_multiple_of,
+    clippy::manual_div_ceil,
+    clippy::doc_markdown
+)]
 
-use brain_core::Tensor;
 use super::super::core::{RegError, RegKind, RegResult, Regularization};
+use brain_core::Tensor;
 
 /// Configuration for Batch Normalization layers.
 #[derive(Debug, Clone, PartialEq)]
@@ -43,8 +52,16 @@ pub struct BatchNorm1d {
 impl BatchNorm1d {
     pub fn new(config: BatchNormConfig) -> Self {
         let c = config.num_features;
-        let weight = if config.affine { Some(vec![1.0; c]) } else { None };
-        let bias = if config.affine { Some(vec![0.0; c]) } else { None };
+        let weight = if config.affine {
+            Some(vec![1.0; c])
+        } else {
+            None
+        };
+        let bias = if config.affine {
+            Some(vec![0.0; c])
+        } else {
+            None
+        };
 
         Self {
             config,
@@ -107,9 +124,15 @@ impl Regularization for BatchNorm1d {
                 let current_var = sq_diff / m;
 
                 if self.config.track_running_stats {
-                    self.running_mean[c] = (1.0 - momentum) * self.running_mean[c] + momentum * current_mean;
-                    let unbiased_var = if m > 1.0 { sq_diff / (m - 1.0) } else { current_var };
-                    self.running_var[c] = (1.0 - momentum) * self.running_var[c] + momentum * unbiased_var;
+                    self.running_mean[c] =
+                        (1.0 - momentum) * self.running_mean[c] + momentum * current_mean;
+                    let unbiased_var = if m > 1.0 {
+                        sq_diff / (m - 1.0)
+                    } else {
+                        current_var
+                    };
+                    self.running_var[c] =
+                        (1.0 - momentum) * self.running_var[c] + momentum * unbiased_var;
                 }
 
                 (current_mean, current_var)
@@ -158,28 +181,39 @@ pub type BatchNorm3d = BatchNorm1d;
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant, clippy::needless_range_loop, clippy::manual_div_ceil, clippy::manual_is_multiple_of, clippy::too_many_arguments, clippy::doc_markdown)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant,
+        clippy::needless_range_loop,
+        clippy::manual_div_ceil,
+        clippy::manual_is_multiple_of,
+        clippy::too_many_arguments,
+        clippy::doc_markdown
+    )]
     use super::*;
-    use crate::core::*;
-    use crate::config::*;
-    use crate::utils::*;
-    use crate::dropout::*;
-    use crate::normalization::*;
-    use crate::regularizers::*;
-    use crate::decay::*;
-    use crate::earlystop::*;
-    use crate::stopping::*;
     use crate::augment::*;
-    use crate::perturb::*;
-    use crate::dropout_uncertainty::*;
-    use crate::label_smooth::*;
-    use crate::curriculum::*;
+    use crate::config::*;
     use crate::consistency::*;
-    use crate::rules::*;
-    use crate::registry::*;
-    use crate::train_hooks::*;
+    use crate::core::*;
+    use crate::curriculum::*;
+    use crate::decay::*;
+    use crate::dropout::*;
+    use crate::dropout_uncertainty::*;
+    use crate::earlystop::*;
+    use crate::label_smooth::*;
+    use crate::normalization::*;
     use crate::ops::*;
+    use crate::perturb::*;
     use crate::r#impl::*;
+    use crate::registry::*;
+    use crate::regularizers::*;
+    use crate::rules::*;
+    use crate::stopping::*;
+    use crate::train_hooks::*;
+    use crate::utils::*;
     use crate::VERSION;
     use brain_core::Tensor;
 }

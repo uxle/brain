@@ -17,7 +17,11 @@ pub fn grad_mse_loss(pred: &Tensor, target: &Tensor, g: f64) -> BrainResult<Tens
 }
 
 /// Gradient of fused Cross-Entropy loss: `(softmax(logits) - target_one_hot) / N * g`.
-pub fn grad_cross_entropy_logits(logits: &Tensor, target_indices: &[usize], g: f64) -> BrainResult<Tensor> {
+pub fn grad_cross_entropy_logits(
+    logits: &Tensor,
+    target_indices: &[usize],
+    g: f64,
+) -> BrainResult<Tensor> {
     let sm = spec_t::softmax(logits, logits.ndim() - 1);
     let mut grad_data = sm.data().to_vec();
     let num_classes = logits.shape().last().copied().unwrap_or(1);
@@ -48,9 +52,9 @@ mod tests {
     #[allow(unused_imports)]
     use super::*;
     #[allow(unused_imports)]
+    use crate::tape::OpRecord;
+    #[allow(unused_imports)]
     use crate::value::Value;
     #[allow(unused_imports)]
     use brain_core::Tensor;
-    #[allow(unused_imports)]
-    use crate::tape::OpRecord;
 }

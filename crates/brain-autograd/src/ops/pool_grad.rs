@@ -14,12 +14,8 @@ pub fn max_pool2d(
     stride: (usize, usize),
     padding: (usize, usize),
 ) -> Value {
-    let out_tensor = brain_core::tensor::pool::max_pool2d(
-        input.data(),
-        kernel_size,
-        stride,
-        padding,
-    );
+    let out_tensor =
+        brain_core::tensor::pool::max_pool2d(input.data(), kernel_size, stride, padding);
     let requires_grad = input.requires_grad();
     let grad_fn = if requires_grad {
         GradFn::MaxPool2d {
@@ -42,12 +38,8 @@ pub fn avg_pool2d(
     stride: (usize, usize),
     padding: (usize, usize),
 ) -> Value {
-    let out_tensor = brain_core::tensor::pool::avg_pool2d(
-        input.data(),
-        kernel_size,
-        stride,
-        padding,
-    );
+    let out_tensor =
+        brain_core::tensor::pool::avg_pool2d(input.data(), kernel_size, stride, padding);
     let requires_grad = input.requires_grad();
     let grad_fn = if requires_grad {
         GradFn::AvgPool2d {
@@ -71,8 +63,16 @@ pub fn grad_avg_pool2d_ext(
     stride: (usize, usize),
     padding: (usize, usize),
 ) -> BrainResult<Tensor> {
-    assert_eq!(input_shape.len(), 4, "avg_pool2d input must be 4D (N, C, H, W)");
-    assert_eq!(grad_output.ndim(), 4, "avg_pool2d grad_output must be 4D (N, C, H_out, W_out)");
+    assert_eq!(
+        input_shape.len(),
+        4,
+        "avg_pool2d input must be 4D (N, C, H, W)"
+    );
+    assert_eq!(
+        grad_output.ndim(),
+        4,
+        "avg_pool2d grad_output must be 4D (N, C, H_out, W_out)"
+    );
 
     let (n, c, in_h, in_w) = (
         input_shape[0],
@@ -148,7 +148,11 @@ pub fn grad_max_pool2d(
     padding: (usize, usize),
 ) -> BrainResult<Tensor> {
     assert_eq!(input.ndim(), 4, "max_pool2d input must be 4D (N, C, H, W)");
-    assert_eq!(grad_output.ndim(), 4, "max_pool2d grad_output must be 4D (N, C, H_out, W_out)");
+    assert_eq!(
+        grad_output.ndim(),
+        4,
+        "max_pool2d grad_output must be 4D (N, C, H_out, W_out)"
+    );
 
     let (n, c, in_h, in_w) = (
         input.shape()[0],
@@ -221,9 +225,9 @@ mod tests {
     #[allow(unused_imports)]
     use super::*;
     #[allow(unused_imports)]
+    use crate::tape::OpRecord;
+    #[allow(unused_imports)]
     use crate::value::Value;
     #[allow(unused_imports)]
     use brain_core::Tensor;
-    #[allow(unused_imports)]
-    use crate::tape::OpRecord;
 }

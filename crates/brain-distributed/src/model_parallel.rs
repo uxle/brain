@@ -13,7 +13,10 @@ pub struct ModelParallelStage {
 impl ModelParallelStage {
     /// Creates a new `ModelParallelStage`.
     pub fn new(stage_idx: usize, num_stages: usize) -> Self {
-        Self { stage_idx, num_stages }
+        Self {
+            stage_idx,
+            num_stages,
+        }
     }
 
     /// Forwards activations through local partition.

@@ -20,7 +20,9 @@ pub fn linspace_timesteps(total_steps: usize, num_samples: usize) -> Vec<usize> 
         return vec![0];
     }
     let step = (total_steps - 1) as f64 / (num_samples - 1) as f64;
-    (0..num_samples).map(|i| (i as f64 * step).round() as usize).collect()
+    (0..num_samples)
+        .map(|i| (i as f64 * step).round() as usize)
+        .collect()
 }
 
 #[cfg(test)]

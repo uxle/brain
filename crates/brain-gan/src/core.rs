@@ -8,7 +8,10 @@ use brain_core::Tensor;
 /// Error type for GAN operations.
 #[derive(Debug, Clone, PartialEq)]
 pub enum GanError {
-    ShapeMismatch { expected: Vec<usize>, got: Vec<usize> },
+    ShapeMismatch {
+        expected: Vec<usize>,
+        got: Vec<usize>,
+    },
     InvalidConfig(String),
     TrainingFailed(String),
 }
@@ -16,8 +19,9 @@ pub enum GanError {
 impl std::fmt::Display for GanError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            GanError::ShapeMismatch { expected, got } =>
-                write!(f, "Shape mismatch: expected {:?}, got {:?}", expected, got),
+            GanError::ShapeMismatch { expected, got } => {
+                write!(f, "Shape mismatch: expected {:?}, got {:?}", expected, got)
+            }
             GanError::InvalidConfig(s) => write!(f, "Invalid config: {}", s),
             GanError::TrainingFailed(s) => write!(f, "Training failed: {}", s),
         }
@@ -51,11 +55,20 @@ pub struct GanState {
 
 impl GanState {
     pub fn new(generator_weights: Vec<Tensor>, discriminator_weights: Vec<Tensor>) -> Self {
-        Self { generator_weights, discriminator_weights, step: 0, epoch: 0 }
+        Self {
+            generator_weights,
+            discriminator_weights,
+            step: 0,
+            epoch: 0,
+        }
     }
 
-    pub fn advance_step(&mut self) { self.step += 1; }
-    pub fn advance_epoch(&mut self) { self.epoch += 1; }
+    pub fn advance_step(&mut self) {
+        self.step += 1;
+    }
+    pub fn advance_epoch(&mut self) {
+        self.epoch += 1;
+    }
 }
 
 /// Summary statistics for a training epoch.
@@ -69,7 +82,12 @@ pub struct EpochSummary {
 
 impl EpochSummary {
     pub fn new(epoch: usize) -> Self {
-        Self { epoch, avg_d_loss: 0.0, avg_g_loss: 0.0, num_steps: 0 }
+        Self {
+            epoch,
+            avg_d_loss: 0.0,
+            avg_g_loss: 0.0,
+            num_steps: 0,
+        }
     }
 
     pub fn update(&mut self, metrics: &GanMetrics) {
@@ -88,7 +106,13 @@ impl EpochSummary {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

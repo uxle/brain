@@ -3,18 +3,20 @@
 //! Detects duplicate operations with identical inputs and merges them.
 #![allow(missing_docs)]
 
-use std::collections::HashMap;
-use crate::core::GraphResult;
-use crate::ir::GraphIr;
-use crate::ir::ops::OpKind;
 use super::GraphPass;
+use crate::core::GraphResult;
+use crate::ir::ops::OpKind;
+use crate::ir::GraphIr;
+use std::collections::HashMap;
 
 /// CSE Pass.
 #[derive(Debug, Default)]
 pub struct CsePass;
 
 impl GraphPass for CsePass {
-    fn name(&self) -> &'static str { "CommonSubexpressionElimination" }
+    fn name(&self) -> &'static str {
+        "CommonSubexpressionElimination"
+    }
 
     fn run(&mut self, graph: &mut GraphIr) -> GraphResult<bool> {
         eliminate_cse(graph)
@@ -59,7 +61,13 @@ pub fn eliminate_cse(graph: &mut GraphIr) -> GraphResult<bool> {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

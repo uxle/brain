@@ -14,7 +14,10 @@ pub struct AvgPool2d {
 impl AvgPool2d {
     /// Creates a new `AvgPool2d` layer.
     pub fn new(kernel_size: usize, stride: usize) -> Self {
-        Self { kernel_size, stride }
+        Self {
+            kernel_size,
+            stride,
+        }
     }
 
     /// Forward pass downsampling spatial dimensions.
@@ -34,7 +37,10 @@ pub struct MaxPool2d {
 impl MaxPool2d {
     /// Creates a new `MaxPool2d` layer.
     pub fn new(kernel_size: usize, stride: usize) -> Self {
-        Self { kernel_size, stride }
+        Self {
+            kernel_size,
+            stride,
+        }
     }
 
     /// Forward pass retaining maximal activation values.

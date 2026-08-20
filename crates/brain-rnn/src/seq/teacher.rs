@@ -1,14 +1,33 @@
 //! # Teacher Forcing Schedules & Scheduled Sampling
 //!
 //! Annealing schedules for autoregressive ground-truth token exposure during training.
-#![allow(missing_docs, clippy::excessive_precision, clippy::approx_constant, clippy::needless_range_loop, clippy::too_many_arguments, clippy::manual_is_multiple_of, clippy::manual_div_ceil, clippy::doc_markdown, clippy::module_inception, clippy::manual_memcpy)]
+#![allow(
+    missing_docs,
+    clippy::excessive_precision,
+    clippy::approx_constant,
+    clippy::needless_range_loop,
+    clippy::too_many_arguments,
+    clippy::manual_is_multiple_of,
+    clippy::manual_div_ceil,
+    clippy::doc_markdown,
+    clippy::module_inception,
+    clippy::manual_memcpy
+)]
 
 /// Scheduled sampling decay schedule.
 #[derive(Debug, Clone, PartialEq)]
 pub enum TeacherSchedule {
     Constant(f64),
-    Linear { start: f64, end: f64, steps: usize },
-    Exponential { start: f64, decay_rate: f64, min_ratio: f64 },
+    Linear {
+        start: f64,
+        end: f64,
+        steps: usize,
+    },
+    Exponential {
+        start: f64,
+        decay_rate: f64,
+        min_ratio: f64,
+    },
 }
 
 /// Teacher Forcing Controller.
@@ -34,7 +53,11 @@ impl TeacherForcer {
                     start + (end - start) * p
                 }
             }
-            TeacherSchedule::Exponential { start, decay_rate, min_ratio } => {
+            TeacherSchedule::Exponential {
+                start,
+                decay_rate,
+                min_ratio,
+            } => {
                 let r = start * decay_rate.powi(self.step as i32);
                 r.max(min_ratio)
             }
@@ -48,20 +71,32 @@ impl TeacherForcer {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant, clippy::needless_range_loop, clippy::manual_div_ceil, clippy::manual_is_multiple_of, clippy::too_many_arguments, clippy::doc_markdown, clippy::excessive_precision)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant,
+        clippy::needless_range_loop,
+        clippy::manual_div_ceil,
+        clippy::manual_is_multiple_of,
+        clippy::too_many_arguments,
+        clippy::doc_markdown,
+        clippy::excessive_precision
+    )]
     use super::*;
-    use crate::core::*;
-    use crate::config::*;
-    use crate::utils::*;
-    use crate::ops::*;
-    use crate::cells::*;
-    use crate::seq::*;
-    use crate::init_rnn::*;
-    use crate::reg_ops::*;
-    use crate::process::*;
     use crate::backward_ops::*;
     use crate::builder::*;
+    use crate::cells::*;
+    use crate::config::*;
+    use crate::core::*;
     use crate::helper::*;
+    use crate::init_rnn::*;
+    use crate::ops::*;
+    use crate::process::*;
+    use crate::reg_ops::*;
+    use crate::seq::*;
+    use crate::utils::*;
     use crate::VERSION;
     use brain_core::Tensor;
 }

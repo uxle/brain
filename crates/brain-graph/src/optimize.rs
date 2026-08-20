@@ -7,7 +7,7 @@ use crate::config::{GraphConfig, OptLevel};
 use crate::core::GraphResult;
 use crate::ir::GraphIr;
 use crate::passes::{
-    PassManager, ConstFoldPass, DeadCodeElimPass, CsePass, FusionPass, InplacePass
+    ConstFoldPass, CsePass, DeadCodeElimPass, FusionPass, InplacePass, PassManager,
 };
 
 /// Summary report after graph optimization.
@@ -51,7 +51,13 @@ pub fn optimize(graph: &mut GraphIr, level: OptLevel) -> GraphResult<OptimizeRep
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

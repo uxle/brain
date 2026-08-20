@@ -4,9 +4,9 @@
 //! and Entropy (KL-divergence minimization) for optimal scale selection.
 #![allow(missing_docs)]
 
-use brain_core::Tensor;
 use super::core::{QParams, QuantDType, QuantError, QuantResult};
 use super::utils::{compute_scale_zero_point, minmax, percentile_slice};
+use brain_core::Tensor;
 
 /// Calibration algorithm selection enum.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -73,13 +73,22 @@ impl MinMaxObserver {
 impl Observer for MinMaxObserver {
     fn observe(&mut self, tensor: &Tensor) -> QuantResult<()> {
         let (batch_min, batch_max) = minmax(tensor.data())?;
-        if batch_min < self.min_val { self.min_val = batch_min; }
-        if batch_max > self.max_val { self.max_val = batch_max; }
+        if batch_min < self.min_val {
+            self.min_val = batch_min;
+        }
+        if batch_max > self.max_val {
+            self.max_val = batch_max;
+        }
         Ok(())
     }
 
     fn calculate_qparams(&self) -> QuantResult<QParams> {
-        let (scale, zp) = compute_scale_zero_point(self.min_val, self.max_val, self.config.dtype, self.config.symmetric)?;
+        let (scale, zp) = compute_scale_zero_point(
+            self.min_val,
+            self.max_val,
+            self.config.dtype,
+            self.config.symmetric,
+        )?;
         Ok(QParams::per_tensor(scale, zp, self.config.dtype))
     }
 
@@ -125,7 +134,8 @@ impl Observer for PercentileObserver {
         let high_p = 100.0 - low_p;
         let min_val = percentile_slice(&self.collected_data, low_p)?;
         let max_val = percentile_slice(&self.collected_data, high_p)?;
-        let (scale, zp) = compute_scale_zero_point(min_val, max_val, self.config.dtype, self.config.symmetric)?;
+        let (scale, zp) =
+            compute_scale_zero_point(min_val, max_val, self.config.dtype, self.config.symmetric)?;
         Ok(QParams::per_tensor(scale, zp, self.config.dtype))
     }
 
@@ -167,7 +177,12 @@ impl Observer for MovingAverageObserver {
     }
 
     fn calculate_qparams(&self) -> QuantResult<QParams> {
-        let (scale, zp) = compute_scale_zero_point(self.min_val, self.max_val, self.config.dtype, self.config.symmetric)?;
+        let (scale, zp) = compute_scale_zero_point(
+            self.min_val,
+            self.max_val,
+            self.config.dtype,
+            self.config.symmetric,
+        )?;
         Ok(QParams::per_tensor(scale, zp, self.config.dtype))
     }
 
@@ -220,7 +235,8 @@ impl Observer for EntropyObserver {
     }
 
     fn calculate_qparams(&self) -> QuantResult<QParams> {
-        let (scale, zp) = compute_scale_zero_point(-self.max_val, self.max_val, self.config.dtype, true)?;
+        let (scale, zp) =
+            compute_scale_zero_point(-self.max_val, self.max_val, self.config.dtype, true)?;
         Ok(QParams::per_tensor(scale, zp, self.config.dtype))
     }
 
@@ -233,7 +249,13 @@ impl Observer for EntropyObserver {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

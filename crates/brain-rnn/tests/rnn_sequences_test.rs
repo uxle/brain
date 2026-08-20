@@ -1,6 +1,6 @@
 //! Tests for RNN, LSTM, and GRU sequences
-use brain_rnn::*;
 use brain_core::Tensor;
+use brain_rnn::*;
 
 #[test]
 fn test_lstm_cell_and_gru_cell() {

@@ -29,24 +29,28 @@ impl Default for PenaltyConfig {
 
 /// WGAN-GP gradient penalty via finite difference on interpolated samples.
 /// Returns scalar penalty value.
-pub fn gradient_penalty(
-    real: &Tensor,
-    fake: &Tensor,
-    lambda: f64,
-    seed: u64,
-) -> f64 {
+pub fn gradient_penalty(real: &Tensor, fake: &Tensor, lambda: f64, seed: u64) -> f64 {
     let mut rng = seed;
     let lcg = |s: &mut u64| -> f64 {
-        *s = s.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+        *s = s
+            .wrapping_mul(6364136223846793005)
+            .wrapping_add(1442695040888963407);
         (*s >> 11) as f64 / (1u64 << 53) as f64
     };
     let alpha = lcg(&mut rng);
     let rv = real.to_vec();
     let fv = fake.to_vec();
     let n = rv.len().min(fv.len());
-    if n == 0 { return 0.0; }
+    if n == 0 {
+        return 0.0;
+    }
     // Interpolated sample
-    let interp: Vec<f64> = rv.iter().zip(fv.iter()).take(n).map(|(r, f)| alpha * r + (1.0 - alpha) * f).collect();
+    let interp: Vec<f64> = rv
+        .iter()
+        .zip(fv.iter())
+        .take(n)
+        .map(|(r, f)| alpha * r + (1.0 - alpha) * f)
+        .collect();
     // Finite-difference gradient estimate
     let eps = 1e-5;
     let d_interp: f64 = interp.iter().sum::<f64>() / n as f64;
@@ -73,7 +77,13 @@ pub fn smooth_labels(real: f64, config: &PenaltyConfig) -> (f64, f64) {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

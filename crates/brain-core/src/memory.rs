@@ -335,21 +335,15 @@ impl<T> AlignedBuffer<T> {
 
     /// Reserves space for at least `additional` more elements.
     pub fn reserve(&mut self, additional: usize) {
-        let min_cap = self
-            .len
-            .checked_add(additional)
-            .expect("Capacity overflow");
+        let min_cap = self.len.checked_add(additional).expect("Capacity overflow");
         if min_cap <= self.capacity {
             return;
         }
         let new_capacity = min_cap.max(self.capacity * 2).max(8);
 
         let elem_size = std::mem::size_of::<T>();
-        let new_size = new_capacity
-            .checked_mul(elem_size)
-            .expect("Size overflow");
-        let new_layout =
-            Layout::from_size_align(new_size, self.alignment).expect("Invalid layout");
+        let new_size = new_capacity.checked_mul(elem_size).expect("Size overflow");
+        let new_layout = Layout::from_size_align(new_size, self.alignment).expect("Invalid layout");
 
         let new_ptr = if self.capacity == 0 {
             unsafe { alloc(new_layout) as *mut T }

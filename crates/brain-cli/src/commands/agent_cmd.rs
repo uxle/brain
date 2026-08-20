@@ -4,12 +4,10 @@
 
 use crate::core::{ExitCode, OutputSink};
 use brain_core::Tensor;
-use brain_rl::{
-    IntrinsicCuriosityModule, ReplayBuffer, SkillLibrary, Transition, WorldModel,
-};
+use brain_rl::{IntrinsicCuriosityModule, ReplayBuffer, SkillLibrary, Transition, WorldModel};
 use brain_utils::hal::{
-    HidAction, HidDevice, MockHidDevice, MockVideoSource, MouseAction,
-    MouseButton, SafetyConfig, SafetyGuard, VideoSource,
+    HidAction, HidDevice, MockHidDevice, MockVideoSource, MouseAction, MouseButton, SafetyConfig,
+    SafetyGuard, VideoSource,
 };
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
@@ -64,7 +62,12 @@ pub struct AutonomousAgent {
 impl AutonomousAgent {
     pub fn new(config: AgentConfig) -> Self {
         let wm = WorldModel::new(config.state_dim, config.action_dim, config.hidden_dim);
-        let icm = IntrinsicCuriosityModule::new(config.state_dim, config.action_dim, config.hidden_dim / 2, config.curiosity_eta);
+        let icm = IntrinsicCuriosityModule::new(
+            config.state_dim,
+            config.action_dim,
+            config.hidden_dim / 2,
+            config.curiosity_eta,
+        );
         let skills = SkillLibrary::new();
         let buffer = ReplayBuffer::new(5000);
 
@@ -114,7 +117,9 @@ impl AutonomousAgent {
             // 2. Compute Intrinsic Curiosity Reward if prev transition exists
             if let (Some(ref s_prev), Some(ref a_prev)) = (&prev_state, &prev_action) {
                 let icm = self.curiosity.lock().unwrap();
-                let r_int = icm.compute_intrinsic_reward(s_prev, a_prev, &state).unwrap_or(0.0);
+                let r_int = icm
+                    .compute_intrinsic_reward(s_prev, a_prev, &state)
+                    .unwrap_or(0.0);
                 total_intrinsic_reward += r_int;
 
                 let mut buf = self.replay_buffer.lock().unwrap();
@@ -136,7 +141,8 @@ impl AutonomousAgent {
                 } else {
                     // Fallback to Actor decision / exploration
                     let wm = self.world_model.lock().unwrap();
-                    let test_action = Tensor::from_slice(&[100.0, 200.0, 1.0, 0.0], vec![self.config.action_dim]);
+                    let test_action =
+                        Tensor::from_slice(&[100.0, 200.0, 1.0, 0.0], vec![self.config.action_dim]);
                     let _pred = wm.predict(&state, &test_action);
                     test_action
                 }
@@ -237,7 +243,10 @@ pub fn run_agent_command(args: &[String], sink: &OutputSink) -> ExitCode {
                 return ExitCode::ERROR;
             }
 
-            sink.println(&format!("Executed {} HID actions successfully.", hid.actions().len()));
+            sink.println(&format!(
+                "Executed {} HID actions successfully.",
+                hid.actions().len()
+            ));
             ExitCode::SUCCESS
         }
         "info" => {

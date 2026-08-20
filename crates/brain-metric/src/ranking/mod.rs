@@ -13,7 +13,9 @@ pub struct RankingConfig {
 
 /// Mean Reciprocal Rank (MRR): 1/Q * sum(1 / rank_i) for the first relevant document.
 pub fn mean_reciprocal_rank(rankings: &[Vec<bool>]) -> f64 {
-    if rankings.is_empty() { return 0.0; }
+    if rankings.is_empty() {
+        return 0.0;
+    }
     let mut sum_rr = 0.0f64;
 
     for query_hits in rankings {
@@ -32,7 +34,9 @@ pub fn mean_reciprocal_rank(rankings: &[Vec<bool>]) -> f64 {
 #[allow(clippy::needless_range_loop)]
 pub fn ndcg_at_k(relevance_scores: &[f64], k: usize) -> f64 {
     let top_k = relevance_scores.len().min(k);
-    if top_k == 0 { return 0.0; }
+    if top_k == 0 {
+        return 0.0;
+    }
 
     // DCG@k = sum_{i=1}^k (2^{rel_i} - 1) / log2(i + 1)
     let mut dcg = 0.0f64;
@@ -57,7 +61,13 @@ pub fn ndcg_at_k(relevance_scores: &[f64], k: usize) -> f64 {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

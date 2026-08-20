@@ -1,11 +1,19 @@
 //! # High-Level End-to-End Transformer Inference Pipelines
 //!
 //! Pipeline orchestrators for text classification, masked token prediction, autoregressive completion, and translation.
-#![allow(missing_docs, unused_imports, unused_variables, dead_code, unused_mut, unused_comparisons, clippy::all)]
+#![allow(
+    missing_docs,
+    unused_imports,
+    unused_variables,
+    dead_code,
+    unused_mut,
+    unused_comparisons,
+    clippy::all
+)]
 
 use crate::core::TransformerResult;
-use crate::models::{BertLite, BertLiteConfig, GptLite, GptLiteConfig, LlamaLite, LlamaLiteConfig};
 use crate::generate::GenerateConfig;
+use crate::models::{BertLite, BertLiteConfig, GptLite, GptLiteConfig, LlamaLite, LlamaLiteConfig};
 use brain_core::Tensor;
 
 /// Pipeline for text sequence classification using BERT-lite.
@@ -22,7 +30,9 @@ impl SequenceClassificationPipeline {
 
     /// Predicts class index for input token IDs.
     pub fn predict_class(&self, input_ids: &[usize]) -> TransformerResult<usize> {
-        let out = self.model.forward(input_ids, 1, input_ids.len(), None, None)?;
+        let out = self
+            .model
+            .forward(input_ids, 1, input_ids.len(), None, None)?;
         let logits = out.class_logits.unwrap();
         let l_data = logits.data();
 
@@ -50,7 +60,11 @@ impl TextGenerationPipeline {
     }
 
     /// Generates token continuation.
-    pub fn generate(&self, prompt_ids: &[usize], max_tokens: usize) -> TransformerResult<Vec<usize>> {
+    pub fn generate(
+        &self,
+        prompt_ids: &[usize],
+        max_tokens: usize,
+    ) -> TransformerResult<Vec<usize>> {
         let cfg = GenerateConfig {
             max_new_tokens: max_tokens,
             temperature: 0.7,
@@ -64,40 +78,55 @@ impl TextGenerationPipeline {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant, clippy::needless_range_loop, clippy::manual_div_ceil, clippy::manual_is_multiple_of, clippy::too_many_arguments, clippy::doc_markdown, clippy::excessive_precision, clippy::float_cmp, clippy::len_zero, clippy::all)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant,
+        clippy::needless_range_loop,
+        clippy::manual_div_ceil,
+        clippy::manual_is_multiple_of,
+        clippy::too_many_arguments,
+        clippy::doc_markdown,
+        clippy::excessive_precision,
+        clippy::float_cmp,
+        clippy::len_zero,
+        clippy::all
+    )]
     use super::*;
-    use crate::core::*;
-    use crate::config::*;
-    use crate::utils::*;
-    use crate::ops::*;
-    use crate::attention::*;
-    use crate::attention::scaled::*;
-    use crate::attention::multi_head::*;
-    use crate::attention::relative::*;
     use crate::attention::flash_lite::*;
+    use crate::attention::multi_head::*;
     use crate::attention::multi_query::*;
+    use crate::attention::relative::*;
+    use crate::attention::scaled::*;
     use crate::attention::xformers_lite::*;
-    use crate::position::*;
-    use crate::position::rope::*;
-    use crate::position::alibi::*;
-    use crate::position::learned::*;
+    use crate::attention::*;
+    use crate::builder::*;
+    use crate::config::*;
+    use crate::core::*;
+    use crate::decoder::cross::*;
+    use crate::decoder::layer::*;
+    use crate::decoder::*;
     use crate::embedding_layers::*;
-    use crate::ffn::*;
-    use crate::encoder::*;
     use crate::encoder::block::*;
     use crate::encoder::layer::*;
-    use crate::decoder::*;
-    use crate::decoder::layer::*;
-    use crate::decoder::cross::*;
+    use crate::encoder::*;
+    use crate::ffn::*;
+    use crate::generate::*;
     use crate::head::*;
     use crate::kv_cache::*;
-    use crate::generate::*;
-    use crate::models::*;
     use crate::models::bert_lite::*;
     use crate::models::gpt_lite::*;
-    use crate::models::t5_lite::*;
     use crate::models::llama_lite::*;
-    use crate::builder::*;
+    use crate::models::t5_lite::*;
+    use crate::models::*;
+    use crate::ops::*;
+    use crate::position::alibi::*;
+    use crate::position::learned::*;
+    use crate::position::rope::*;
+    use crate::position::*;
+    use crate::utils::*;
     use brain_core::Tensor;
 
     #[test]

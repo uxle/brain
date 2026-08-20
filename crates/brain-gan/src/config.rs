@@ -152,7 +152,8 @@ impl GanConfig {
     pub fn summary(&self) -> String {
         format!(
             "GAN[arch={:?} loss={:?} latent={} img={}x{}]",
-            self.arch, self.loss,
+            self.arch,
+            self.loss,
             self.generator.latent_dim,
             self.generator.image_size,
             self.generator.image_size,
@@ -162,7 +163,13 @@ impl GanConfig {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

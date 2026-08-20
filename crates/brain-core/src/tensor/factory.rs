@@ -37,7 +37,10 @@ pub fn logspace(start: f64, end: f64, steps: usize, base: f64) -> Tensor {
 
 /// Creates a 1D tensor of `steps` points geometrically spaced between `start` and `end`.
 pub fn geomspace(start: f64, end: f64, steps: usize) -> Tensor {
-    assert!(start > 0.0 && end > 0.0, "geomspace: start and end must be positive");
+    assert!(
+        start > 0.0 && end > 0.0,
+        "geomspace: start and end must be positive"
+    );
     let log_start = start.ln();
     let log_end = end.ln();
     let lin = Tensor::linspace(log_start, log_end, steps);

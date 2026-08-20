@@ -45,7 +45,12 @@ impl Unet2d {
 
     /// Forward pass predicting noise for sample `x` at timestep `t`.
     pub fn forward(&self, x: &Tensor, _t: usize, _context: Option<&Tensor>) -> Tensor {
-        Tensor::zeros(vec![x.shape()[0], self.config.out_channels, x.shape()[2], x.shape()[3]])
+        Tensor::zeros(vec![
+            x.shape()[0],
+            self.config.out_channels,
+            x.shape()[2],
+            x.shape()[3],
+        ])
     }
 }
 

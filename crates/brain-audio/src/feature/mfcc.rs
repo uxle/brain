@@ -3,9 +3,9 @@
 //! Production-grade MFCC extraction via Discrete Cosine Transform Type-II (DCT-II),
 //! sine liftering, and cepstral mean and variance normalization (CMVN).
 
-use brain_core::{BrainError, BrainResult, Tensor};
 use crate::config::MFCCConfig;
 use crate::feature::spectral::mel_spectrogram;
+use brain_core::{BrainError, BrainResult, Tensor};
 use std::f64::consts::PI;
 
 /// MFCC computation engine.
@@ -26,7 +26,11 @@ impl MFCCProcessor {
         // Ortho-normalized DCT-II matrix [n_mfcc, n_mels]
         let mut dct_matrix = vec![0.0; n_mfcc * n_mels];
         for i in 0..n_mfcc {
-            let factor = if i == 0 { (1.0 / n_mels as f64).sqrt() } else { (2.0 / n_mels as f64).sqrt() };
+            let factor = if i == 0 {
+                (1.0 / n_mels as f64).sqrt()
+            } else {
+                (2.0 / n_mels as f64).sqrt()
+            };
             for j in 0..n_mels {
                 let angle = PI * i as f64 * (j as f64 + 0.5) / n_mels as f64;
                 dct_matrix[i * n_mels + j] = factor * angle.cos();
@@ -77,7 +81,11 @@ impl MFCCProcessor {
 
         // Apply Cepstral Mean & Variance Normalization if requested
         if self.config.cepstral_mean_norm || self.config.cepstral_var_norm {
-            apply_cmvn(&mut out_tensor, self.config.cepstral_mean_norm, self.config.cepstral_var_norm)?;
+            apply_cmvn(
+                &mut out_tensor,
+                self.config.cepstral_mean_norm,
+                self.config.cepstral_var_norm,
+            )?;
         }
 
         Ok(out_tensor)
@@ -87,7 +95,9 @@ impl MFCCProcessor {
 /// Applies Cepstral Mean and Variance Normalization (CMVN) in-place across the frame axis.
 pub fn apply_cmvn(features: &mut Tensor, norm_mean: bool, norm_var: bool) -> BrainResult<()> {
     if features.ndim() != 2 {
-        return Err(BrainError::invalid_value("apply_cmvn requires 2D [features, frames] tensor"));
+        return Err(BrainError::invalid_value(
+            "apply_cmvn requires 2D [features, frames] tensor",
+        ));
     }
     let n_features = features.shape()[0];
     let n_frames = features.shape()[1];

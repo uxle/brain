@@ -61,14 +61,17 @@ impl TensorProto {
                 DataType::Int64 => {
                     for chunk in self.raw_data.chunks_exact(8) {
                         let val = i64::from_le_bytes([
-                            chunk[0], chunk[1], chunk[2], chunk[3],
-                            chunk[4], chunk[5], chunk[6], chunk[7],
+                            chunk[0], chunk[1], chunk[2], chunk[3], chunk[4], chunk[5], chunk[6],
+                            chunk[7],
                         ]);
                         f64_vec.push(val as f64);
                     }
                 }
                 _ => {
-                    return Err(OnnxError::InvalidTensorShape(format!("Unsupported data type {:?}", self.data_type)));
+                    return Err(OnnxError::InvalidTensorShape(format!(
+                        "Unsupported data type {:?}",
+                        self.data_type
+                    )));
                 }
             }
         } else {
@@ -83,14 +86,24 @@ impl TensorProto {
             )));
         }
 
-        let shape = if self.dims.is_empty() { vec![1] } else { self.dims.clone() };
+        let shape = if self.dims.is_empty() {
+            vec![1]
+        } else {
+            self.dims.clone()
+        };
         Ok(Tensor::from_vec(f64_vec, shape))
     }
 }
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

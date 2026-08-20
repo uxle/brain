@@ -3,12 +3,12 @@
 //! High-level APIs for converting models, tensors, and layers to quantized representations.
 #![allow(missing_docs)]
 
-use brain_core::Tensor;
 use super::config::QuantConfig;
 use super::core::{QParams, QuantResult, QuantScheme, QuantTensor};
 use super::prune::{MagnitudePruner, PruneResult, Pruner};
 use super::quantizer::{AffineQuantizer, Quantizer, SymmetricQuantizer};
 use super::utils::{compute_scale_zero_point, minmax, quantize_val};
+use brain_core::Tensor;
 
 /// Quantizes an arbitrary floating point Tensor according to configuration.
 pub fn quantize_tensor(tensor: &Tensor, config: &QuantConfig) -> QuantResult<QuantTensor> {
@@ -89,7 +89,13 @@ pub fn apply_magnitude_prune(weights: &mut Tensor, sparsity: f64) -> QuantResult
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

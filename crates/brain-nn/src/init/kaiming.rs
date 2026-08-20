@@ -3,8 +3,8 @@
 //! Variance-preserving random weight tensor initialization for deep networks.
 #![allow(missing_docs)]
 
-use brain_core::Tensor;
 use super::calculate_fan;
+use brain_core::Tensor;
 
 /// Configuration for Kaiming/Xavier initialization.
 #[derive(Debug, Clone, Default)]
@@ -92,7 +92,13 @@ mod tests {
         let var: f64 = data.iter().map(|&x| (x - mean).powi(2)).sum::<f64>() / n;
         let expected_var = 2.0 / (256.0 + 256.0); // 2 / (fan_in + fan_out)
         let rel_err = (var - expected_var).abs() / expected_var;
-        assert!(rel_err < 0.05, "Xavier uniform var={}, expected={}, rel_err={}", var, expected_var, rel_err);
+        assert!(
+            rel_err < 0.05,
+            "Xavier uniform var={}, expected={}, rel_err={}",
+            var,
+            expected_var,
+            rel_err
+        );
     }
 
     #[test]
@@ -104,6 +110,12 @@ mod tests {
         let var: f64 = data.iter().map(|&x| (x - mean).powi(2)).sum::<f64>() / n;
         let expected_var = 2.0 / 256.0; // 2 / fan_in for ReLU (a=0.0)
         let rel_err = (var - expected_var).abs() / expected_var;
-        assert!(rel_err < 0.05, "Kaiming normal var={}, expected={}, rel_err={}", var, expected_var, rel_err);
+        assert!(
+            rel_err < 0.05,
+            "Kaiming normal var={}, expected={}, rel_err={}",
+            var,
+            expected_var,
+            rel_err
+        );
     }
 }

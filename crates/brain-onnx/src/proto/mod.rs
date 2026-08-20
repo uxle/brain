@@ -3,11 +3,11 @@
 //! Hand-rolled, zero-dependency protobuf binary wire decoder for ModelProto, GraphProto, NodeProto, and TensorProto.
 #![allow(missing_docs)]
 
-pub mod tensor;
 pub mod attrs;
+pub mod tensor;
 
-pub use tensor::{TensorProto, DataType};
 pub use attrs::{AttributeProto, AttributeType};
+pub use tensor::{DataType, TensorProto};
 
 use crate::core::{OnnxError, OnnxResult};
 use crate::utils::decode_varint;
@@ -76,7 +76,9 @@ fn parse_node_proto(bytes: &[u8]) -> OnnxResult<NodeProto> {
                 let len = len as usize;
                 offset = next;
                 if offset + len > bytes.len() {
-                    return Err(OnnxError::ProtobufDecodeError("Node length exceeds buffer".into()));
+                    return Err(OnnxError::ProtobufDecodeError(
+                        "Node length exceeds buffer".into(),
+                    ));
                 }
                 let slice = &bytes[offset..offset + len];
                 offset += len;
@@ -125,7 +127,9 @@ fn parse_tensor_proto(bytes: &[u8]) -> OnnxResult<TensorProto> {
                 let len = len as usize;
                 offset = next;
                 if offset + len > bytes.len() {
-                    return Err(OnnxError::ProtobufDecodeError("Tensor length exceeds buffer".into()));
+                    return Err(OnnxError::ProtobufDecodeError(
+                        "Tensor length exceeds buffer".into(),
+                    ));
                 }
                 let slice = &bytes[offset..offset + len];
                 offset += len;
@@ -167,7 +171,9 @@ fn parse_value_info_proto(bytes: &[u8]) -> OnnxResult<ValueInfoProto> {
                 let len = len as usize;
                 offset = next;
                 if offset + len > bytes.len() {
-                    return Err(OnnxError::ProtobufDecodeError("ValueInfo length exceeds buffer".into()));
+                    return Err(OnnxError::ProtobufDecodeError(
+                        "ValueInfo length exceeds buffer".into(),
+                    ));
                 }
                 let slice = &bytes[offset..offset + len];
                 offset += len;
@@ -199,7 +205,9 @@ fn parse_graph_proto(bytes: &[u8]) -> OnnxResult<GraphProto> {
                 let len = len as usize;
                 offset = next;
                 if offset + len > bytes.len() {
-                    return Err(OnnxError::ProtobufDecodeError("Graph length exceeds buffer".into()));
+                    return Err(OnnxError::ProtobufDecodeError(
+                        "Graph length exceeds buffer".into(),
+                    ));
                 }
                 let slice = &bytes[offset..offset + len];
                 offset += len;
@@ -240,7 +248,9 @@ fn parse_opset_proto(bytes: &[u8]) -> OnnxResult<(String, i64)> {
                 let len = len as usize;
                 offset = next;
                 if offset + len > bytes.len() {
-                    return Err(OnnxError::ProtobufDecodeError("Opset length exceeds buffer".into()));
+                    return Err(OnnxError::ProtobufDecodeError(
+                        "Opset length exceeds buffer".into(),
+                    ));
                 }
                 let slice = &bytes[offset..offset + len];
                 offset += len;
@@ -293,7 +303,9 @@ pub fn parse_model_proto(bytes: &[u8]) -> OnnxResult<ModelProto> {
                 let len = len as usize;
                 offset = next;
                 if offset + len > bytes.len() {
-                    return Err(OnnxError::ProtobufDecodeError("Length exceeds byte buffer".into()));
+                    return Err(OnnxError::ProtobufDecodeError(
+                        "Length exceeds byte buffer".into(),
+                    ));
                 }
                 let slice = &bytes[offset..offset + len];
                 offset += len;
@@ -321,7 +333,13 @@ pub fn parse_model_proto(bytes: &[u8]) -> OnnxResult<ModelProto> {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

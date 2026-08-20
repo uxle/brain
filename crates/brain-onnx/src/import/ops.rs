@@ -21,7 +21,15 @@ pub fn translate_op(proto: &NodeProto) -> OnnxNode {
     }
 
     OnnxNode {
-        name: if proto.name.is_empty() { format!("{}_{}", proto.op_type, proto.output.first().cloned().unwrap_or_default()) } else { proto.name.clone() },
+        name: if proto.name.is_empty() {
+            format!(
+                "{}_{}",
+                proto.op_type,
+                proto.output.first().cloned().unwrap_or_default()
+            )
+        } else {
+            proto.name.clone()
+        },
         op_type: proto.op_type.clone(),
         domain: proto.domain.clone(),
         inputs: proto.input.clone(),
@@ -32,7 +40,13 @@ pub fn translate_op(proto: &NodeProto) -> OnnxNode {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

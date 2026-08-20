@@ -5,15 +5,18 @@
 
 use brain_autograd::Value;
 use brain_core::Tensor;
-use brain_nn::containers::Sequential;
-use brain_nn::layers::{Linear, Conv2d, ConvTranspose2d, Embedding};
 use brain_nn::activations::ReLU;
+use brain_nn::containers::Sequential;
+use brain_nn::layers::{Conv2d, ConvTranspose2d, Embedding, Linear};
 use brain_nn::module::Module;
 
 #[test]
 fn test_linear_layer_autograd_tape_backward() {
     let lin = Linear::new(4, 2, true);
-    let x = Value::new(Tensor::from_vec(vec![1.0, -2.0, 3.0, -1.0], vec![1, 4]), true);
+    let x = Value::new(
+        Tensor::from_vec(vec![1.0, -2.0, 3.0, -1.0], vec![1, 4]),
+        true,
+    );
 
     // Forward pass building tape
     let out = lin.forward(&x).expect("Linear forward");
@@ -95,5 +98,8 @@ fn test_embedding_autograd_tape_backward() {
 
     let params = emb.parameters();
     assert_eq!(params.len(), 1);
-    assert!(params[0].grad().is_some(), "Embedding parameter gradient missing");
+    assert!(
+        params[0].grad().is_some(),
+        "Embedding parameter gradient missing"
+    );
 }

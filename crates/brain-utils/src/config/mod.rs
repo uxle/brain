@@ -5,9 +5,9 @@
 
 pub mod schema;
 
+use crate::core::UtilsResult;
 use std::collections::BTreeMap;
 use std::fmt;
-use crate::core::UtilsResult;
 
 /// Represents a source of configuration parameters.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -107,12 +107,16 @@ impl ConfigManager {
 
     /// Retrieves and parses integer value.
     pub fn get_i64(&self, key: &str, default: i64) -> i64 {
-        self.get(key).and_then(|v| v.parse::<i64>().ok()).unwrap_or(default)
+        self.get(key)
+            .and_then(|v| v.parse::<i64>().ok())
+            .unwrap_or(default)
     }
 
     /// Retrieves and parses float value.
     pub fn get_f64(&self, key: &str, default: f64) -> f64 {
-        self.get(key).and_then(|v| v.parse::<f64>().ok()).unwrap_or(default)
+        self.get(key)
+            .and_then(|v| v.parse::<f64>().ok())
+            .unwrap_or(default)
     }
 
     /// Retrieves and parses boolean value (accepts true, false, 1, 0, yes, no).
@@ -198,24 +202,24 @@ mod tests {
     fn test_config_manager_precedence_1() {
         let mut cfg = ConfigManager::new();
         assert!(cfg.is_empty());
-        
+
         assert!(cfg.set("threads", "4", ConfigSource::Defaults));
         assert_eq!(cfg.get_i64("threads", 1), 4);
-        
+
         assert!(cfg.set("threads", "8", ConfigSource::ProjectFile));
         assert_eq!(cfg.get_i64("threads", 1), 8);
-        
+
         assert!(!cfg.set("threads", "2", ConfigSource::Defaults));
         assert_eq!(cfg.get_i64("threads", 1), 8);
-        
+
         assert!(cfg.set("threads", "16", ConfigSource::Environment));
         assert_eq!(cfg.get_i64("threads", 1), 16);
-        
+
         cfg.set("verbose", "true", ConfigSource::Override);
         assert!(cfg.get_bool("verbose", false));
         cfg.set("debug", "off", ConfigSource::Override);
         assert!(!cfg.get_bool("debug", true));
-        
+
         let text = cfg.export_kv();
         let mut imported = ConfigManager::new();
         let count = imported.import_kv(&text, ConfigSource::UserFile).unwrap();

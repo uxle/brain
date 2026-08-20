@@ -20,7 +20,7 @@ jobs:
         run: cargo run --example convnet_train -j 2
 
       - name: Run ONNX Export Example
-        run: cargo run --example onnx_export -j 2
+        run: cargo run --example onnx_export --features export -j 2
 
       - name: Run Quantization Example
-        run: cargo run --example quantize_linear -j 2
+        run: cargo run --example quantize_linear --features export -j 2

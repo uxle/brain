@@ -18,7 +18,10 @@ pub fn export_dot(graph: &IrGraph) -> String {
 pub fn export_text(graph: &IrGraph) -> String {
     let mut text = String::from("IR Function @graph:\n");
     for node in &graph.nodes {
-        text.push_str(&format!("  %{} = {:?}({:?})\n", node.output, node.kind, node.inputs));
+        text.push_str(&format!(
+            "  %{} = {:?}({:?})\n",
+            node.output, node.kind, node.inputs
+        ));
     }
     text
 }

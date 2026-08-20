@@ -3,7 +3,7 @@
 //! Generates valid ONNX byte streams and graph structures for automated unit and fuzz testing.
 #![allow(missing_docs)]
 
-use crate::ir::{OnnxModel, OnnxGraph, OnnxNode};
+use crate::ir::{OnnxGraph, OnnxModel, OnnxNode};
 use std::collections::HashMap;
 
 /// Generates a test OnnxModel with a single operator.
@@ -33,7 +33,13 @@ pub fn generate_test_op_model(op_type: &str) -> OnnxModel {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

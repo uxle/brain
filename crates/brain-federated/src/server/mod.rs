@@ -6,7 +6,7 @@
 pub mod aggregate;
 pub mod round;
 
-pub use aggregate::{AggregationAlgorithm, fed_avg_aggregate};
+pub use aggregate::{fed_avg_aggregate, AggregationAlgorithm};
 pub use round::RoundStats;
 
 use crate::core::RoundId;
@@ -21,7 +21,11 @@ pub struct ServerConfig {
 
 impl Default for ServerConfig {
     fn default() -> Self {
-        Self { min_clients: 2, fraction_fit: 1.0, max_rounds: 10 }
+        Self {
+            min_clients: 2,
+            fraction_fit: 1.0,
+            max_rounds: 10,
+        }
     }
 }
 
@@ -33,7 +37,10 @@ pub struct FederatedServer {
 
 impl FederatedServer {
     pub fn new(config: ServerConfig) -> Self {
-        Self { config, current_round: 0 }
+        Self {
+            config,
+            current_round: 0,
+        }
     }
 
     pub fn advance_round(&mut self) {

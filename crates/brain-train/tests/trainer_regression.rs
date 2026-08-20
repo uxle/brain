@@ -1,19 +1,13 @@
 //! # End-to-End Trainer Regression Tests
 
 use brain_core::Tensor;
-use brain_train::{Batch, Conv2d, Flatten, Linear, MaxPool2d, ModelState, ReLU, Sequential, Trainer};
+use brain_train::{
+    Batch, Conv2d, Flatten, Linear, MaxPool2d, ModelState, ReLU, Sequential, Trainer,
+};
 
 #[test]
 fn test_mlp_regression_training() {
-    let inputs = Tensor::from_vec(
-        vec![
-            0.0, 0.0,
-            0.0, 1.0,
-            1.0, 0.0,
-            1.0, 1.0,
-        ],
-        vec![4, 2],
-    );
+    let inputs = Tensor::from_vec(vec![0.0, 0.0, 0.0, 1.0, 1.0, 0.0, 1.0, 1.0], vec![4, 2]);
     let targets = vec![0, 1, 1, 0]; // XOR task
     let batch = Batch::new(inputs, targets).unwrap();
     let batches = vec![batch];
@@ -38,7 +32,11 @@ fn test_mlp_regression_training() {
         before.loss,
         after.loss
     );
-    assert!(after.accuracy >= 0.70, "Expected accuracy >= 0.70, got {}", after.accuracy);
+    assert!(
+        after.accuracy >= 0.70,
+        "Expected accuracy >= 0.70, got {}",
+        after.accuracy
+    );
 }
 
 #[test]
@@ -90,7 +88,11 @@ fn test_cnn_regression_training() {
         before.loss,
         after.loss
     );
-    assert!(after.accuracy >= 0.85, "Expected CNN accuracy >= 0.85, got {}", after.accuracy);
+    assert!(
+        after.accuracy >= 0.85,
+        "Expected CNN accuracy >= 0.85, got {}",
+        after.accuracy
+    );
 }
 
 #[test]
@@ -193,8 +195,7 @@ fn test_trainer_eval_metric_consistency() {
     let batch = Batch::new(inputs, targets).unwrap();
     let batches = vec![batch];
 
-    let model = Sequential::new()
-        .add(Linear::new(2, 2, true));
+    let model = Sequential::new().add(Linear::new(2, 2, true));
 
     let trainer = Trainer::builder()
         .model(model)

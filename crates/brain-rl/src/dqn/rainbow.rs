@@ -1,14 +1,23 @@
 //! # Rainbow-Lite DQN
 //!
 //! Combines Double DQN, Dueling Network Architecture, and Prioritized Replay.
-#![allow(missing_docs, clippy::excessive_precision, clippy::approx_constant, clippy::needless_range_loop, clippy::too_many_arguments, clippy::manual_is_multiple_of, clippy::manual_div_ceil, clippy::doc_markdown)]
+#![allow(
+    missing_docs,
+    clippy::excessive_precision,
+    clippy::approx_constant,
+    clippy::needless_range_loop,
+    clippy::too_many_arguments,
+    clippy::manual_is_multiple_of,
+    clippy::manual_div_ceil,
+    clippy::doc_markdown
+)]
 
-use brain_core::Tensor;
 use super::super::buffer::PrioritizedReplayBuffer;
 use super::super::core::{RlResult, Transition};
 use super::super::policy::{EpsilonGreedyPolicy, EpsilonSchedule};
 use super::dueling::DuelingQNet;
 use super::DqnConfig;
+use brain_core::Tensor;
 
 /// Rainbow-Lite DQN Agent.
 #[derive(Debug, Clone)]
@@ -56,7 +65,8 @@ impl RainbowAgent {
             return Ok(0.0);
         }
 
-        let (tree_indices, batch, weights) = self.per_buffer.sample_batch(self.config.batch_size)?;
+        let (tree_indices, batch, weights) =
+            self.per_buffer.sample_batch(self.config.batch_size)?;
         let mut total_loss = 0.0;
         let gamma = self.config.gamma;
 
@@ -73,7 +83,11 @@ impl RainbowAgent {
             }
 
             let target_next_q = self.q_target.forward(&t.next_state)[best_action];
-            let target = if t.done { t.reward } else { t.reward + gamma * target_next_q };
+            let target = if t.done {
+                t.reward
+            } else {
+                t.reward + gamma * target_next_q
+            };
             let td_error = target - q_current;
             let loss = weights[i] * td_error * td_error;
             total_loss += loss;
@@ -92,23 +106,35 @@ impl RainbowAgent {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant, clippy::needless_range_loop, clippy::manual_div_ceil, clippy::manual_is_multiple_of, clippy::too_many_arguments, clippy::doc_markdown, clippy::excessive_precision)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant,
+        clippy::needless_range_loop,
+        clippy::manual_div_ceil,
+        clippy::manual_is_multiple_of,
+        clippy::too_many_arguments,
+        clippy::doc_markdown,
+        clippy::excessive_precision
+    )]
     use super::*;
-    use crate::core::*;
-    use crate::env::*;
-    use crate::policy::*;
-    use crate::value::*;
-    use crate::buffer::*;
-    use crate::dqn::*;
-    use crate::ppo::*;
     use crate::a2c::*;
     use crate::actor_critic::*;
-    use crate::sac::*;
     use crate::agents::*;
-    use crate::trainer::*;
-    use crate::eval::*;
+    use crate::buffer::*;
     use crate::checkpoint::*;
+    use crate::core::*;
+    use crate::dqn::*;
+    use crate::env::*;
+    use crate::eval::*;
+    use crate::policy::*;
+    use crate::ppo::*;
+    use crate::sac::*;
+    use crate::trainer::*;
     use crate::utils::*;
+    use crate::value::*;
     use crate::VERSION;
     use brain_core::Tensor;
 }

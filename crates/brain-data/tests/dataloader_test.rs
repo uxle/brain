@@ -1,11 +1,11 @@
 //! # Comprehensive Dataset & DataLoader Pipeline Integration Tests
 
 use brain_core::Tensor;
-use brain_data::core::{DataSource, Sample, SampleBatch};
-use brain_data::samplers::{Sampler, SequentialSampler, DistributedSampler};
 use brain_data::batch::BatchIter;
 use brain_data::collate::default_collate;
+use brain_data::core::{DataSource, Sample, SampleBatch};
 use brain_data::loading::MemoryLoader;
+use brain_data::samplers::{DistributedSampler, Sampler, SequentialSampler};
 
 #[test]
 fn test_memory_loader_datasource() {
@@ -83,8 +83,10 @@ fn test_batch_iterator_drop_last() {
 
 #[test]
 fn test_default_collation() {
-    let s1 = Sample::new(0, Tensor::from_slice(&[1.0, 2.0], vec![2])).with_label(Tensor::scalar(0.0));
-    let s2 = Sample::new(1, Tensor::from_slice(&[3.0, 4.0], vec![2])).with_label(Tensor::scalar(1.0));
+    let s1 =
+        Sample::new(0, Tensor::from_slice(&[1.0, 2.0], vec![2])).with_label(Tensor::scalar(0.0));
+    let s2 =
+        Sample::new(1, Tensor::from_slice(&[3.0, 4.0], vec![2])).with_label(Tensor::scalar(1.0));
 
     let batch = default_collate(&[s1, s2]);
     assert_eq!(batch.len(), 2);

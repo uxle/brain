@@ -1,14 +1,23 @@
 //! # Double Deep Q-Networks (Double DQN)
 //!
 //! Decouples action selection (online network) from action evaluation (target network) to prevent overestimation bias.
-#![allow(missing_docs, clippy::excessive_precision, clippy::approx_constant, clippy::needless_range_loop, clippy::too_many_arguments, clippy::manual_is_multiple_of, clippy::manual_div_ceil, clippy::doc_markdown)]
+#![allow(
+    missing_docs,
+    clippy::excessive_precision,
+    clippy::approx_constant,
+    clippy::needless_range_loop,
+    clippy::too_many_arguments,
+    clippy::manual_is_multiple_of,
+    clippy::manual_div_ceil,
+    clippy::doc_markdown
+)]
 
-use brain_core::Tensor;
 use super::super::buffer::ReplayBuffer;
 use super::super::core::{RlResult, Transition};
 use super::super::policy::{EpsilonGreedyPolicy, EpsilonSchedule};
 use super::super::value::QNet;
 use super::DqnConfig;
+use brain_core::Tensor;
 
 /// Double DQN Agent.
 #[derive(Debug, Clone)]
@@ -74,13 +83,18 @@ impl DoubleDqnAgent {
             }
 
             let target_next_q = self.q_target.forward(&t.next_state)[best_action];
-            let target = if t.done { t.reward } else { t.reward + gamma * target_next_q };
+            let target = if t.done {
+                t.reward
+            } else {
+                t.reward + gamma * target_next_q
+            };
             let error = target - q_current;
             total_loss += error * error;
 
             let s_data = t.state.data();
             for i in 0..s_data.len().min(self.q_online.input_dim) {
-                self.q_online.weights[t.action * self.q_online.input_dim + i] += lr * error * s_data[i];
+                self.q_online.weights[t.action * self.q_online.input_dim + i] +=
+                    lr * error * s_data[i];
             }
             self.q_online.biases[t.action] += lr * error;
         }
@@ -95,23 +109,35 @@ impl DoubleDqnAgent {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant, clippy::needless_range_loop, clippy::manual_div_ceil, clippy::manual_is_multiple_of, clippy::too_many_arguments, clippy::doc_markdown, clippy::excessive_precision)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant,
+        clippy::needless_range_loop,
+        clippy::manual_div_ceil,
+        clippy::manual_is_multiple_of,
+        clippy::too_many_arguments,
+        clippy::doc_markdown,
+        clippy::excessive_precision
+    )]
     use super::*;
-    use crate::core::*;
-    use crate::env::*;
-    use crate::policy::*;
-    use crate::value::*;
-    use crate::buffer::*;
-    use crate::dqn::*;
-    use crate::ppo::*;
     use crate::a2c::*;
     use crate::actor_critic::*;
-    use crate::sac::*;
     use crate::agents::*;
-    use crate::trainer::*;
-    use crate::eval::*;
+    use crate::buffer::*;
     use crate::checkpoint::*;
+    use crate::core::*;
+    use crate::dqn::*;
+    use crate::env::*;
+    use crate::eval::*;
+    use crate::policy::*;
+    use crate::ppo::*;
+    use crate::sac::*;
+    use crate::trainer::*;
     use crate::utils::*;
+    use crate::value::*;
     use crate::VERSION;
     use brain_core::Tensor;
 }

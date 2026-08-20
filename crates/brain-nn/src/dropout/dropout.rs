@@ -3,8 +3,8 @@
 //! Randomly zeroes elements with probability p during training, scaling non-zero entries by 1/(1-p).
 #![allow(missing_docs)]
 
-use brain_core::Tensor;
 use crate::module::{Module, ModuleResult};
+use brain_core::Tensor;
 
 /// Standard inverted Bernoulli dropout.
 #[derive(Debug, Clone)]
@@ -24,7 +24,11 @@ impl Dropout {
     }
 
     pub fn with_seed(p: f64, seed: u64) -> Self {
-        Self { p, training: true, seed }
+        Self {
+            p,
+            training: true,
+            seed,
+        }
     }
 
     pub fn forward_tensor(&self, input: &Tensor) -> Tensor {
@@ -72,7 +76,9 @@ pub struct FusedDropout {
 
 impl FusedDropout {
     pub fn new(p: f64) -> Self {
-        Self { dropout: Dropout::new(p) }
+        Self {
+            dropout: Dropout::new(p),
+        }
     }
 
     pub fn forward_add(&self, input: &Tensor, residual: &Tensor) -> Tensor {
@@ -83,7 +89,13 @@ impl FusedDropout {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

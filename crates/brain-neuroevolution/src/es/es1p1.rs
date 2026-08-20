@@ -3,9 +3,9 @@
 //! Fast, lightweight self-adaptive point mutation optimizer.
 #![allow(missing_docs)]
 
+use super::EsResult;
 use crate::fitness::FitnessFn;
 use crate::utils::FastRng;
-use super::EsResult;
 
 /// Configuration for (1+1)-ES.
 #[derive(Debug, Clone)]
@@ -17,7 +17,11 @@ pub struct Es1p1Config {
 
 impl Default for Es1p1Config {
     fn default() -> Self {
-        Self { dim: 5, initial_sigma: 0.5, max_evals: 200 }
+        Self {
+            dim: 5,
+            initial_sigma: 0.5,
+            max_evals: 200,
+        }
     }
 }
 
@@ -73,7 +77,13 @@ impl Es1p1 {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

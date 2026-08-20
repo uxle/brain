@@ -109,7 +109,11 @@ pub fn slice_multi(a: &Tensor, slices: &[Slice]) -> Tensor {
 /// Gathers values along dimension `dim` specified by `index` tensor.
 pub fn gather(input: &Tensor, dim: usize, index: &Tensor) -> Tensor {
     assert!(dim < input.ndim(), "gather: dim out of bounds");
-    assert_eq!(input.ndim(), index.ndim(), "gather: input and index must have same rank");
+    assert_eq!(
+        input.ndim(),
+        index.ndim(),
+        "gather: input and index must have same rank"
+    );
 
     let mut out_data = Vec::with_capacity(index.numel());
     let mut coords = vec![0usize; index.ndim()];
@@ -214,7 +218,11 @@ pub fn masked_fill(input: &Tensor, mask: &Tensor, value: f64) -> Tensor {
 
 /// Scatters elements from a 1D `source` into `input` at mask locations.
 pub fn masked_scatter(input: &Tensor, mask: &Tensor, source: &Tensor) -> Tensor {
-    assert_eq!(input.shape(), mask.shape(), "masked_scatter: shape mismatch");
+    assert_eq!(
+        input.shape(),
+        mask.shape(),
+        "masked_scatter: shape mismatch"
+    );
     let mut src_idx = 0;
     let mut data = input.data().to_vec();
     for (i, &m) in mask.data().iter().enumerate() {
@@ -272,7 +280,11 @@ pub fn take(input: &Tensor, indices: &[usize]) -> Tensor {
 
 /// Puts values into `input` at flat linear indices.
 pub fn put(input: &mut Tensor, indices: &[usize], values: &[f64]) {
-    assert_eq!(indices.len(), values.len(), "put: indices and values must match in length");
+    assert_eq!(
+        indices.len(),
+        values.len(),
+        "put: indices and values must match in length"
+    );
     for (&idx, &val) in indices.iter().zip(values.iter()) {
         assert!(idx < input.numel(), "put: index out of bounds");
         input.set(idx, val);
@@ -281,7 +293,10 @@ pub fn put(input: &mut Tensor, indices: &[usize], values: &[f64]) {
 
 /// Extracts a diagonal tensor.
 pub fn diagonal(input: &Tensor, offset: isize, dim1: usize, dim2: usize) -> Tensor {
-    assert!(dim1 < input.ndim() && dim2 < input.ndim(), "diagonal: dims out of bounds");
+    assert!(
+        dim1 < input.ndim() && dim2 < input.ndim(),
+        "diagonal: dims out of bounds"
+    );
     assert_ne!(dim1, dim2, "diagonal: dims must be different");
 
     let (d1_len, d2_len) = (input.shape()[dim1], input.shape()[dim2]);

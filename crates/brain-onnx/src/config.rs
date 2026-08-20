@@ -3,7 +3,6 @@
 //! Settings for model import, optimization levels, graph lowering, and execution evaluation.
 #![allow(missing_docs)]
 
-
 /// Policy for handling unknown or unsupported operators during import.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum UnknownOpPolicy {
@@ -70,7 +69,13 @@ impl Default for EvalConfig {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

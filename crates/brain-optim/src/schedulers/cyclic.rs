@@ -3,9 +3,9 @@
 //! Cycles the learning rate between boundary thresholds according to triangular or exponential amplitude policies.
 #![allow(missing_docs)]
 
-use std::collections::HashMap;
-use crate::optimizer::{Optimizer, OptimResult};
 use super::LrScheduler;
+use crate::optimizer::{OptimResult, Optimizer};
+use std::collections::HashMap;
 
 /// Operational amplitude policy for cyclic learning rates.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -57,7 +57,14 @@ pub struct CyclicLR {
 }
 
 impl CyclicLR {
-    pub fn new(base_lrs: Vec<f64>, max_lrs: Vec<f64>, step_size_up: usize, step_size_down: usize, mode: CyclicMode, gamma: f64) -> Self {
+    pub fn new(
+        base_lrs: Vec<f64>,
+        max_lrs: Vec<f64>,
+        step_size_up: usize,
+        step_size_down: usize,
+        mode: CyclicMode,
+        gamma: f64,
+    ) -> Self {
         let last_lrs = base_lrs.clone();
         let step_size_up = step_size_up.max(1);
         let step_size_down = step_size_down.max(1);
@@ -142,7 +149,13 @@ impl LrScheduler for CyclicLR {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

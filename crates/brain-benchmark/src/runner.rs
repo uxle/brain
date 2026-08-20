@@ -58,8 +58,13 @@ impl Runner {
 
         let batch_size = match config.strategy {
             IterationStrategy::FixedIterations(n) => n.max(1),
-            IterationStrategy::FixedDuration(d) => Self::discover_batch_size(d / config.sample_count as u32, &mut f),
-            IterationStrategy::Adaptive { target_sample_duration, max_iterations } => {
+            IterationStrategy::FixedDuration(d) => {
+                Self::discover_batch_size(d / config.sample_count as u32, &mut f)
+            }
+            IterationStrategy::Adaptive {
+                target_sample_duration,
+                max_iterations,
+            } => {
                 let discovered = Self::discover_batch_size(target_sample_duration, &mut f);
                 discovered.min(max_iterations).max(1)
             }
@@ -81,11 +86,7 @@ impl Runner {
     }
 
     /// Runs a parameter sweep across input values.
-    pub fn run_sweep<P, F>(
-        name: &str,
-        params: &[P],
-        mut f: F,
-    ) -> BrainResult<Vec<(P, BenchResult)>>
+    pub fn run_sweep<P, F>(name: &str, params: &[P], mut f: F) -> BrainResult<Vec<(P, BenchResult)>>
     where
         P: Clone + std::fmt::Debug,
         F: FnMut(&P),

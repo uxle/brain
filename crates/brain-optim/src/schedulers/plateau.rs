@@ -3,9 +3,9 @@
 //! Reduce learning rate when a metric has stopped improving.
 #![allow(missing_docs)]
 
-use std::collections::HashMap;
-use crate::optimizer::{Optimizer, OptimResult};
 use super::LrScheduler;
+use crate::optimizer::{OptimResult, Optimizer};
+use std::collections::HashMap;
 
 /// Optimization mode for ReduceLROnPlateau.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -82,7 +82,11 @@ impl ReduceLROnPlateau {
     }
 
     /// Primary stepping method providing the scalar evaluation metric.
-    pub fn step_metric(&mut self, optimizer: &mut dyn Optimizer, metric: f64) -> OptimResult<Vec<f64>> {
+    pub fn step_metric(
+        &mut self,
+        optimizer: &mut dyn Optimizer,
+        metric: f64,
+    ) -> OptimResult<Vec<f64>> {
         self.step_count += 1;
 
         if self.is_better(metric, self.best) {
@@ -169,7 +173,13 @@ impl LrScheduler for ReduceLROnPlateau {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

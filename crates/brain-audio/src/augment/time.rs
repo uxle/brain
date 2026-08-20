@@ -76,9 +76,13 @@ pub fn add_noise(signal: &mut [f64], snr_db: f64, seed: u64) {
     // Pure-Rust LCG PRNG for noise generation
     let mut state = seed.wrapping_add(0x9e3779b97f4a7c15);
     for s in signal.iter_mut() {
-        state = state.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+        state = state
+            .wrapping_mul(6364136223846793005)
+            .wrapping_add(1442695040888963407);
         let u1 = ((state >> 32) as u32 as f64 + 1.0) / 4294967297.0;
-        state = state.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+        state = state
+            .wrapping_mul(6364136223846793005)
+            .wrapping_add(1442695040888963407);
         let u2 = ((state >> 32) as u32 as f64 + 1.0) / 4294967297.0;
         // Box-Muller transform
         let normal = (-2.0 * u1.ln()).sqrt() * (2.0 * PI * u2).cos();

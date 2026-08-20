@@ -9,7 +9,9 @@ pub fn sample_clients(num_clients: usize, fraction: f64, seed: u64) -> Vec<usize
     let mut rng = seed;
     let mut indices: Vec<usize> = (0..num_clients).collect();
     for i in 0..n {
-        rng = rng.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+        rng = rng
+            .wrapping_mul(6364136223846793005)
+            .wrapping_add(1442695040888963407);
         let j = i + (rng as usize % (num_clients - i));
         indices.swap(i, j);
     }
@@ -18,7 +20,9 @@ pub fn sample_clients(num_clients: usize, fraction: f64, seed: u64) -> Vec<usize
 
 /// Computes standard deviation of a slice of f64 values.
 pub fn stddev(values: &[f64]) -> f64 {
-    if values.len() < 2 { return 0.0; }
+    if values.len() < 2 {
+        return 0.0;
+    }
     let mean = values.iter().sum::<f64>() / values.len() as f64;
     let var = values.iter().map(|v| (v - mean).powi(2)).sum::<f64>() / values.len() as f64;
     var.sqrt()

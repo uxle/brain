@@ -49,14 +49,22 @@ impl FastRng {
 pub fn rank_fitness(fitnesses: &[f64]) -> Vec<usize> {
     let mut indices: Vec<usize> = (0..fitnesses.len()).collect();
     indices.sort_by(|&a, &b| {
-        fitnesses[b].partial_cmp(&fitnesses[a]).unwrap_or(std::cmp::Ordering::Equal)
+        fitnesses[b]
+            .partial_cmp(&fitnesses[a])
+            .unwrap_or(std::cmp::Ordering::Equal)
     });
     indices
 }
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

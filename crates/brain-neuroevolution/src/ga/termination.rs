@@ -40,11 +40,15 @@ impl TerminationTracker {
         }
 
         if let Some(target) = config.target_fitness {
-            if current_best >= target { return true; }
+            if current_best >= target {
+                return true;
+            }
         }
 
         if let Some(patience) = config.patience {
-            if self.generations_without_improvement >= patience { return true; }
+            if self.generations_without_improvement >= patience {
+                return true;
+            }
         }
 
         false
@@ -53,7 +57,13 @@ impl TerminationTracker {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

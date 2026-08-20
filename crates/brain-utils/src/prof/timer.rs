@@ -153,18 +153,20 @@ mod tests {
         let mut stats = TimingStats::new();
         assert_eq!(stats.count, 0);
         assert_eq!(stats.mean(), Duration::ZERO);
-    
+
         for k in 1..=100 {
             stats.add_sample(Duration::from_millis(k));
         }
-    
+
         assert_eq!(stats.count, 100);
         assert_eq!(stats.min, Duration::from_millis(1));
         assert_eq!(stats.max, Duration::from_millis(100));
-        assert!(stats.p50() >= Duration::from_millis(49) && stats.p50() <= Duration::from_millis(52));
+        assert!(
+            stats.p50() >= Duration::from_millis(49) && stats.p50() <= Duration::from_millis(52)
+        );
         assert!(stats.p95() >= Duration::from_millis(94));
         assert!(stats.p99() >= Duration::from_millis(98));
-    
+
         let timer = Timer::start("benchmark_task");
         assert_eq!(timer.name(), "benchmark_task");
         let _ = timer.elapsed();

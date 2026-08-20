@@ -56,7 +56,11 @@ impl HdrHistogram {
 
     /// Returns the minimum recorded value in nanoseconds.
     pub fn min(&self) -> u64 {
-        if self.total_count == 0 { 0 } else { self.min_value }
+        if self.total_count == 0 {
+            0
+        } else {
+            self.min_value
+        }
     }
 
     /// Returns the maximum recorded value in nanoseconds.

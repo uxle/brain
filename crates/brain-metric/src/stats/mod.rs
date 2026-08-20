@@ -14,7 +14,9 @@ pub struct StatsConfig {
 /// Computes Pearson product-moment correlation coefficient r in [-1, 1].
 pub fn pearson_correlation(x: &[f64], y: &[f64]) -> f64 {
     let n = x.len().min(y.len());
-    if n < 2 { return 0.0; }
+    if n < 2 {
+        return 0.0;
+    }
 
     let mean_x = x.iter().take(n).sum::<f64>() / n as f64;
     let mean_y = y.iter().take(n).sum::<f64>() / n as f64;
@@ -36,7 +38,13 @@ pub fn pearson_correlation(x: &[f64], y: &[f64]) -> f64 {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

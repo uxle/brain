@@ -3,8 +3,8 @@
 //! Layer-wise sensitivity estimation and automatic bit-width allocation (int4 vs int8 vs fp16).
 #![allow(missing_docs)]
 
-use std::collections::HashMap;
 use super::core::QuantDType;
+use std::collections::HashMap;
 
 /// Configuration container for mixed-precision selection.
 #[derive(Debug, Clone, PartialEq)]
@@ -39,7 +39,8 @@ impl MixedPrecisionQuantizer {
 
     /// Registers observed loss perturbation sensitivity for a named model layer.
     pub fn register_sensitivity(&mut self, layer_name: impl Into<String>, sensitivity: f64) {
-        self.layer_sensitivities.insert(layer_name.into(), sensitivity);
+        self.layer_sensitivities
+            .insert(layer_name.into(), sensitivity);
     }
 
     /// Determines the optimal precision type for a given layer based on sensitivity.
@@ -60,7 +61,13 @@ impl MixedPrecisionQuantizer {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

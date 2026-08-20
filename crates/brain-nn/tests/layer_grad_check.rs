@@ -1,12 +1,19 @@
 //! Layer-level gradient checking and parameter cross-checks.
 
-use brain_core::Tensor;
 use brain_autograd::Value;
-use brain_nn::{Linear, Conv2d, BatchNorm2d, LayerNorm, RMSNorm, Embedding, Dropout, MaxPool2d, Module};
+use brain_core::Tensor;
+use brain_nn::{
+    BatchNorm2d, Conv2d, Dropout, Embedding, LayerNorm, Linear, MaxPool2d, Module, RMSNorm,
+};
 
 /// Verifies analytic gradient against numerical central finite differences.
-pub fn check_param_gradient<F>(eval_loss: F, param_data: &[f64], analytic_grad: &[f64], eps: f64, tol: f64)
-where
+pub fn check_param_gradient<F>(
+    eval_loss: F,
+    param_data: &[f64],
+    analytic_grad: &[f64],
+    eps: f64,
+    tol: f64,
+) where
     F: Fn(&[f64]) -> f64,
 {
     assert_eq!(param_data.len(), analytic_grad.len());
@@ -41,10 +48,16 @@ where
 #[test]
 fn test_linear_layer_weight_and_bias_gradient() {
     let mut linear = Linear::new(3, 2, true);
-    linear.weight = Value::new(Tensor::from_slice(&[0.5, -0.2, 1.0, 0.8, -1.2, 0.3], vec![2, 3]), true);
+    linear.weight = Value::new(
+        Tensor::from_slice(&[0.5, -0.2, 1.0, 0.8, -1.2, 0.3], vec![2, 3]),
+        true,
+    );
     linear.bias = Some(Value::new(Tensor::from_slice(&[0.1, -0.4], vec![2]), true));
 
-    let x = Value::new(Tensor::from_slice(&[1.0, 2.0, 3.0, -1.0, 0.5, 2.0], vec![2, 3]), false);
+    let x = Value::new(
+        Tensor::from_slice(&[1.0, 2.0, 3.0, -1.0, 0.5, 2.0], vec![2, 3]),
+        false,
+    );
 
     let b_size = 2.0;
     let mut analytic_dw = vec![0.0f64; 6];
@@ -116,14 +129,19 @@ fn test_linear_layer_without_bias() {
 fn test_conv2d_layer_weight_and_bias_gradient() {
     let mut conv = Conv2d::new(1, 1, 2, true);
     conv.config.padding = (0, 0);
-    conv.weight = Value::new(Tensor::from_slice(&[0.5, -0.5, 1.0, -1.0], vec![1, 1, 2, 2]), true);
+    conv.weight = Value::new(
+        Tensor::from_slice(&[0.5, -0.5, 1.0, -1.0], vec![1, 1, 2, 2]),
+        true,
+    );
     conv.bias = Some(Value::new(Tensor::from_slice(&[0.2], vec![1]), true));
 
-    let input = Value::new(Tensor::from_slice(&[
-        1.0, 2.0, 3.0,
-        4.0, 5.0, 6.0,
-        7.0, 8.0, 9.0,
-    ], vec![1, 1, 3, 3]), false);
+    let input = Value::new(
+        Tensor::from_slice(
+            &[1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0],
+            vec![1, 1, 3, 3],
+        ),
+        false,
+    );
 
     let w_data = conv.weight.to_vec();
     let in_fixed = input.clone();
@@ -174,12 +192,12 @@ fn test_batchnorm2d_full_gradient_formula() {
     bn.weight = Tensor::from_slice(&[1.5, 0.8], vec![2]);
     bn.bias = Tensor::from_slice(&[0.2, -0.1], vec![2]);
 
-    let input = Tensor::from_slice(&[
-        1.0, 2.0, 3.0, 4.0,
-        0.5, -0.5, 1.5, -1.0,
-        2.0, 1.0, 4.0, 3.0,
-        1.0, -1.0, 0.0, 0.5,
-    ], vec![2, 2, 2, 2]);
+    let input = Tensor::from_slice(
+        &[
+            1.0, 2.0, 3.0, 4.0, 0.5, -0.5, 1.5, -1.0, 2.0, 1.0, 4.0, 3.0, 1.0, -1.0, 0.0, 0.5,
+        ],
+        vec![2, 2, 2, 2],
+    );
 
     let in_fixed = input.clone();
     let out = bn.forward_train(&input);
@@ -223,7 +241,10 @@ fn test_layernorm_and_rmsnorm_gradient() {
     ln.weight = Tensor::from_slice(&[1.0, 2.0, 0.5], vec![3]);
     ln.bias = Tensor::from_slice(&[0.1, -0.1, 0.2], vec![3]);
 
-    let input = Value::new(Tensor::from_slice(&[1.0, 2.0, 3.0, 4.0, 5.0, 6.0], vec![2, 3]), false);
+    let input = Value::new(
+        Tensor::from_slice(&[1.0, 2.0, 3.0, 4.0, 5.0, 6.0], vec![2, 3]),
+        false,
+    );
     let in_fixed = input.clone();
 
     let b_data = ln.bias.to_vec();
@@ -231,7 +252,11 @@ fn test_layernorm_and_rmsnorm_gradient() {
         |b_test| {
             let mut l = ln.clone();
             l.bias = Tensor::from_slice(b_test, vec![3]);
-            Module::forward(&l, &in_fixed).unwrap().to_vec().iter().sum()
+            Module::forward(&l, &in_fixed)
+                .unwrap()
+                .to_vec()
+                .iter()
+                .sum()
         },
         &b_data,
         &[2.0, 2.0, 2.0],
@@ -246,13 +271,20 @@ fn test_layernorm_and_rmsnorm_gradient() {
         |w_test| {
             let mut r = rms.clone();
             r.weight = Tensor::from_slice(w_test, vec![3]);
-            Module::forward(&r, &in_fixed).unwrap().to_vec().iter().sum()
+            Module::forward(&r, &in_fixed)
+                .unwrap()
+                .to_vec()
+                .iter()
+                .sum()
         },
         &w_data,
         &[
-            (Module::forward(&rms, &in_fixed).unwrap().to_vec()[0]/1.2 + Module::forward(&rms, &in_fixed).unwrap().to_vec()[3]/1.2),
-            (Module::forward(&rms, &in_fixed).unwrap().to_vec()[1]/0.8 + Module::forward(&rms, &in_fixed).unwrap().to_vec()[4]/0.8),
-            (Module::forward(&rms, &in_fixed).unwrap().to_vec()[2]/1.0 + Module::forward(&rms, &in_fixed).unwrap().to_vec()[5]/1.0),
+            (Module::forward(&rms, &in_fixed).unwrap().to_vec()[0] / 1.2
+                + Module::forward(&rms, &in_fixed).unwrap().to_vec()[3] / 1.2),
+            (Module::forward(&rms, &in_fixed).unwrap().to_vec()[1] / 0.8
+                + Module::forward(&rms, &in_fixed).unwrap().to_vec()[4] / 0.8),
+            (Module::forward(&rms, &in_fixed).unwrap().to_vec()[2] / 1.0
+                + Module::forward(&rms, &in_fixed).unwrap().to_vec()[5] / 1.0),
         ],
         1e-5,
         1e-4,
@@ -266,21 +298,14 @@ fn test_layernorm_and_rmsnorm_gradient() {
 #[test]
 fn test_embedding_duplicate_index_accumulation() {
     let mut emb = Embedding::new(4, 2);
-    emb.weight = Value::new(Tensor::from_slice(&[
-        1.0, 2.0,
-        3.0, 4.0,
-        5.0, 6.0,
-        7.0, 8.0,
-    ], vec![4, 2]), true);
+    emb.weight = Value::new(
+        Tensor::from_slice(&[1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0], vec![4, 2]),
+        true,
+    );
 
     let indices = vec![1, 2, 1];
 
-    let analytic_dw = vec![
-        0.0, 0.0,
-        2.0, 2.0,
-        1.0, 1.0,
-        0.0, 0.0,
-    ];
+    let analytic_dw = vec![0.0, 0.0, 2.0, 2.0, 1.0, 1.0, 0.0, 0.0];
 
     let w_data = emb.weight.to_vec();
     check_param_gradient(
@@ -307,7 +332,11 @@ fn test_dropout_mask_consistency_and_eval() {
 
     let out_train1 = drop.forward(&input).unwrap();
     let out_train2 = drop.forward(&input).unwrap();
-    assert_eq!(out_train1.to_vec(), out_train2.to_vec(), "Dropout mask must be deterministic with same seed");
+    assert_eq!(
+        out_train1.to_vec(),
+        out_train2.to_vec(),
+        "Dropout mask must be deterministic with same seed"
+    );
 
     drop.set_training(false);
     let out_eval = drop.forward(&input).unwrap();
@@ -321,12 +350,15 @@ fn test_dropout_mask_consistency_and_eval() {
 #[test]
 fn test_maxpool2d_argmax_and_tie_breaking() {
     let pool = MaxPool2d::new(2, 2);
-    let input = Value::new(Tensor::from_slice(&[
-        4.0, 4.0, 1.0, 2.0,
-        1.0, 2.0, 3.0, 0.0,
-        0.0, 1.0, 5.0, 6.0,
-        2.0, 3.0, 7.0, 8.0,
-    ], vec![1, 1, 4, 4]), false);
+    let input = Value::new(
+        Tensor::from_slice(
+            &[
+                4.0, 4.0, 1.0, 2.0, 1.0, 2.0, 3.0, 0.0, 0.0, 1.0, 5.0, 6.0, 2.0, 3.0, 7.0, 8.0,
+            ],
+            vec![1, 1, 4, 4],
+        ),
+        false,
+    );
 
     let out = pool.forward(&input);
     assert_eq!(out.shape(), &[1, 1, 2, 2]);
@@ -342,9 +374,15 @@ fn test_conv_transpose2d_weight_gradient() {
     use brain_nn::ConvTranspose2d;
 
     let mut conv_t = ConvTranspose2d::new(1, 1, 2);
-    conv_t.weight = Value::new(Tensor::from_slice(&[1.0, 0.5, -0.5, 2.0], vec![1, 1, 2, 2]), true);
+    conv_t.weight = Value::new(
+        Tensor::from_slice(&[1.0, 0.5, -0.5, 2.0], vec![1, 1, 2, 2]),
+        true,
+    );
 
-    let input = Value::new(Tensor::from_slice(&[1.0, 2.0, 3.0, 4.0], vec![1, 1, 2, 2]), false);
+    let input = Value::new(
+        Tensor::from_slice(&[1.0, 2.0, 3.0, 4.0], vec![1, 1, 2, 2]),
+        false,
+    );
     let w_data = conv_t.weight.to_vec();
 
     // Analytic gradient of sum(output) w.r.t weight
@@ -420,7 +458,7 @@ fn test_multihead_attention_numerical_forward() {
 
 #[test]
 fn test_initialization_schemes_and_variance() {
-    use brain_nn::init::{xavier_uniform, kaiming_normal, calculate_fan};
+    use brain_nn::init::{calculate_fan, kaiming_normal, xavier_uniform};
 
     let shape = [128, 128];
     let (fan_in, fan_out) = calculate_fan(&shape);
@@ -437,7 +475,12 @@ fn test_initialization_schemes_and_variance() {
     let k_var: f64 = k_data.iter().map(|&x| (x - 0.0).powi(2)).sum::<f64>() / k_data.len() as f64;
     let expected_var = 2.0 / 128.0;
     let rel_diff = (k_var - expected_var).abs() / expected_var;
-    assert!(rel_diff < 0.20, "Kaiming normal variance mismatch: observed={}, expected={}", k_var, expected_var);
+    assert!(
+        rel_diff < 0.20,
+        "Kaiming normal variance mismatch: observed={}, expected={}",
+        k_var,
+        expected_var
+    );
 }
 
 #[test]

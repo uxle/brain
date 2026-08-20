@@ -9,21 +9,16 @@
 //! 6. brain-export (Safetensors binary checkpointing)
 
 use brain_core::Tensor;
-use brain_nn::{Linear, relu, Module};
-use brain_loss::CrossEntropyLoss;
-use brain_optim::{Adam, AdamConfig, ParamGroup, Optimizer};
-use brain_metric::classification::auc::roc_auc_score;
 use brain_export::safetensors::SafetensorsArchive;
+use brain_loss::CrossEntropyLoss;
+use brain_metric::classification::auc::roc_auc_score;
+use brain_nn::{relu, Linear, Module};
+use brain_optim::{Adam, AdamConfig, Optimizer, ParamGroup};
 
 #[test]
 fn test_cross_crate_end_to_end_training_and_export_pipeline() {
     // 1. Synthetic Dataset Preparation (4 samples, 2 features, 2 classes)
-    let inputs = Tensor::from_slice(&[
-        0.0, 0.0,
-        0.0, 1.0,
-        1.0, 0.0,
-        1.0, 1.0,
-    ], vec![4, 2]);
+    let inputs = Tensor::from_slice(&[0.0, 0.0, 0.0, 1.0, 1.0, 0.0, 1.0, 1.0], vec![4, 2]);
     let targets = vec![0, 1, 1, 0]; // XOR task targets
 
     // 2. Neural Architecture: Linear(2->4) -> ReLU -> Linear(4->2)
@@ -77,6 +72,11 @@ fn test_cross_crate_end_to_end_training_and_export_pipeline() {
     let loaded_w1 = reader.get("l1.weight").expect("l1.weight lookup");
     assert_eq!(loaded_w1.shape(), l1.weight.shape());
     for (a, b) in loaded_w1.data().iter().zip(l1.weight.data().iter()) {
-        assert!((a - b).abs() < 1e-6, "Safetensors F32 roundtrip precision: got {}, expected {}", a, b);
+        assert!(
+            (a - b).abs() < 1e-6,
+            "Safetensors F32 roundtrip precision: got {}, expected {}",
+            a,
+            b
+        );
     }
 }

@@ -3,11 +3,11 @@
 //! Provides output destinations for log records: console, files with size rotation,
 //! in-memory bounded ring buffers, and multi-sink fan-outs.
 
+use super::{LogLevel, LogRecord};
+use crate::core::{UtilsError, UtilsResult};
 use std::collections::VecDeque;
 use std::io::Write;
 use std::sync::{Arc, Mutex};
-use crate::core::{UtilsError, UtilsResult};
-use super::{LogLevel, LogRecord};
 
 /// Log sink trait representing an output destination.
 pub trait LogSink: Send + Sync {
@@ -49,7 +49,9 @@ impl LogSink for ConsoleSink {
     }
 
     fn flush(&self) -> UtilsResult<()> {
-        std::io::stdout().flush().map_err(|e| UtilsError::IoError(e.to_string()))
+        std::io::stdout()
+            .flush()
+            .map_err(|e| UtilsError::IoError(e.to_string()))
     }
 }
 
@@ -161,9 +163,11 @@ mod tests {
     fn test_log_sinks_behavior_1() {
         let console = ConsoleSink::new(false);
         let rec = LogRecord::new(LogLevel::Info, "test", "hello world");
-        assert!(console.write_record(&rec, "[INFO] test: hello world").is_ok());
+        assert!(console
+            .write_record(&rec, "[INFO] test: hello world")
+            .is_ok());
         assert!(console.flush().is_ok());
-    
+
         let ring = RingBufferSink::new(5);
         assert!(ring.is_empty());
         for k in 0..10 {
@@ -176,7 +180,7 @@ mod tests {
         assert_eq!(msgs[4], "entry 9");
         ring.clear();
         assert_eq!(ring.len(), 0);
-    
+
         let mut multi = MultiSink::new();
         multi.add_sink(Box::new(RingBufferSink::new(10)));
         assert!(multi.write_record(&rec, "multi msg").is_ok());

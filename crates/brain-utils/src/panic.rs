@@ -43,7 +43,12 @@ fn format_panic_info(info: &PanicHookInfo) -> String {
     };
 
     let loc = if let Some(location) = info.location() {
-        format!("{}:{}:{}", location.file(), location.line(), location.column())
+        format!(
+            "{}:{}:{}",
+            location.file(),
+            location.line(),
+            location.column()
+        )
     } else {
         "unknown location".to_string()
     };

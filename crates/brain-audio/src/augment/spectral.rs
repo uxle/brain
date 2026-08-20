@@ -18,7 +18,9 @@ pub fn spec_augment(
     seed: u64,
 ) -> BrainResult<()> {
     if spectrogram.ndim() != 2 {
-        return Err(BrainError::invalid_value("spec_augment requires 2D [channels, frames] tensor"));
+        return Err(BrainError::invalid_value(
+            "spec_augment requires 2D [channels, frames] tensor",
+        ));
     }
     let n_freq = spectrogram.shape()[0];
     let n_time = spectrogram.shape()[1];
@@ -27,18 +29,26 @@ pub fn spec_augment(
 
     // Apply frequency masks
     for _ in 0..num_freq_masks {
-        state = state.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+        state = state
+            .wrapping_mul(6364136223846793005)
+            .wrapping_add(1442695040888963407);
         let f_len = (state >> 32) as usize % freq_mask_param.min(n_freq);
-        state = state.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+        state = state
+            .wrapping_mul(6364136223846793005)
+            .wrapping_add(1442695040888963407);
         let f_start = (state >> 32) as usize % (n_freq - f_len).max(1);
         frequency_mask(spectrogram, f_start, f_len)?;
     }
 
     // Apply time masks
     for _ in 0..num_time_masks {
-        state = state.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+        state = state
+            .wrapping_mul(6364136223846793005)
+            .wrapping_add(1442695040888963407);
         let t_len = (state >> 32) as usize % time_mask_param.min(n_time);
-        state = state.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+        state = state
+            .wrapping_mul(6364136223846793005)
+            .wrapping_add(1442695040888963407);
         let t_start = (state >> 32) as usize % (n_time - t_len).max(1);
         time_mask_spec(spectrogram, t_start, t_len)?;
     }
@@ -77,7 +87,13 @@ pub fn time_mask_spec(spectrogram: &mut Tensor, t_start: usize, t_len: usize) ->
 }
 
 /// Masks a rectangular cutout region `[f_start..f_end, t_start..t_end]` with zeros.
-pub fn spec_cutout(spectrogram: &mut Tensor, f_start: usize, f_len: usize, t_start: usize, t_len: usize) -> BrainResult<()> {
+pub fn spec_cutout(
+    spectrogram: &mut Tensor,
+    f_start: usize,
+    f_len: usize,
+    t_start: usize,
+    t_len: usize,
+) -> BrainResult<()> {
     let n_freq = spectrogram.shape()[0];
     let n_time = spectrogram.shape()[1];
     let f_end = (f_start + f_len).min(n_freq);
@@ -105,7 +121,11 @@ pub fn spec_mixup(spec1: &Tensor, spec2: &Tensor, alpha: f64) -> BrainResult<Ten
     let b = 1.0 - a;
     let d1 = spec1.data();
     let d2 = spec2.data();
-    let mixed: Vec<f64> = d1.iter().zip(d2.iter()).map(|(&x, &y)| a * x + b * y).collect();
+    let mixed: Vec<f64> = d1
+        .iter()
+        .zip(d2.iter())
+        .map(|(&x, &y)| a * x + b * y)
+        .collect();
     Ok(Tensor::from_slice(&mixed, spec1.shape().to_vec()))
 }
 

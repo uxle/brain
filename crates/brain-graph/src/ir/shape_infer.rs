@@ -3,9 +3,9 @@
 //! Propagates tensor dimensions across graph operators forward from inputs.
 #![allow(missing_docs)]
 
-use crate::core::{Shape, GraphResult};
-use crate::ir::GraphIr;
+use crate::core::{GraphResult, Shape};
 use crate::ir::ops::OpKind;
+use crate::ir::GraphIr;
 
 /// Carries status and shape inferences across the graph.
 #[derive(Debug, Clone, Default)]
@@ -23,8 +23,14 @@ pub fn infer_graph_shapes(graph: &mut GraphIr) -> GraphResult<ShapeInferenceResu
 
     for node in &graph.nodes {
         match node.op {
-            OpKind::Add | OpKind::Sub | OpKind::Mul | OpKind::Div
-            | OpKind::Relu | OpKind::Sigmoid | OpKind::Tanh | OpKind::Gelu => {
+            OpKind::Add
+            | OpKind::Sub
+            | OpKind::Mul
+            | OpKind::Div
+            | OpKind::Relu
+            | OpKind::Sigmoid
+            | OpKind::Tanh
+            | OpKind::Gelu => {
                 if let Some(&first_in) = node.inputs.first() {
                     let in_shape = inferred[first_in].clone();
                     for &out in &node.outputs {
@@ -60,12 +66,20 @@ pub fn infer_graph_shapes(graph: &mut GraphIr) -> GraphResult<ShapeInferenceResu
         }
     }
 
-    Ok(ShapeInferenceResult { inferred_shapes: inferred })
+    Ok(ShapeInferenceResult {
+        inferred_shapes: inferred,
+    })
 }
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

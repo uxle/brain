@@ -1,14 +1,23 @@
 //! # Dropout Family Modules
 //!
 //! Standard inverted dropout, 2D spatial feature map dropout, 3D volumetric dropout, and fused operations.
-#![allow(missing_docs, clippy::excessive_precision, clippy::approx_constant, clippy::needless_range_loop, clippy::too_many_arguments, clippy::manual_is_multiple_of, clippy::manual_div_ceil, clippy::doc_markdown)]
+#![allow(
+    missing_docs,
+    clippy::excessive_precision,
+    clippy::approx_constant,
+    clippy::needless_range_loop,
+    clippy::too_many_arguments,
+    clippy::manual_is_multiple_of,
+    clippy::manual_div_ceil,
+    clippy::doc_markdown
+)]
 
-pub mod alpha;
 pub mod adaptive;
+pub mod alpha;
 
-use brain_core::Tensor;
 use super::core::{RegError, RegKind, RegResult, Regularization};
 use super::utils::XorShift64;
+use brain_core::Tensor;
 
 /// Inverted Dropout layer: zeroing elements with probability p and scaling remaining by 1 / (1 - p).
 #[derive(Debug, Clone)]
@@ -153,28 +162,39 @@ impl Dropout2d {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant, clippy::needless_range_loop, clippy::manual_div_ceil, clippy::manual_is_multiple_of, clippy::too_many_arguments, clippy::doc_markdown)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant,
+        clippy::needless_range_loop,
+        clippy::manual_div_ceil,
+        clippy::manual_is_multiple_of,
+        clippy::too_many_arguments,
+        clippy::doc_markdown
+    )]
     use super::*;
-    use crate::core::*;
-    use crate::config::*;
-    use crate::utils::*;
-    use crate::dropout::*;
-    use crate::normalization::*;
-    use crate::regularizers::*;
-    use crate::decay::*;
-    use crate::earlystop::*;
-    use crate::stopping::*;
     use crate::augment::*;
-    use crate::perturb::*;
-    use crate::dropout_uncertainty::*;
-    use crate::label_smooth::*;
-    use crate::curriculum::*;
+    use crate::config::*;
     use crate::consistency::*;
-    use crate::rules::*;
-    use crate::registry::*;
-    use crate::train_hooks::*;
+    use crate::core::*;
+    use crate::curriculum::*;
+    use crate::decay::*;
+    use crate::dropout::*;
+    use crate::dropout_uncertainty::*;
+    use crate::earlystop::*;
+    use crate::label_smooth::*;
+    use crate::normalization::*;
     use crate::ops::*;
+    use crate::perturb::*;
     use crate::r#impl::*;
+    use crate::registry::*;
+    use crate::regularizers::*;
+    use crate::rules::*;
+    use crate::stopping::*;
+    use crate::train_hooks::*;
+    use crate::utils::*;
     use crate::VERSION;
     use brain_core::Tensor;
 }

@@ -1,7 +1,15 @@
 //! # Text Transformations, Casing, Transliteration, and Pipelines
 //!
 //! Case conversions, ASCII transliteration, regex-free pattern substitutions, profanity masking, and chainable pipelines.
-#![allow(missing_docs, unused_imports, unused_variables, dead_code, unused_mut, unused_comparisons, clippy::all)]
+#![allow(
+    missing_docs,
+    unused_imports,
+    unused_variables,
+    dead_code,
+    unused_mut,
+    unused_comparisons,
+    clippy::all
+)]
 
 use crate::utils::TextRng;
 use std::collections::HashSet;
@@ -32,21 +40,30 @@ pub fn case_transform(text: &str, kind: CaseKind) -> String {
             let mut result = Vec::new();
             for word in text.split_whitespace() {
                 let mut chars = word.chars();
-                let first = chars.next().map(|c| c.to_uppercase().to_string()).unwrap_or_default();
+                let first = chars
+                    .next()
+                    .map(|c| c.to_uppercase().to_string())
+                    .unwrap_or_default();
                 let rest: String = chars.as_str().to_lowercase();
                 result.push(format!("{}{}", first, rest));
             }
             result.join(" ")
         }
         CaseKind::Camel => {
-            let words: Vec<&str> = text.split(|c: char| c.is_whitespace() || c == '_' || c == '-').filter(|w| !w.is_empty()).collect();
+            let words: Vec<&str> = text
+                .split(|c: char| c.is_whitespace() || c == '_' || c == '-')
+                .filter(|w| !w.is_empty())
+                .collect();
             let mut result = String::new();
             for (i, &w) in words.iter().enumerate() {
                 if i == 0 {
                     result.push_str(&w.to_lowercase());
                 } else {
                     let mut chars = w.chars();
-                    let first = chars.next().map(|c| c.to_uppercase().to_string()).unwrap_or_default();
+                    let first = chars
+                        .next()
+                        .map(|c| c.to_uppercase().to_string())
+                        .unwrap_or_default();
                     let rest: String = chars.as_str().to_lowercase();
                     result.push_str(&first);
                     result.push_str(&rest);
@@ -55,12 +72,26 @@ pub fn case_transform(text: &str, kind: CaseKind) -> String {
             result
         }
         CaseKind::Snake => {
-            let words: Vec<&str> = text.split(|c: char| c.is_whitespace() || c == '_' || c == '-').filter(|w| !w.is_empty()).collect();
-            words.iter().map(|w| w.to_lowercase()).collect::<Vec<String>>().join("_")
+            let words: Vec<&str> = text
+                .split(|c: char| c.is_whitespace() || c == '_' || c == '-')
+                .filter(|w| !w.is_empty())
+                .collect();
+            words
+                .iter()
+                .map(|w| w.to_lowercase())
+                .collect::<Vec<String>>()
+                .join("_")
         }
         CaseKind::Kebab => {
-            let words: Vec<&str> = text.split(|c: char| c.is_whitespace() || c == '_' || c == '-').filter(|w| !w.is_empty()).collect();
-            words.iter().map(|w| w.to_lowercase()).collect::<Vec<String>>().join("-")
+            let words: Vec<&str> = text
+                .split(|c: char| c.is_whitespace() || c == '_' || c == '-')
+                .filter(|w| !w.is_empty())
+                .collect();
+            words
+                .iter()
+                .map(|w| w.to_lowercase())
+                .collect::<Vec<String>>()
+                .join("-")
         }
     }
 }
@@ -176,37 +207,51 @@ impl TextPipeline {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant, clippy::needless_range_loop, clippy::manual_div_ceil, clippy::manual_is_multiple_of, clippy::too_many_arguments, clippy::doc_markdown, clippy::excessive_precision, clippy::float_cmp, clippy::len_zero)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant,
+        clippy::needless_range_loop,
+        clippy::manual_div_ceil,
+        clippy::manual_is_multiple_of,
+        clippy::too_many_arguments,
+        clippy::doc_markdown,
+        clippy::excessive_precision,
+        clippy::float_cmp,
+        clippy::len_zero
+    )]
     use super::*;
-    use crate::core::*;
-    use crate::config::*;
-    use crate::utils::*;
-    use crate::ops::*;
-    use crate::vocab::*;
-    use crate::text_ops::*;
-    use crate::features::*;
-    use crate::similarity::*;
-    use crate::lm::*;
-    use crate::process::*;
-    use crate::optimize::*;
     use crate::analyze::*;
-    use crate::compute::*;
-    use crate::helper::*;
-    use crate::transform::*;
     use crate::builder::*;
-    use crate::tokenizer::*;
-    use crate::tokenizer::bpe::*;
-    use crate::tokenizer::sentencepiece::*;
-    use crate::tokenizer::wordpiece::*;
-    use crate::tokenizer::char::*;
-    use crate::tokenizer::trainer::*;
-    use crate::tokenizer::normalizer::*;
-    use crate::tokenizer::pretokenizer::*;
-    use crate::tokenizer::bytelevel::*;
-    use crate::tokenizer::post::*;
-    use crate::embedding::*;
-    use crate::embedding::pretrained::*;
+    use crate::compute::*;
+    use crate::config::*;
+    use crate::core::*;
     use crate::embedding::fasttext::*;
+    use crate::embedding::pretrained::*;
+    use crate::embedding::*;
+    use crate::features::*;
+    use crate::helper::*;
+    use crate::lm::*;
+    use crate::ops::*;
+    use crate::optimize::*;
+    use crate::process::*;
+    use crate::similarity::*;
+    use crate::text_ops::*;
+    use crate::tokenizer::bpe::*;
+    use crate::tokenizer::bytelevel::*;
+    use crate::tokenizer::char::*;
+    use crate::tokenizer::normalizer::*;
+    use crate::tokenizer::post::*;
+    use crate::tokenizer::pretokenizer::*;
+    use crate::tokenizer::sentencepiece::*;
+    use crate::tokenizer::trainer::*;
+    use crate::tokenizer::wordpiece::*;
+    use crate::tokenizer::*;
+    use crate::transform::*;
+    use crate::utils::*;
+    use crate::vocab::*;
     use crate::VERSION;
     use brain_core::Tensor;
 

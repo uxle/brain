@@ -1,11 +1,11 @@
 //! Numerical correctness tests for core brain-core tensor ops.
 
-use brain_core::Tensor;
 use brain_core::tensor::arithmetic as arith;
 use brain_core::tensor::conv;
 use brain_core::tensor::pool;
 use brain_core::tensor::reduction as red;
 use brain_core::tensor::special as spec;
+use brain_core::Tensor;
 
 fn approx(a: f64, b: f64) -> bool {
     (a - b).abs() < 1e-6
@@ -96,10 +96,7 @@ fn check_softmax_correctness() {
 
 #[test]
 fn check_max_pool2d() {
-    let input = Tensor::from_slice(
-        &[1.0, 3.0, 2.0, 4.0, 5.0, 7.0, 6.0, 8.0],
-        vec![1, 1, 4, 2],
-    );
+    let input = Tensor::from_slice(&[1.0, 3.0, 2.0, 4.0, 5.0, 7.0, 6.0, 8.0], vec![1, 1, 4, 2]);
     let out = pool::max_pool2d(&input, (2, 2), (2, 2), (0, 0));
     assert_eq!(out.shape(), &[1, 1, 2, 1]);
     // input 4x2:
@@ -112,10 +109,7 @@ fn check_max_pool2d() {
 
 #[test]
 fn check_avg_pool2d_no_pad() {
-    let input = Tensor::from_slice(
-        &[1.0, 3.0, 2.0, 4.0, 5.0, 7.0, 6.0, 8.0],
-        vec![1, 1, 4, 2],
-    );
+    let input = Tensor::from_slice(&[1.0, 3.0, 2.0, 4.0, 5.0, 7.0, 6.0, 8.0], vec![1, 1, 4, 2]);
     let out = pool::avg_pool2d(&input, (2, 2), (2, 2), (0, 0));
     assert_eq!(out.shape(), &[1, 1, 2, 1]);
     // top window: (1+3+2+4)/4 = 2.5
@@ -143,10 +137,7 @@ fn check_avg_pool2d_with_pad() {
 
 #[test]
 fn check_global_avg_pool2d() {
-    let input = Tensor::from_slice(
-        &[1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0],
-        vec![1, 1, 2, 4],
-    );
+    let input = Tensor::from_slice(&[1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0], vec![1, 1, 2, 4]);
     let out = pool::global_avg_pool2d(&input);
     assert_eq!(out.shape(), &[1, 1, 1, 1]);
     assert!(approx(out.get(0), 4.5));
@@ -179,8 +170,10 @@ fn check_batched_matmul_broadcast() {
                     expected += a_mat[i * 3 + k] * b_mat[k * 4 + j];
                 }
                 let got = c.get_3d(bb, i, j);
-                assert!(approx(got, expected),
-                    "matmul broadcast mismatch bb={bb} i={i} j={j}: got {got} expected {expected}");
+                assert!(
+                    approx(got, expected),
+                    "matmul broadcast mismatch bb={bb} i={i} j={j}: got {got} expected {expected}"
+                );
             }
         }
     }
@@ -227,11 +220,10 @@ fn check_broadcast_map2() {
     let c = arith::mul(&a, &b);
     assert_eq!(c.shape(), &[3, 4]);
     // c[i,j] = a[i]*b[j]
-    assert_eq!(c.to_vec(), vec![
-        10.0, 20.0, 30.0, 40.0,
-        20.0, 40.0, 60.0, 80.0,
-        30.0, 60.0, 90.0, 120.0,
-    ]);
+    assert_eq!(
+        c.to_vec(),
+        vec![10.0, 20.0, 30.0, 40.0, 20.0, 40.0, 60.0, 80.0, 30.0, 60.0, 90.0, 120.0,]
+    );
     // scalar broadcast: [2,2] + 100 -> all +100
     let m = Tensor::from_slice(&[1.0, 2.0, 3.0, 4.0], vec![2, 2]);
     let n = arith::add_scalar(&m, 100.0);
@@ -258,9 +250,15 @@ fn check_conv2d_output_size() {
 fn check_avg_pool_counts_valid_only() {
     // When padding adds zero elements to a window, the average should ideally
     // divide by the number of valid (non-padded) elements. Check behavior.
-    let input = Tensor::from_slice(&[1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0], vec![1, 1, 3, 3]);
+    let input = Tensor::from_slice(
+        &[1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0],
+        vec![1, 1, 3, 3],
+    );
     let out = pool::avg_pool2d(&input, (2, 2), (1, 1), (1, 1));
-    println!("avg_pool2d 3x3 with pad=1 2x2 stride1 out = {:?}", out.to_vec());
+    println!(
+        "avg_pool2d 3x3 with pad=1 2x2 stride1 out = {:?}",
+        out.to_vec()
+    );
 }
 
 #[test]
@@ -455,12 +453,12 @@ fn test_matrix_determinant_4x4_and_8x8_reference() {
     use brain_core::tensor::linalg::det;
 
     // Diagonal matrix with known det = product of diagonal
-    let diag4 = Tensor::from_slice(&[
-        2.0, 0.0, 0.0, 0.0,
-        0.0, 3.0, 0.0, 0.0,
-        0.0, 0.0, 4.0, 0.0,
-        0.0, 0.0, 0.0, 5.0,
-    ], vec![4, 4]);
+    let diag4 = Tensor::from_slice(
+        &[
+            2.0, 0.0, 0.0, 0.0, 0.0, 3.0, 0.0, 0.0, 0.0, 0.0, 4.0, 0.0, 0.0, 0.0, 0.0, 5.0,
+        ],
+        vec![4, 4],
+    );
     assert!(approx(det(&diag4), 120.0));
 
     // 8x8 identity scaled by 2 -> det = 2^8 = 256
@@ -474,13 +472,10 @@ fn test_matrix_determinant_4x4_and_8x8_reference() {
 
 #[test]
 fn test_svd_reconstruction_fidelity() {
-    use brain_core::tensor::linalg::{svd_symmetric, norm_frobenius};
+    use brain_core::tensor::linalg::{norm_frobenius, svd_symmetric};
 
     // Symmetric positive-definite matrix
-    let a = Tensor::from_slice(&[
-        4.0, 1.0,
-        1.0, 3.0,
-    ], vec![2, 2]);
+    let a = Tensor::from_slice(&[4.0, 1.0, 1.0, 3.0], vec![2, 2]);
 
     let svd_res = svd_symmetric(&a);
 
@@ -496,7 +491,11 @@ fn test_svd_reconstruction_fidelity() {
 
     let diff = arith::sub(&a, &recon);
     let frob_err = norm_frobenius(&diff);
-    assert!(frob_err < 1e-7, "SVD Frobenius reconstruction error too large: {}", frob_err);
+    assert!(
+        frob_err < 1e-7,
+        "SVD Frobenius reconstruction error too large: {}",
+        frob_err
+    );
 }
 
 #[test]
@@ -526,6 +525,9 @@ fn test_fft_ifft_roundtrip_power_of_two_and_arbitrary() {
     dft(&mut re2, &mut im2, true);
 
     for (a, b) in original2.iter().zip(re2.iter()) {
-        assert!((a - b).abs() < 1e-6, "Arbitrary length DFT roundtrip failed");
+        assert!(
+            (a - b).abs() < 1e-6,
+            "Arbitrary length DFT roundtrip failed"
+        );
     }
 }

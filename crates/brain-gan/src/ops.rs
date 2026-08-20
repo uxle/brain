@@ -40,7 +40,11 @@ pub fn batch_norm(t: &Tensor, eps: f64) -> Tensor {
 
 /// Leaky ReLU activation.
 pub fn leaky_relu(t: &Tensor, neg_slope: f64) -> Tensor {
-    let data: Vec<f64> = t.to_vec().iter().map(|&v| if v >= 0.0 { v } else { neg_slope * v }).collect();
+    let data: Vec<f64> = t
+        .to_vec()
+        .iter()
+        .map(|&v| if v >= 0.0 { v } else { neg_slope * v })
+        .collect();
     Tensor::from_vec(data, t.shape().to_vec())
 }
 
@@ -58,7 +62,11 @@ pub fn tanh_act(t: &Tensor) -> Tensor {
 
 /// Sigmoid activation.
 pub fn sigmoid_act(t: &Tensor) -> Tensor {
-    let data: Vec<f64> = t.to_vec().iter().map(|v| 1.0 / (1.0 + (-v).exp())).collect();
+    let data: Vec<f64> = t
+        .to_vec()
+        .iter()
+        .map(|v| 1.0 / (1.0 + (-v).exp()))
+        .collect();
     Tensor::from_vec(data, t.shape().to_vec())
 }
 
@@ -82,7 +90,9 @@ pub fn spectral_norm_apply(w: &Tensor, u: &Tensor) -> (Tensor, Tensor, f64) {
         }
     }
     let vnorm = v.iter().map(|x| x * x).sum::<f64>().sqrt().max(1e-8);
-    for vj in v.iter_mut() { *vj /= vnorm; }
+    for vj in v.iter_mut() {
+        *vj /= vnorm;
+    }
     // u_new = W v / ||W v||
     let mut u_new = vec![0.0f64; rows];
     for i in 0..rows {
@@ -92,7 +102,9 @@ pub fn spectral_norm_apply(w: &Tensor, u: &Tensor) -> (Tensor, Tensor, f64) {
     }
     let sigma: f64 = u_new.iter().zip(udata.iter()).map(|(a, b)| a * b).sum();
     let unorm = u_new.iter().map(|x| x * x).sum::<f64>().sqrt().max(1e-8);
-    for ui in u_new.iter_mut() { *ui /= unorm; }
+    for ui in u_new.iter_mut() {
+        *ui /= unorm;
+    }
     let _sigma_t = Tensor::scalar(sigma.max(1e-8));
     let w_sn_data: Vec<f64> = wdata.iter().map(|v| v / sigma.max(1e-8)).collect();
     let w_sn = Tensor::from_vec(w_sn_data, w.shape().to_vec());
@@ -103,13 +115,19 @@ pub fn spectral_norm_apply(w: &Tensor, u: &Tensor) -> (Tensor, Tensor, f64) {
 pub fn interpolate_latents(a: &Tensor, b: &Tensor, alpha: f64) -> Tensor {
     let ad = a.to_vec();
     let bd = b.to_vec();
-    let data: Vec<f64> = ad.iter().zip(bd.iter()).map(|(x, y)| alpha * x + (1.0 - alpha) * y).collect();
+    let data: Vec<f64> = ad
+        .iter()
+        .zip(bd.iter())
+        .map(|(x, y)| alpha * x + (1.0 - alpha) * y)
+        .collect();
     Tensor::from_vec(data, a.shape().to_vec())
 }
 
 /// Assembles a batch of images into a grid tensor (vertical concatenation, simplified).
 pub fn image_grid(images: &[Tensor]) -> Tensor {
-    if images.is_empty() { return Tensor::zeros(vec![1]); }
+    if images.is_empty() {
+        return Tensor::zeros(vec![1]);
+    }
     let total: Vec<f64> = images.iter().flat_map(|img| img.to_vec()).collect();
     let total_len = total.len();
     Tensor::from_vec(total, vec![total_len])
@@ -119,11 +137,15 @@ pub fn image_grid(images: &[Tensor]) -> Tensor {
 pub fn resize_like(t: &Tensor, new_size: usize) -> Tensor {
     let data = t.to_vec();
     let old_size = data.len();
-    if old_size == 0 { return Tensor::zeros(vec![new_size]); }
-    let out: Vec<f64> = (0..new_size).map(|i| {
-        let src = (i * old_size / new_size).min(old_size - 1);
-        data[src]
-    }).collect();
+    if old_size == 0 {
+        return Tensor::zeros(vec![new_size]);
+    }
+    let out: Vec<f64> = (0..new_size)
+        .map(|i| {
+            let src = (i * old_size / new_size).min(old_size - 1);
+            data[src]
+        })
+        .collect();
     Tensor::from_vec(out, vec![new_size])
 }
 
@@ -134,7 +156,13 @@ pub fn mix_style(s1: &Tensor, s2: &Tensor, ratio: f64) -> Tensor {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

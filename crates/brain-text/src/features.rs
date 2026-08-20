@@ -1,7 +1,15 @@
 //! # Text Feature Extraction: Bag-of-Words, TF-IDF, and BM25
 //!
 //! Vector space representations, inverse document frequency weighting, and BM25 relevance scoring.
-#![allow(missing_docs, unused_imports, unused_variables, dead_code, unused_mut, unused_comparisons, clippy::all)]
+#![allow(
+    missing_docs,
+    unused_imports,
+    unused_variables,
+    dead_code,
+    unused_mut,
+    unused_comparisons,
+    clippy::all
+)]
 
 use crate::vocab::Vocab;
 use std::collections::{HashMap, HashSet};
@@ -329,7 +337,8 @@ impl Bm25 {
                 let idf = self.idf.get(term).copied().unwrap_or(0.0);
                 let tf_f = tf as f64;
                 let numerator = tf_f * (self.k1 + 1.0);
-                let denominator = tf_f + self.k1 * (1.0 - self.b + self.b * (doc_len / self.avg_doc_len));
+                let denominator =
+                    tf_f + self.k1 * (1.0 - self.b + self.b * (doc_len / self.avg_doc_len));
                 score += idf * (numerator / denominator);
             }
         }
@@ -409,45 +418,67 @@ impl HashingVectorizer {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant, clippy::needless_range_loop, clippy::manual_div_ceil, clippy::manual_is_multiple_of, clippy::too_many_arguments, clippy::doc_markdown, clippy::excessive_precision, clippy::float_cmp, clippy::len_zero)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant,
+        clippy::needless_range_loop,
+        clippy::manual_div_ceil,
+        clippy::manual_is_multiple_of,
+        clippy::too_many_arguments,
+        clippy::doc_markdown,
+        clippy::excessive_precision,
+        clippy::float_cmp,
+        clippy::len_zero
+    )]
     use super::*;
-    use crate::core::*;
-    use crate::config::*;
-    use crate::utils::*;
-    use crate::ops::*;
-    use crate::vocab::*;
-    use crate::text_ops::*;
-    use crate::features::*;
-    use crate::similarity::*;
-    use crate::lm::*;
-    use crate::process::*;
-    use crate::optimize::*;
     use crate::analyze::*;
-    use crate::compute::*;
-    use crate::helper::*;
-    use crate::transform::*;
     use crate::builder::*;
-    use crate::tokenizer::*;
-    use crate::tokenizer::bpe::*;
-    use crate::tokenizer::sentencepiece::*;
-    use crate::tokenizer::wordpiece::*;
-    use crate::tokenizer::char::*;
-    use crate::tokenizer::trainer::*;
-    use crate::tokenizer::normalizer::*;
-    use crate::tokenizer::pretokenizer::*;
-    use crate::tokenizer::bytelevel::*;
-    use crate::tokenizer::post::*;
-    use crate::embedding::*;
-    use crate::embedding::pretrained::*;
+    use crate::compute::*;
+    use crate::config::*;
+    use crate::core::*;
     use crate::embedding::fasttext::*;
+    use crate::embedding::pretrained::*;
+    use crate::embedding::*;
+    use crate::features::*;
+    use crate::helper::*;
+    use crate::lm::*;
+    use crate::ops::*;
+    use crate::optimize::*;
+    use crate::process::*;
+    use crate::similarity::*;
+    use crate::text_ops::*;
+    use crate::tokenizer::bpe::*;
+    use crate::tokenizer::bytelevel::*;
+    use crate::tokenizer::char::*;
+    use crate::tokenizer::normalizer::*;
+    use crate::tokenizer::post::*;
+    use crate::tokenizer::pretokenizer::*;
+    use crate::tokenizer::sentencepiece::*;
+    use crate::tokenizer::trainer::*;
+    use crate::tokenizer::wordpiece::*;
+    use crate::tokenizer::*;
+    use crate::transform::*;
+    use crate::utils::*;
+    use crate::vocab::*;
     use crate::VERSION;
     use brain_core::Tensor;
 
     #[test]
     fn test_feature_extractors_1() {
         let corpus = vec![
-            vec!["machine".to_string(), "learning".to_string(), "model_1".to_string()],
-            vec!["deep".to_string(), "learning".to_string(), "neural".to_string()],
+            vec![
+                "machine".to_string(),
+                "learning".to_string(),
+                "model_1".to_string(),
+            ],
+            vec![
+                "deep".to_string(),
+                "learning".to_string(),
+                "neural".to_string(),
+            ],
         ];
 
         let mut bow = BagOfWords::default();

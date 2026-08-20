@@ -62,19 +62,40 @@ impl OpKind {
     pub fn is_elementwise(&self) -> bool {
         matches!(
             self,
-            OpKind::Add | OpKind::Sub | OpKind::Mul | OpKind::Div
-            | OpKind::Neg | OpKind::Relu | OpKind::Sigmoid | OpKind::Tanh | OpKind::Gelu
+            OpKind::Add
+                | OpKind::Sub
+                | OpKind::Mul
+                | OpKind::Div
+                | OpKind::Neg
+                | OpKind::Relu
+                | OpKind::Sigmoid
+                | OpKind::Tanh
+                | OpKind::Gelu
         )
     }
 
     pub fn min_inputs(&self) -> usize {
         match self {
             OpKind::Constant => 0,
-            OpKind::Neg | OpKind::Relu | OpKind::Sigmoid | OpKind::Tanh | OpKind::Gelu
-            | OpKind::MaxPool2D | OpKind::AvgPool2D | OpKind::Softmax
-            | OpKind::Reshape | OpKind::Transpose | OpKind::Flatten => 1,
-            OpKind::Add | OpKind::Sub | OpKind::Mul | OpKind::Div | OpKind::MatMul
-            | OpKind::Conv2D | OpKind::BatchNorm | OpKind::LayerNorm => 2,
+            OpKind::Neg
+            | OpKind::Relu
+            | OpKind::Sigmoid
+            | OpKind::Tanh
+            | OpKind::Gelu
+            | OpKind::MaxPool2D
+            | OpKind::AvgPool2D
+            | OpKind::Softmax
+            | OpKind::Reshape
+            | OpKind::Transpose
+            | OpKind::Flatten => 1,
+            OpKind::Add
+            | OpKind::Sub
+            | OpKind::Mul
+            | OpKind::Div
+            | OpKind::MatMul
+            | OpKind::Conv2D
+            | OpKind::BatchNorm
+            | OpKind::LayerNorm => 2,
             OpKind::Custom => 1,
         }
     }
@@ -88,7 +109,9 @@ pub struct OpRegistry {
 
 impl OpRegistry {
     pub fn new() -> Self {
-        let mut reg = Self { ops: HashMap::new() };
+        let mut reg = Self {
+            ops: HashMap::new(),
+        };
         reg.register("add", OpKind::Add);
         reg.register("sub", OpKind::Sub);
         reg.register("mul", OpKind::Mul);
@@ -111,7 +134,13 @@ impl OpRegistry {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

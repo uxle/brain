@@ -3,16 +3,16 @@
 //! High-level stacked GNN models: GcnModel, GatModel, SageModel.
 #![allow(missing_docs)]
 
-pub mod gin_model;
 pub mod edge_model;
+pub mod gin_model;
 
-pub use gin_model::GinModel;
 pub use edge_model::{EdgeClassifier, EdgeRegressor};
+pub use gin_model::GinModel;
 
-use brain_core::Tensor;
 use crate::graph::Graph;
-use crate::layers::{GcnLayer, GatLayer, SageLayer, GnnLayer};
+use crate::layers::{GatLayer, GcnLayer, GnnLayer, SageLayer};
 use crate::readout::global_mean_pool;
+use brain_core::Tensor;
 
 /// Stacked GCN Model.
 pub struct GcnModel {
@@ -29,7 +29,10 @@ impl GcnModel {
             curr_in = hidden_dim;
         }
         let classifier_weight = Tensor::zeros(vec![out_dim, hidden_dim]);
-        Self { layers, classifier_weight }
+        Self {
+            layers,
+            classifier_weight,
+        }
     }
 
     pub fn forward_node(&self, graph: &Graph) -> Tensor {
@@ -99,7 +102,13 @@ impl SageModel {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

@@ -54,7 +54,10 @@ pub fn norm_l2(a: &Tensor) -> f64 {
 
 /// Computes the Infinity norm (maximum absolute value).
 pub fn norm_linf(a: &Tensor) -> f64 {
-    a.data().iter().map(|&v| v.abs()).fold(f64::NEG_INFINITY, f64::max)
+    a.data()
+        .iter()
+        .map(|&v| v.abs())
+        .fold(f64::NEG_INFINITY, f64::max)
 }
 
 /// Computes the Frobenius norm of a matrix.
@@ -247,7 +250,11 @@ pub fn lu_solve(l: &Tensor, u: &Tensor, p: &[usize], b: &Tensor) -> Tensor {
             sum -= u.get_2d(i, j) * x[j];
         }
         let u_diag = u.get_2d(i, i);
-        x[i] = if u_diag.abs() > 1e-15 { sum / u_diag } else { 0.0 };
+        x[i] = if u_diag.abs() > 1e-15 {
+            sum / u_diag
+        } else {
+            0.0
+        };
     }
 
     Tensor::new(x, vec![n])
@@ -275,7 +282,11 @@ pub fn qr(a: &Tensor) -> (Tensor, Tensor) {
             continue;
         }
 
-        let alpha = if r.get_2d(k, k) >= 0.0 { -norm_x } else { norm_x };
+        let alpha = if r.get_2d(k, k) >= 0.0 {
+            -norm_x
+        } else {
+            norm_x
+        };
         let mut v = vec![0.0; m];
         v[k] = r.get_2d(k, k) - alpha;
         for i in k + 1..m {
@@ -519,7 +530,11 @@ pub fn pinv(a: &Tensor) -> Tensor {
 pub fn condition_number(a: &Tensor) -> f64 {
     let svd = svd_symmetric(a);
     let max_s = svd.singular_values.iter().copied().fold(0.0f64, f64::max);
-    let min_s = svd.singular_values.iter().copied().fold(f64::INFINITY, f64::min);
+    let min_s = svd
+        .singular_values
+        .iter()
+        .copied()
+        .fold(f64::INFINITY, f64::min);
     if min_s < 1e-15 {
         f64::INFINITY
     } else {
@@ -529,7 +544,10 @@ pub fn condition_number(a: &Tensor) -> f64 {
 
 /// Computes matrix power A^n for integer n.
 pub fn matrix_power(a: &Tensor, n: i32) -> Tensor {
-    assert!(a.ndim() == 2 && a.shape()[0] == a.shape()[1], "matrix_power requires square matrix");
+    assert!(
+        a.ndim() == 2 && a.shape()[0] == a.shape()[1],
+        "matrix_power requires square matrix"
+    );
     let dim = a.shape()[0];
     if n == 0 {
         return Tensor::eye(dim);
@@ -600,16 +618,24 @@ mod tests {
     fn test_det_and_logdet_4x4_and_8x8_reference() {
         // 4x4 triangular matrix: det is product of diagonals
         // Diag: 2.0, 3.0, 5.0, 7.0 => det = 210.0
-        let a4 = Tensor::from_slice(&[
-            2.0, 1.0, 3.0, 4.0,
-            0.0, 3.0, 2.0, 1.0,
-            0.0, 0.0, 5.0, 6.0,
-            0.0, 0.0, 0.0, 7.0,
-        ], vec![4, 4]);
+        let a4 = Tensor::from_slice(
+            &[
+                2.0, 1.0, 3.0, 4.0, 0.0, 3.0, 2.0, 1.0, 0.0, 0.0, 5.0, 6.0, 0.0, 0.0, 0.0, 7.0,
+            ],
+            vec![4, 4],
+        );
         let d4 = det(&a4);
-        assert!((d4 - 210.0).abs() < 1e-9, "det(4x4) expected 210.0, got {}", d4);
+        assert!(
+            (d4 - 210.0).abs() < 1e-9,
+            "det(4x4) expected 210.0, got {}",
+            d4
+        );
         let ld4 = logdet(&a4);
-        assert!((ld4 - 210.0f64.ln()).abs() < 1e-9, "logdet(4x4) expected ln(210), got {}", ld4);
+        assert!(
+            (ld4 - 210.0f64.ln()).abs() < 1e-9,
+            "logdet(4x4) expected ln(210), got {}",
+            ld4
+        );
 
         // 8x8 diagonal matrix: Diag: [1, 2, 3, 4, 5, 6, 7, 8] => det = 40320.0
         let mut data8 = vec![0.0; 64];
@@ -621,20 +647,26 @@ mod tests {
         }
         let a8 = Tensor::from_slice(&data8, vec![8, 8]);
         let d8 = det(&a8);
-        assert!((d8 - expected_det).abs() < 1e-7, "det(8x8) expected {}, got {}", expected_det, d8);
+        assert!(
+            (d8 - expected_det).abs() < 1e-7,
+            "det(8x8) expected {}, got {}",
+            expected_det,
+            d8
+        );
         let ld8 = logdet(&a8);
-        assert!((ld8 - expected_det.ln()).abs() < 1e-7, "logdet(8x8) expected ln({}), got {}", expected_det, ld8);
+        assert!(
+            (ld8 - expected_det.ln()).abs() < 1e-7,
+            "logdet(8x8) expected ln({}), got {}",
+            expected_det,
+            ld8
+        );
     }
 
     #[test]
     fn test_svd_symmetric_reconstruction() {
         // Symmetric positive semi-definite matrix A = M^T * M
-        let m = Tensor::from_slice(&[
-            1.0, 2.0, 0.5,
-            2.0, 3.0, 1.0,
-            0.5, 1.0, 4.0,
-        ], vec![3, 3]);
-        
+        let m = Tensor::from_slice(&[1.0, 2.0, 0.5, 2.0, 3.0, 1.0, 0.5, 1.0, 4.0], vec![3, 3]);
+
         let svd = svd_symmetric(&m);
         // Reconstruct A = U * S * V^T
         let mut u_s = svd.u.clone();
@@ -655,23 +687,26 @@ mod tests {
             }
         }
         let diff_frob = diff_frob.sqrt();
-        assert!(diff_frob < 1e-6, "SVD reconstruction Frobenius norm diff = {}", diff_frob);
+        assert!(
+            diff_frob < 1e-6,
+            "SVD reconstruction Frobenius norm diff = {}",
+            diff_frob
+        );
     }
 
     #[test]
     fn test_lu_decomposition_and_solve() {
-        let a = Tensor::from_slice(&[
-            3.0, 2.0, -1.0,
-            2.0, -2.0, 4.0,
-            -1.0, 0.5, -1.0,
-        ], vec![3, 3]);
+        let a = Tensor::from_slice(
+            &[3.0, 2.0, -1.0, 2.0, -2.0, 4.0, -1.0, 0.5, -1.0],
+            vec![3, 3],
+        );
         let (l, u, p) = lu(&a);
-        
+
         // Solve A * x = b where b = [1.0, -2.0, 0.0]
         let b = Tensor::from_slice(&[1.0, -2.0, 0.0], vec![3]);
         let x = lu_solve(&l, &u, &p, &b);
         assert_eq!(x.shape(), &[3]);
-        
+
         let ax = crate::tensor::arithmetic::matmul(&a, &x.reshape(vec![3, 1]));
         assert!((ax.get(0) - 1.0).abs() < 1e-5);
         assert!((ax.get(1) - (-2.0)).abs() < 1e-5);

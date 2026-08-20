@@ -3,9 +3,9 @@
 //! Xie et al., 2022: "Adan: Adaptive Nesterov Momentum Algorithm for Faster Optimizing Deep Models".
 //! Tracks gradient, gradient differences, and second moments for accelerated convergence.
 
-use std::collections::HashMap;
+use crate::optimizer::{OptimResult, Optimizer, OptimizerError, ParamGroup, StepInfo};
 use brain_core::Tensor;
-use crate::optimizer::{Optimizer, OptimizerError, OptimResult, StepInfo, ParamGroup};
+use std::collections::HashMap;
 
 /// Configuration parameters for Adan optimizer.
 #[derive(Debug, Clone, PartialEq)]
@@ -63,7 +63,9 @@ impl Optimizer for Adan {
             return Err(OptimizerError::EmptyParamGroup);
         }
         if params.len() != grads.len() {
-            return Err(OptimizerError::InvalidHyperparameter("Length mismatch".into()));
+            return Err(OptimizerError::InvalidHyperparameter(
+                "Length mismatch".into(),
+            ));
         }
 
         self.step_count += 1;
@@ -95,12 +97,18 @@ impl Optimizer for Adan {
                 let m = self.exp_avg_m.entry(p_idx).or_insert_with(|| vec![0.0; n]);
                 let v = self.exp_avg_v.entry(p_idx).or_insert_with(|| vec![0.0; n]);
                 let sq = self.exp_avg_n.entry(p_idx).or_insert_with(|| vec![0.0; n]);
-                let prev_g = self.prev_grad.entry(p_idx).or_insert_with(|| g_data.to_vec());
+                let prev_g = self
+                    .prev_grad
+                    .entry(p_idx)
+                    .or_insert_with(|| g_data.to_vec());
 
                 for i in 0..n {
                     let grad_val = g_data[i];
                     if grad_val.is_nan() || grad_val.is_infinite() {
-                        return Err(OptimizerError::NonFiniteGradient { param_id: p_idx, value: grad_val });
+                        return Err(OptimizerError::NonFiniteGradient {
+                            param_id: p_idx,
+                            value: grad_val,
+                        });
                     }
                     total_grad_norm_sq += grad_val * grad_val;
                     let grad_diff = grad_val - prev_g[i];
@@ -133,7 +141,10 @@ impl Optimizer for Adan {
     }
 
     fn get_lr(&self) -> f64 {
-        self.param_groups.first().map(|g| g.effective_lr()).unwrap_or(self.config.lr)
+        self.param_groups
+            .first()
+            .map(|g| g.effective_lr())
+            .unwrap_or(self.config.lr)
     }
 
     fn set_lr(&mut self, lr: f64) {
@@ -167,13 +178,22 @@ impl Optimizer for Adan {
     fn state_dict(&self) -> HashMap<String, Tensor> {
         let mut map = HashMap::new();
         for (idx, buf) in &self.exp_avg_m {
-            map.insert(format!("adan_m_{}", idx), Tensor::from_slice(buf, vec![buf.len()]));
+            map.insert(
+                format!("adan_m_{}", idx),
+                Tensor::from_slice(buf, vec![buf.len()]),
+            );
         }
         for (idx, buf) in &self.exp_avg_v {
-            map.insert(format!("adan_v_{}", idx), Tensor::from_slice(buf, vec![buf.len()]));
+            map.insert(
+                format!("adan_v_{}", idx),
+                Tensor::from_slice(buf, vec![buf.len()]),
+            );
         }
         for (idx, buf) in &self.exp_avg_n {
-            map.insert(format!("adan_n_{}", idx), Tensor::from_slice(buf, vec![buf.len()]));
+            map.insert(
+                format!("adan_n_{}", idx),
+                Tensor::from_slice(buf, vec![buf.len()]),
+            );
         }
         map
     }

@@ -3,11 +3,11 @@
 //! Offline calibration -> scale freezing -> integer-only execution.
 #![allow(missing_docs)]
 
-use brain_core::Tensor;
-use super::calibration::{MinMaxObserver, Observer, CalibrationConfig};
+use super::calibration::{CalibrationConfig, MinMaxObserver, Observer};
 use super::config::StaticConfig;
 use super::core::{QParams, QuantError, QuantResult, QuantTensor};
 use super::utils::quantize_val;
+use brain_core::Tensor;
 
 /// Static Quantization Manager coordinating calibration and layer quantization.
 #[derive(Debug, Clone)]
@@ -59,13 +59,23 @@ impl StaticQuantizer {
             q_data.push(quantize_val(v, scale, zp, qmin, qmax));
         }
 
-        Ok(QuantTensor::new(q_data, tensor.shape().to_vec(), params.clone()))
+        Ok(QuantTensor::new(
+            q_data,
+            tensor.shape().to_vec(),
+            params.clone(),
+        ))
     }
 }
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

@@ -28,7 +28,9 @@ pub struct FlacStreamInfo {
 /// Parses FLAC metadata headers from raw bytes.
 pub fn parse_flac_metadata(bytes: &[u8]) -> BrainResult<FlacStreamInfo> {
     if bytes.len() < 42 {
-        return Err(BrainError::invalid_value("FLAC stream shorter than minimum header"));
+        return Err(BrainError::invalid_value(
+            "FLAC stream shorter than minimum header",
+        ));
     }
     if &bytes[0..4] != b"fLaC" {
         return Err(BrainError::invalid_value("invalid FLAC magic identifier"));
@@ -38,7 +40,9 @@ pub fn parse_flac_metadata(bytes: &[u8]) -> BrainResult<FlacStreamInfo> {
     let block_header = bytes[4];
     let block_type = block_header & 0x7F;
     if block_type != 0 {
-        return Err(BrainError::invalid_value("first FLAC metadata block must be STREAMINFO (type 0)"));
+        return Err(BrainError::invalid_value(
+            "first FLAC metadata block must be STREAMINFO (type 0)",
+        ));
     }
 
     let min_block_size = u16::from_be_bytes(bytes[8..10].try_into().unwrap());

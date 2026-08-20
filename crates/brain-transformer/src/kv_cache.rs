@@ -1,7 +1,15 @@
 //! # Key-Value (KV) Cache for High-Throughput Autoregressive Inference
 //!
 //! Multi-layer cached state management preventing redundant key/value recomputation during sequential token generation.
-#![allow(missing_docs, unused_imports, unused_variables, dead_code, unused_mut, unused_comparisons, clippy::all)]
+#![allow(
+    missing_docs,
+    unused_imports,
+    unused_variables,
+    dead_code,
+    unused_mut,
+    unused_comparisons,
+    clippy::all
+)]
 
 use crate::core::{TransformerError, TransformerResult};
 use brain_core::Tensor;
@@ -54,7 +62,12 @@ pub struct LayerKvCache {
 
 impl LayerKvCache {
     /// Creates a new `LayerKvCache` with pre-allocated memory.
-    pub fn new(batch_size: usize, num_kv_heads: usize, head_dim: usize, max_seq_len: usize) -> Self {
+    pub fn new(
+        batch_size: usize,
+        num_kv_heads: usize,
+        head_dim: usize,
+        max_seq_len: usize,
+    ) -> Self {
         Self {
             key_cache: Vec::with_capacity(batch_size * num_kv_heads * max_seq_len * head_dim),
             value_cache: Vec::with_capacity(batch_size * num_kv_heads * max_seq_len * head_dim),
@@ -93,20 +106,29 @@ impl LayerKvCache {
         } else {
             // Interleave append across batch and heads
             let total_len = self.current_seq_len + new_len;
-            let mut updated_k = vec![0.0f64; self.batch_size * self.num_kv_heads * total_len * self.head_dim];
-            let mut updated_v = vec![0.0f64; self.batch_size * self.num_kv_heads * total_len * self.head_dim];
+            let mut updated_k =
+                vec![0.0f64; self.batch_size * self.num_kv_heads * total_len * self.head_dim];
+            let mut updated_v =
+                vec![0.0f64; self.batch_size * self.num_kv_heads * total_len * self.head_dim];
 
             for b in 0..self.batch_size {
                 for h in 0..self.num_kv_heads {
-                    let old_offset = (b * self.num_kv_heads + h) * self.current_seq_len * self.head_dim;
+                    let old_offset =
+                        (b * self.num_kv_heads + h) * self.current_seq_len * self.head_dim;
                     let new_offset = (b * self.num_kv_heads + h) * new_len * self.head_dim;
                     let out_offset = (b * self.num_kv_heads + h) * total_len * self.head_dim;
 
                     // Copy old cache
                     updated_k[out_offset..out_offset + self.current_seq_len * self.head_dim]
-                        .copy_from_slice(&self.key_cache[old_offset..old_offset + self.current_seq_len * self.head_dim]);
+                        .copy_from_slice(
+                            &self.key_cache
+                                [old_offset..old_offset + self.current_seq_len * self.head_dim],
+                        );
                     updated_v[out_offset..out_offset + self.current_seq_len * self.head_dim]
-                        .copy_from_slice(&self.value_cache[old_offset..old_offset + self.current_seq_len * self.head_dim]);
+                        .copy_from_slice(
+                            &self.value_cache
+                                [old_offset..old_offset + self.current_seq_len * self.head_dim],
+                        );
 
                     // Append new chunk
                     let append_out_offset = out_offset + self.current_seq_len * self.head_dim;
@@ -199,40 +221,55 @@ impl KvCache {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant, clippy::needless_range_loop, clippy::manual_div_ceil, clippy::manual_is_multiple_of, clippy::too_many_arguments, clippy::doc_markdown, clippy::excessive_precision, clippy::float_cmp, clippy::len_zero, clippy::all)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant,
+        clippy::needless_range_loop,
+        clippy::manual_div_ceil,
+        clippy::manual_is_multiple_of,
+        clippy::too_many_arguments,
+        clippy::doc_markdown,
+        clippy::excessive_precision,
+        clippy::float_cmp,
+        clippy::len_zero,
+        clippy::all
+    )]
     use super::*;
-    use crate::core::*;
-    use crate::config::*;
-    use crate::utils::*;
-    use crate::ops::*;
-    use crate::attention::*;
-    use crate::attention::scaled::*;
-    use crate::attention::multi_head::*;
-    use crate::attention::relative::*;
     use crate::attention::flash_lite::*;
+    use crate::attention::multi_head::*;
     use crate::attention::multi_query::*;
+    use crate::attention::relative::*;
+    use crate::attention::scaled::*;
     use crate::attention::xformers_lite::*;
-    use crate::position::*;
-    use crate::position::rope::*;
-    use crate::position::alibi::*;
-    use crate::position::learned::*;
+    use crate::attention::*;
+    use crate::builder::*;
+    use crate::config::*;
+    use crate::core::*;
+    use crate::decoder::cross::*;
+    use crate::decoder::layer::*;
+    use crate::decoder::*;
     use crate::embedding_layers::*;
-    use crate::ffn::*;
-    use crate::encoder::*;
     use crate::encoder::block::*;
     use crate::encoder::layer::*;
-    use crate::decoder::*;
-    use crate::decoder::layer::*;
-    use crate::decoder::cross::*;
+    use crate::encoder::*;
+    use crate::ffn::*;
+    use crate::generate::*;
     use crate::head::*;
     use crate::kv_cache::*;
-    use crate::generate::*;
-    use crate::models::*;
     use crate::models::bert_lite::*;
     use crate::models::gpt_lite::*;
-    use crate::models::t5_lite::*;
     use crate::models::llama_lite::*;
-    use crate::builder::*;
+    use crate::models::t5_lite::*;
+    use crate::models::*;
+    use crate::ops::*;
+    use crate::position::alibi::*;
+    use crate::position::learned::*;
+    use crate::position::rope::*;
+    use crate::position::*;
+    use crate::utils::*;
     use brain_core::Tensor;
 
     #[test]

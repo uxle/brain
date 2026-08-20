@@ -8,13 +8,13 @@ pub mod ce;
 pub mod focal;
 pub mod other;
 
-pub use bce::{BCELoss, BCEWithLogitsLoss, BCEConfig};
-pub use ce::{CrossEntropyLoss, CrossEntropyConfig};
-pub use focal::{FocalLoss, FocalConfig};
-pub use other::{HingeLoss, KLDivergenceLoss, ClassLossKind};
+pub use bce::{BCEConfig, BCELoss, BCEWithLogitsLoss};
+pub use ce::{CrossEntropyConfig, CrossEntropyLoss};
+pub use focal::{FocalConfig, FocalLoss};
+pub use other::{ClassLossKind, HingeLoss, KLDivergenceLoss};
 
-use brain_core::Tensor;
 use crate::core::{LossResult, Reduction};
+use brain_core::Tensor;
 
 /// Configuration for classification loss algorithms.
 #[derive(Debug, Clone)]
@@ -42,7 +42,11 @@ pub trait ClassificationLoss: Send + Sync {
     fn compute(&self, logits: &Tensor, targets: &[usize]) -> LossResult<Tensor>;
 
     /// Computes differentiable classification loss from logits `Value` and targets [N].
-    fn forward_value(&self, logits: &brain_autograd::Value, targets: &[usize]) -> LossResult<brain_autograd::Value> {
+    fn forward_value(
+        &self,
+        logits: &brain_autograd::Value,
+        targets: &[usize],
+    ) -> LossResult<brain_autograd::Value> {
         let t_loss = self.compute(logits.data(), targets)?;
         Ok(brain_autograd::Value::new(t_loss, logits.requires_grad()))
     }
@@ -50,7 +54,13 @@ pub trait ClassificationLoss: Send + Sync {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

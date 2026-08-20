@@ -20,7 +20,9 @@ pub fn to_json(graph: &GraphIr) -> String {
         out.push_str(&format!("      \"inputs\": {:?},\n", node.inputs));
         out.push_str(&format!("      \"outputs\": {:?}\n", node.outputs));
         out.push_str("    }");
-        if i + 1 < graph.nodes.len() { out.push(','); }
+        if i + 1 < graph.nodes.len() {
+            out.push(',');
+        }
         out.push('\n');
     }
 
@@ -33,7 +35,13 @@ pub fn to_json(graph: &GraphIr) -> String {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

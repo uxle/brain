@@ -16,13 +16,8 @@ pub fn conv2d(
     padding: (usize, usize),
 ) -> Value {
     let bias_tensor = bias.map(|b| b.data());
-    let out_tensor = brain_core::tensor::conv::conv2d(
-        input.data(),
-        weight.data(),
-        bias_tensor,
-        stride,
-        padding,
-    );
+    let out_tensor =
+        brain_core::tensor::conv::conv2d(input.data(), weight.data(), bias_tensor, stride, padding);
     let requires_grad = input.requires_grad()
         || weight.requires_grad()
         || bias.map(|b| b.requires_grad()).unwrap_or(false);
@@ -87,7 +82,11 @@ pub fn grad_conv2d(
 ) -> BrainResult<(Tensor, Tensor, Option<Tensor>)> {
     assert_eq!(input.ndim(), 4, "conv2d input must be 4D (N, C, H, W)");
     assert_eq!(weight.ndim(), 4, "conv2d weight must be 4D (O, C, KH, KW)");
-    assert_eq!(grad_output.ndim(), 4, "conv2d grad_output must be 4D (N, O, H_out, W_out)");
+    assert_eq!(
+        grad_output.ndim(),
+        4,
+        "conv2d grad_output must be 4D (N, O, H_out, W_out)"
+    );
 
     let (n, in_c, in_h, in_w) = (
         input.shape()[0],
@@ -172,9 +171,21 @@ pub fn grad_conv_transpose2d(
     stride: (usize, usize),
     padding: (usize, usize),
 ) -> BrainResult<(Tensor, Tensor, Option<Tensor>)> {
-    assert_eq!(input.ndim(), 4, "conv_transpose2d input must be 4D (N, C_in, H, W)");
-    assert_eq!(weight.ndim(), 4, "conv_transpose2d weight must be 4D (C_in, C_out, KH, KW)");
-    assert_eq!(grad_output.ndim(), 4, "conv_transpose2d grad_output must be 4D (N, C_out, H_out, W_out)");
+    assert_eq!(
+        input.ndim(),
+        4,
+        "conv_transpose2d input must be 4D (N, C_in, H, W)"
+    );
+    assert_eq!(
+        weight.ndim(),
+        4,
+        "conv_transpose2d weight must be 4D (C_in, C_out, KH, KW)"
+    );
+    assert_eq!(
+        grad_output.ndim(),
+        4,
+        "conv_transpose2d grad_output must be 4D (N, C_out, H_out, W_out)"
+    );
 
     let (n, in_c, in_h, in_w) = (
         input.shape()[0],
@@ -264,9 +275,9 @@ mod tests {
     #[allow(unused_imports)]
     use super::*;
     #[allow(unused_imports)]
+    use crate::tape::OpRecord;
+    #[allow(unused_imports)]
     use crate::value::Value;
     #[allow(unused_imports)]
     use brain_core::Tensor;
-    #[allow(unused_imports)]
-    use crate::tape::OpRecord;
 }

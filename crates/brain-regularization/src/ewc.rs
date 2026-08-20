@@ -3,8 +3,8 @@
 //! Kirkpatrick et al., 2017: "Overcoming catastrophic forgetting in neural networks".
 //! Penalizes updates to parameters critical to previous tasks using the diagonal Fisher Information Matrix.
 
-use std::collections::HashMap;
 use brain_core::Tensor;
+use std::collections::HashMap;
 
 /// Elastic Weight Consolidation (EWC) regularizer.
 #[derive(Debug, Clone)]
@@ -26,11 +26,7 @@ impl ElasticWeightConsolidation {
     }
 
     /// Registers a consolidated task checkpoint with empirical Fisher information.
-    pub fn register_task(
-        &mut self,
-        current_params: &[Tensor],
-        empirical_gradients: &[Vec<f64>],
-    ) {
+    pub fn register_task(&mut self, current_params: &[Tensor], empirical_gradients: &[Vec<f64>]) {
         for (idx, p) in current_params.iter().enumerate() {
             let p_data = p.data().to_vec();
             let mut f_diag = vec![1e-4; p_data.len()]; // small prior
@@ -51,7 +47,9 @@ impl ElasticWeightConsolidation {
         let mut total_penalty = 0.0;
 
         for (idx, p) in current_params.iter().enumerate() {
-            if let (Some(star), Some(fisher)) = (self.star_params.get(&idx), self.fisher_diag.get(&idx)) {
+            if let (Some(star), Some(fisher)) =
+                (self.star_params.get(&idx), self.fisher_diag.get(&idx))
+            {
                 let p_data = p.data();
                 let n = p_data.len().min(star.len()).min(fisher.len());
 
@@ -73,7 +71,9 @@ impl ElasticWeightConsolidation {
             let p_data = p.data();
             let mut grad = vec![0.0f64; p_data.len()];
 
-            if let (Some(star), Some(fisher)) = (self.star_params.get(&idx), self.fisher_diag.get(&idx)) {
+            if let (Some(star), Some(fisher)) =
+                (self.star_params.get(&idx), self.fisher_diag.get(&idx))
+            {
                 let n = p_data.len().min(star.len()).min(fisher.len());
                 for i in 0..n {
                     grad[i] = self.lambda * fisher[i] * (p_data[i] - star[i]);

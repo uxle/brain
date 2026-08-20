@@ -1,10 +1,10 @@
 //! Python wrapper around brain_core::Tensor.
 
-#[cfg(feature = "extension-module")]
-use pyo3::prelude::*;
-use brain_core::Tensor;
 use brain_core::tensor::arithmetic as arith;
 use brain_core::tensor::reduction as red;
+use brain_core::Tensor;
+#[cfg(feature = "extension-module")]
+use pyo3::prelude::*;
 
 #[cfg_attr(feature = "extension-module", pyclass(name = "Tensor"))]
 #[derive(Clone)]
@@ -35,7 +35,8 @@ impl PyTensor {
         if total != data.len() {
             return Err(pyo3::exceptions::PyValueError::new_err(format!(
                 "Data elements ({}) does not match shape total ({})",
-                data.len(), total
+                data.len(),
+                total
             )));
         }
         Ok(Self::new(Tensor::from_vec(data, shape)))
@@ -81,7 +82,9 @@ impl PyTensor {
 
     pub fn item(&self) -> PyResult<f64> {
         if self.inner.numel() != 1 {
-            return Err(pyo3::exceptions::PyValueError::new_err("item() only valid for single-element tensors"));
+            return Err(pyo3::exceptions::PyValueError::new_err(
+                "item() only valid for single-element tensors",
+            ));
         }
         Ok(self.inner.item())
     }
@@ -91,7 +94,8 @@ impl PyTensor {
         let actual_idx = if idx < 0 { n + idx } else { idx };
         if actual_idx < 0 || actual_idx >= n {
             return Err(pyo3::exceptions::PyIndexError::new_err(format!(
-                "Index {} out of bounds for tensor with {} elements", idx, n
+                "Index {} out of bounds for tensor with {} elements",
+                idx, n
             )));
         }
         Ok(self.inner.data()[actual_idx as usize])
@@ -99,8 +103,9 @@ impl PyTensor {
 
     pub fn backward(&mut self) -> PyResult<()> {
         let val = brain_autograd::Value::new(self.inner.clone(), true);
-        val.backward()
-            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(format!("Autograd backward error: {:?}", e)))?;
+        val.backward().map_err(|e| {
+            pyo3::exceptions::PyRuntimeError::new_err(format!("Autograd backward error: {:?}", e))
+        })?;
         if let Some(g) = val.grad() {
             self.grad = Some(Box::new(PyTensor::new(g)));
         }
@@ -141,7 +146,11 @@ impl PyTensor {
     }
 
     pub fn __repr__(&self) -> String {
-        format!("brain.Tensor(shape={:?}, data={:?})", self.inner.shape(), self.inner.to_vec())
+        format!(
+            "brain.Tensor(shape={:?}, data={:?})",
+            self.inner.shape(),
+            self.inner.to_vec()
+        )
     }
 }
 

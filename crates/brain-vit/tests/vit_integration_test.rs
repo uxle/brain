@@ -1,6 +1,6 @@
 //! # Vision Transformer Integration Test
-use brain_vit::r#impl::VitModel;
 use brain_vit::config::VitConfig;
+use brain_vit::r#impl::VitModel;
 
 #[test]
 fn test_vit_forward_pass_logits() {

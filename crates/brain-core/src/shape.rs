@@ -31,8 +31,8 @@ use std::fmt;
 pub type Dim = usize;
 /// Strides vector type alias.
 pub type Strides = Vec<usize>;
-use std::ops::{Deref, DerefMut, Index, IndexMut};
 use crate::error::{BrainError, BrainResult};
+use std::ops::{Deref, DerefMut, Index, IndexMut};
 
 // =============================================================================
 // Shape Struct
@@ -575,7 +575,12 @@ impl Shape {
     /// assert_eq!(expanded2.as_slice(), &[3, 4, 1]);
     /// ```
     pub fn insert_dim(&self, axis: usize) -> Shape {
-        assert!(axis <= self.0.len(), "axis {} out of bounds for ndim {}", axis, self.0.len());
+        assert!(
+            axis <= self.0.len(),
+            "axis {} out of bounds for ndim {}",
+            axis,
+            self.0.len()
+        );
         let mut dims = self.0.clone();
         dims.insert(axis, 1);
         Shape(dims)
@@ -602,8 +607,17 @@ impl Shape {
     /// assert_eq!(squeezed.as_slice(), &[3, 1, 4]);
     /// ```
     pub fn remove_dim(&self, axis: usize) -> Shape {
-        assert!(axis < self.0.len(), "axis {} out of bounds for ndim {}", axis, self.0.len());
-        assert_eq!(self.0[axis], 1, "cannot remove dimension {} with size {}", axis, self.0[axis]);
+        assert!(
+            axis < self.0.len(),
+            "axis {} out of bounds for ndim {}",
+            axis,
+            self.0.len()
+        );
+        assert_eq!(
+            self.0[axis], 1,
+            "cannot remove dimension {} with size {}",
+            axis, self.0[axis]
+        );
         let mut dims = self.0.clone();
         dims.remove(axis);
         Shape(dims)
@@ -648,7 +662,12 @@ impl Shape {
     ///
     /// Panics if `axis` is out of bounds.
     pub fn without_dim(&self, axis: usize) -> Shape {
-        assert!(axis < self.0.len(), "axis {} out of bounds for ndim {}", axis, self.0.len());
+        assert!(
+            axis < self.0.len(),
+            "axis {} out of bounds for ndim {}",
+            axis,
+            self.0.len()
+        );
         let mut dims = self.0.clone();
         dims.remove(axis);
         Shape(dims)
@@ -737,7 +756,11 @@ impl Shape {
     ///
     /// Panics if the dimension is not size 1.
     pub fn expand_dim(&self, axis: usize, size: usize) -> Shape {
-        assert_eq!(self.0[axis], 1, "cannot expand dimension {} with size {}", axis, self.0[axis]);
+        assert_eq!(
+            self.0[axis], 1,
+            "cannot expand dimension {} with size {}",
+            axis, self.0[axis]
+        );
         self.with_dim(axis, size)
     }
 
@@ -774,7 +797,11 @@ impl Shape {
     /// assert_eq!(permuted.as_slice(), &[4, 2, 3]);
     /// ```
     pub fn permuted(&self, permutation: &[usize]) -> Shape {
-        assert_eq!(permutation.len(), self.0.len(), "permutation length mismatch");
+        assert_eq!(
+            permutation.len(),
+            self.0.len(),
+            "permutation length mismatch"
+        );
         let dims: Vec<usize> = permutation.iter().map(|&i| self.0[i]).collect();
         Shape(dims)
     }
@@ -848,7 +875,12 @@ impl Shape {
 
     /// Splits this shape into two shapes at the specified dimension index.
     pub fn split(&self, axis: usize) -> (Shape, Shape) {
-        assert!(axis <= self.ndim(), "split axis {} exceeds ndim {}", axis, self.ndim());
+        assert!(
+            axis <= self.ndim(),
+            "split axis {} exceeds ndim {}",
+            axis,
+            self.ndim()
+        );
         let left = Shape::from_dims(&self.0[..axis]);
         let right = Shape::from_dims(&self.0[axis..]);
         (left, right)
@@ -856,8 +888,18 @@ impl Shape {
 
     /// Transposes two dimensions of the shape.
     pub fn transposed(&self, dim0: usize, dim1: usize) -> Shape {
-        assert!(dim0 < self.ndim(), "dim0 {} out of bounds for ndim {}", dim0, self.ndim());
-        assert!(dim1 < self.ndim(), "dim1 {} out of bounds for ndim {}", dim1, self.ndim());
+        assert!(
+            dim0 < self.ndim(),
+            "dim0 {} out of bounds for ndim {}",
+            dim0,
+            self.ndim()
+        );
+        assert!(
+            dim1 < self.ndim(),
+            "dim1 {} out of bounds for ndim {}",
+            dim1,
+            self.ndim()
+        );
         let mut dims = self.0.clone();
         dims.swap(dim0, dim1);
         Shape(dims)
@@ -924,7 +966,10 @@ impl Shape {
                     return Err(BrainError::shape_mismatch(
                         format!("compatible with dim {}", cur),
                         format!("dim {}", dim),
-                        format!("broadcast_shapes: incompatible dimension at trailing position {}", i),
+                        format!(
+                            "broadcast_shapes: incompatible dimension at trailing position {}",
+                            i
+                        ),
                     ));
                 }
             }
@@ -939,8 +984,16 @@ impl Shape {
     /// the configuration is degenerate (kernel larger than the padded input, or a
     /// zero stride) this returns `0`, yielding an empty output tensor instead of
     /// crashing.
-    pub fn output_dim(in_len: usize, padding: usize, kernel: usize, stride: usize, dilation: usize) -> usize {
-        let num = (in_len as i128) + 2 * (padding as i128) - (dilation as i128) * (kernel as i128 - 1) - 1;
+    pub fn output_dim(
+        in_len: usize,
+        padding: usize,
+        kernel: usize,
+        stride: usize,
+        dilation: usize,
+    ) -> usize {
+        let num = (in_len as i128) + 2 * (padding as i128)
+            - (dilation as i128) * (kernel as i128 - 1)
+            - 1;
         if num < 0 || stride == 0 {
             return 0;
         }
@@ -1404,14 +1457,20 @@ impl ShapeIndex {
 
     /// Returns the number of NewAxis insertions in this index.
     pub fn num_new_axes(&self) -> usize {
-        self.0.iter().filter(|t| matches!(t, ShapeIndexType::NewAxis)).count()
+        self.0
+            .iter()
+            .filter(|t| matches!(t, ShapeIndexType::NewAxis))
+            .count()
     }
 
     /// Returns the number of dimensions consumed by this index.
     ///
     /// This excludes NewAxis entries.
     pub fn consumed_dims(&self) -> usize {
-        self.0.iter().filter(|t| !matches!(t, ShapeIndexType::NewAxis)).count()
+        self.0
+            .iter()
+            .filter(|t| !matches!(t, ShapeIndexType::NewAxis))
+            .count()
     }
 }
 
@@ -1449,7 +1508,11 @@ impl StrideInfo {
     ///
     /// Panics if shape and strides have different lengths.
     pub fn new(shape: Vec<usize>, strides: Vec<usize>) -> Self {
-        assert_eq!(shape.len(), strides.len(), "shape and strides must have same length");
+        assert_eq!(
+            shape.len(),
+            strides.len(),
+            "shape and strides must have same length"
+        );
         StrideInfo { shape, strides }
     }
 
@@ -1515,7 +1578,11 @@ impl StrideInfo {
             return (0, element_size);
         }
         let max_offset = self.compute_index(
-            &self.shape.iter().map(|&d| if d > 0 { d - 1 } else { 0 }).collect::<Vec<_>>(),
+            &self
+                .shape
+                .iter()
+                .map(|&d| if d > 0 { d - 1 } else { 0 })
+                .collect::<Vec<_>>(),
         );
         (0, (max_offset + 1) * element_size)
     }
@@ -2214,7 +2281,6 @@ mod tests {
         assert_eq!(result.as_slice(), &[4, 3, 5]);
     }
 
-
     #[test]
     fn test_expand_dim() {
         let s = Shape::from_dims(&[1, 3, 1]);
@@ -2366,7 +2432,6 @@ mod tests {
         assert_eq!(broadcast_shapes(&[2, 1], &[1, 3]), vec![2, 3]);
     }
 
-
     #[test]
     fn test_broadcast_shapes_different_rank() {
         assert_eq!(broadcast_shapes(&[3], &[2, 3]), vec![2, 3]);
@@ -2378,7 +2443,6 @@ mod tests {
         assert_eq!(broadcast_shapes(&[], &[2, 3]), vec![2, 3]);
         assert_eq!(broadcast_shapes(&[2, 3], &[]), vec![2, 3]);
     }
-
 
     #[test]
     #[should_panic]
@@ -2419,7 +2483,10 @@ mod tests {
 
     #[test]
     fn test_broadcast_method() {
-        let result = Shape::broadcast_shapes(&[&Shape::from_dims(&[2, 1]), &Shape::from_dims(&[1, 3])]).unwrap().to_vec();
+        let result =
+            Shape::broadcast_shapes(&[&Shape::from_dims(&[2, 1]), &Shape::from_dims(&[1, 3])])
+                .unwrap()
+                .to_vec();
         assert_eq!(result, vec![2, 3]);
     }
 
@@ -2429,21 +2496,10 @@ mod tests {
 
     #[test]
     fn test_conv_output_shape_basic() {
-        let out = compute_conv_output_shape(
-            &[1, 3, 32, 32],
-            &[3, 3],
-            &[1, 1],
-            &[1, 1],
-            &[1, 1],
-            1,
-            16,
-        );
+        let out =
+            compute_conv_output_shape(&[1, 3, 32, 32], &[3, 3], &[1, 1], &[1, 1], &[1, 1], 1, 16);
         assert_eq!(out, vec![1, 16, 32, 32]);
     }
-
-
-
-
 
     // =========================================================================
     // Pool Output Shape Tests
@@ -2451,16 +2507,9 @@ mod tests {
 
     #[test]
     fn test_pool_output_shape_basic() {
-        let out = compute_pool_output_shape(
-            &[1, 3, 32, 32],
-            &[2, 2],
-            &[2, 2],
-            &[0, 0],
-        );
+        let out = compute_pool_output_shape(&[1, 3, 32, 32], &[2, 2], &[2, 2], &[0, 0]);
         assert_eq!(out, vec![1, 3, 16, 16]);
     }
-
-
 
     // =========================================================================
     // Transpose Shape Tests
@@ -2468,9 +2517,11 @@ mod tests {
 
     #[test]
     fn test_transpose_shape() {
-        assert_eq!(compute_transpose_shape(&[2, 3, 4], &[2, 0, 1]), vec![4, 2, 3]);
+        assert_eq!(
+            compute_transpose_shape(&[2, 3, 4], &[2, 0, 1]),
+            vec![4, 2, 3]
+        );
     }
-
 
     #[test]
     fn test_transpose_shape_2d() {
@@ -2491,7 +2542,10 @@ mod tests {
     fn test_reshape_shape_infer() {
         assert_eq!(compute_reshape_shape(&[2, 3, 4], &[-1]), vec![24]);
         assert_eq!(compute_reshape_shape(&[2, 3, 4], &[-1, 4]), vec![6, 4]);
-        assert_eq!(compute_reshape_shape(&[2, 3, 4], &[2, -1, 2]), vec![2, 6, 2]);
+        assert_eq!(
+            compute_reshape_shape(&[2, 3, 4], &[2, -1, 2]),
+            vec![2, 6, 2]
+        );
     }
 
     #[test]
@@ -2517,10 +2571,7 @@ mod tests {
 
     #[test]
     fn test_shape_index_new() {
-        let idx = ShapeIndex::new(vec![
-            ShapeIndexType::Index(0),
-            ShapeIndexType::All,
-        ]);
+        let idx = ShapeIndex::new(vec![ShapeIndexType::Index(0), ShapeIndexType::All]);
         assert_eq!(idx.ndim(), 2);
     }
 
@@ -2548,9 +2599,11 @@ mod tests {
 
     #[test]
     fn test_shape_index_output_shape_slice() {
-        let idx = ShapeIndex::new(vec![
-            ShapeIndexType::Slice { start: Some(1), end: Some(4), step: None },
-        ]);
+        let idx = ShapeIndex::new(vec![ShapeIndexType::Slice {
+            start: Some(1),
+            end: Some(4),
+            step: None,
+        }]);
         let input = Shape::vector(10);
         let output = idx.output_shape(&input);
         assert_eq!(output.as_slice(), &[3]);
@@ -2558,9 +2611,11 @@ mod tests {
 
     #[test]
     fn test_shape_index_output_shape_with_step() {
-        let idx = ShapeIndex::new(vec![
-            ShapeIndexType::Slice { start: Some(0), end: Some(10), step: Some(2) },
-        ]);
+        let idx = ShapeIndex::new(vec![ShapeIndexType::Slice {
+            start: Some(0),
+            end: Some(10),
+            step: Some(2),
+        }]);
         let input = Shape::vector(10);
         let output = idx.output_shape(&input);
         assert_eq!(output.as_slice(), &[5]);
@@ -2568,10 +2623,7 @@ mod tests {
 
     #[test]
     fn test_shape_index_output_shape_new_axis() {
-        let idx = ShapeIndex::new(vec![
-            ShapeIndexType::Index(0),
-            ShapeIndexType::NewAxis,
-        ]);
+        let idx = ShapeIndex::new(vec![ShapeIndexType::Index(0), ShapeIndexType::NewAxis]);
         let input = Shape::from_dims(&[5, 3]);
         let output = idx.output_shape(&input);
         assert_eq!(output.as_slice(), &[1, 3]);
@@ -2830,15 +2882,8 @@ mod tests {
 
     #[test]
     fn test_conv_output_shape_batch() {
-        let out = compute_conv_output_shape(
-            &[8, 3, 32, 32],
-            &[3, 3],
-            &[1, 1],
-            &[1, 1],
-            &[1, 1],
-            1,
-            64,
-        );
+        let out =
+            compute_conv_output_shape(&[8, 3, 32, 32], &[3, 3], &[1, 1], &[1, 1], &[1, 1], 1, 64);
         assert_eq!(out[0], 8);
         assert_eq!(out[1], 64);
     }
@@ -2873,7 +2918,11 @@ mod tests {
     #[test]
     fn test_shape_index_output_shape_complex() {
         let idx = ShapeIndex::new(vec![
-            ShapeIndexType::Slice { start: None, end: Some(3), step: None },
+            ShapeIndexType::Slice {
+                start: None,
+                end: Some(3),
+                step: None,
+            },
             ShapeIndexType::Index(1),
             ShapeIndexType::NewAxis,
             ShapeIndexType::All,
@@ -2982,29 +3031,16 @@ mod tests {
     // Additional Conv Tests
     // =========================================================================
 
-
-
     #[test]
     fn test_conv_batch() {
-        let out = compute_conv_output_shape(
-            &[16, 3, 32, 32],
-            &[3, 3],
-            &[1, 1],
-            &[1, 1],
-            &[1, 1],
-            1,
-            64,
-        );
+        let out =
+            compute_conv_output_shape(&[16, 3, 32, 32], &[3, 3], &[1, 1], &[1, 1], &[1, 1], 1, 64);
         assert_eq!(out[0], 16);
     }
-
 
     // =========================================================================
     // Additional Pool Tests
     // =========================================================================
-
-
-
 
     // =========================================================================
     // Additional Transpose Tests
@@ -3012,9 +3048,18 @@ mod tests {
 
     #[test]
     fn test_transpose_3d() {
-        assert_eq!(compute_transpose_shape(&[2, 3, 4], &[1, 0, 2]), vec![3, 2, 4]);
-        assert_eq!(compute_transpose_shape(&[2, 3, 4], &[0, 2, 1]), vec![2, 4, 3]);
-        assert_eq!(compute_transpose_shape(&[2, 3, 4], &[2, 1, 0]), vec![4, 3, 2]);
+        assert_eq!(
+            compute_transpose_shape(&[2, 3, 4], &[1, 0, 2]),
+            vec![3, 2, 4]
+        );
+        assert_eq!(
+            compute_transpose_shape(&[2, 3, 4], &[0, 2, 1]),
+            vec![2, 4, 3]
+        );
+        assert_eq!(
+            compute_transpose_shape(&[2, 3, 4], &[2, 1, 0]),
+            vec![4, 3, 2]
+        );
     }
 
     #[test]
@@ -3121,7 +3166,9 @@ mod tests {
     #[test]
     fn test_shape_index_slice_full() {
         let idx = ShapeIndex::new(vec![ShapeIndexType::Slice {
-            start: None, end: None, step: None,
+            start: None,
+            end: None,
+            step: None,
         }]);
         let input = Shape::vector(10);
         let output = idx.output_shape(&input);
@@ -3131,7 +3178,9 @@ mod tests {
     #[test]
     fn test_shape_index_slice_with_step() {
         let idx = ShapeIndex::new(vec![ShapeIndexType::Slice {
-            start: Some(0), end: Some(10), step: Some(3),
+            start: Some(0),
+            end: Some(10),
+            step: Some(3),
         }]);
         let input = Shape::vector(10);
         let output = idx.output_shape(&input);
@@ -3141,7 +3190,9 @@ mod tests {
     #[test]
     fn test_shape_index_slice_empty_result() {
         let idx = ShapeIndex::new(vec![ShapeIndexType::Slice {
-            start: Some(5), end: Some(3), step: None,
+            start: Some(5),
+            end: Some(3),
+            step: None,
         }]);
         let input = Shape::vector(10);
         let output = idx.output_shape(&input);
@@ -3165,10 +3216,7 @@ mod tests {
 
     #[test]
     fn test_shape_index_only_new_axes() {
-        let idx = ShapeIndex::new(vec![
-            ShapeIndexType::NewAxis,
-            ShapeIndexType::NewAxis,
-        ]);
+        let idx = ShapeIndex::new(vec![ShapeIndexType::NewAxis, ShapeIndexType::NewAxis]);
         let input = Shape::scalar();
         let output = idx.output_shape(&input);
         assert_eq!(output.ndim(), 2);
@@ -3354,7 +3402,6 @@ mod tests {
     // Shape Utility Tests
     // =========================================================================
 
-
     #[test]
     fn test_product_except_1d() {
         let s = Shape::vector(10);
@@ -3372,8 +3419,6 @@ mod tests {
     // Additional Conv Edge Cases
     // =========================================================================
 
-
-
     // =========================================================================
     // Broadcasting Edge Cases
     // =========================================================================
@@ -3385,11 +3430,9 @@ mod tests {
         assert_eq!(result.as_slice(), &[2, 3, 4, 5, 6]);
     }
 
-
     // =========================================================================
     // Shape Debug Tests
     // =========================================================================
-
 
     #[test]
     fn test_debug_scalar() {

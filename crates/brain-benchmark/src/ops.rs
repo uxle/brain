@@ -16,12 +16,7 @@ impl OpsBenchMatrix {
     /// Creates a standard 2D shape sweep matrix.
     pub fn standard_2d() -> Self {
         Self {
-            shapes: vec![
-                vec![32, 32],
-                vec![64, 64],
-                vec![128, 128],
-                vec![256, 256],
-            ],
+            shapes: vec![vec![32, 32], vec![64, 64], vec![128, 128], vec![256, 256]],
         }
     }
 

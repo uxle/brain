@@ -3,9 +3,9 @@
 //! Triplet loss: L(a, p, n) = max(0, d(a, p) - d(a, n) + margin).
 #![allow(missing_docs)]
 
-use brain_core::Tensor;
 use crate::core::{LossResult, Reduction};
 use crate::utils::reduction_apply;
+use brain_core::Tensor;
 
 /// Configuration for Triplet loss.
 #[derive(Debug, Clone)]
@@ -17,7 +17,11 @@ pub struct TripletConfig {
 
 impl Default for TripletConfig {
     fn default() -> Self {
-        Self { margin: 1.0, p: 2.0, reduction: Reduction::Mean }
+        Self {
+            margin: 1.0,
+            p: 2.0,
+            reduction: Reduction::Mean,
+        }
     }
 }
 
@@ -32,13 +36,22 @@ impl TripletMarginLoss {
         Self { config }
     }
 
-    pub fn compute(&self, anchor: &Tensor, positive: &Tensor, negative: &Tensor) -> LossResult<Tensor> {
+    pub fn compute(
+        &self,
+        anchor: &Tensor,
+        positive: &Tensor,
+        negative: &Tensor,
+    ) -> LossResult<Tensor> {
         let a = anchor.to_vec();
         let p = positive.to_vec();
         let n = negative.to_vec();
 
         let num_items = anchor.shape()[0];
-        let dim = anchor.shape().get(1).copied().unwrap_or(a.len() / num_items.max(1));
+        let dim = anchor
+            .shape()
+            .get(1)
+            .copied()
+            .unwrap_or(a.len() / num_items.max(1));
 
         let mut losses = vec![0.0f64; num_items];
 
@@ -65,7 +78,13 @@ impl TripletMarginLoss {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

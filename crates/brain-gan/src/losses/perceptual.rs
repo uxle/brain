@@ -15,7 +15,11 @@ pub struct PerceptualConfig {
 
 impl Default for PerceptualConfig {
     fn default() -> Self {
-        Self { feature_weight: 10.0, style_weight: 1.0, num_layers: 3 }
+        Self {
+            feature_weight: 10.0,
+            style_weight: 1.0,
+            num_layers: 3,
+        }
     }
 }
 
@@ -38,8 +42,15 @@ pub fn feature_matching_loss(real_feats: &Tensor, fake_feats: &Tensor) -> f64 {
     let rv = real_feats.to_vec();
     let fv = fake_feats.to_vec();
     let n = rv.len().min(fv.len());
-    if n == 0 { return 0.0; }
-    rv.iter().zip(fv.iter()).take(n).map(|(r, f)| (r - f).powi(2)).sum::<f64>() / n as f64
+    if n == 0 {
+        return 0.0;
+    }
+    rv.iter()
+        .zip(fv.iter())
+        .take(n)
+        .map(|(r, f)| (r - f).powi(2))
+        .sum::<f64>()
+        / n as f64
 }
 
 /// Style loss: MSE between Gram matrices of real and fake features.
@@ -50,11 +61,7 @@ pub fn style_loss(real_feats: &Tensor, fake_feats: &Tensor) -> f64 {
 }
 
 /// Combined perceptual loss.
-pub fn perceptual_loss(
-    real_feats: &Tensor,
-    fake_feats: &Tensor,
-    config: &PerceptualConfig,
-) -> f64 {
+pub fn perceptual_loss(real_feats: &Tensor, fake_feats: &Tensor, config: &PerceptualConfig) -> f64 {
     let feat_loss = feature_matching_loss(real_feats, fake_feats);
     let sty_loss = style_loss(real_feats, fake_feats);
     config.feature_weight * feat_loss + config.style_weight * sty_loss
@@ -62,7 +69,13 @@ pub fn perceptual_loss(
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

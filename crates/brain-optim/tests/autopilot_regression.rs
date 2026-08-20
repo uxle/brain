@@ -32,6 +32,13 @@ fn test_autopilot_lr_search_finds_optimal_convergence() {
         }
     }
 
-    assert_eq!(best_lr, 0.5, "Autopilot search should discover optimal lr 0.5");
-    assert!(lowest_loss < 1e-6, "Optimal lr should achieve near-zero loss: got {}", lowest_loss);
+    assert_eq!(
+        best_lr, 0.5,
+        "Autopilot search should discover optimal lr 0.5"
+    );
+    assert!(
+        lowest_loss < 1e-6,
+        "Optimal lr should achieve near-zero loss: got {}",
+        lowest_loss
+    );
 }

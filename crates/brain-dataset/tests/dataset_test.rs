@@ -1,15 +1,10 @@
 use brain_core::Tensor;
-use brain_dataset::dataset::{Dataset, Subset, tabular::TabularDataset};
+use brain_dataset::dataset::{tabular::TabularDataset, Dataset, Subset};
 use brain_dataset::loaders::DataLoader;
 
 #[test]
 fn test_tabular_dataset_and_subset() {
-    let features = Tensor::from_slice(&[
-        1.0, 2.0,
-        3.0, 4.0,
-        5.0, 6.0,
-        7.0, 8.0,
-    ], vec![4, 2]);
+    let features = Tensor::from_slice(&[1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0], vec![4, 2]);
     let labels = Tensor::from_slice(&[0.0, 1.0, 0.0, 1.0], vec![4]);
 
     let ds = TabularDataset::new(features, Some(labels));
@@ -30,11 +25,7 @@ fn test_tabular_dataset_and_subset() {
 
 #[test]
 fn test_dataloader_batch_fetch() {
-    let features = Tensor::from_slice(&[
-        10.0, 20.0,
-        30.0, 40.0,
-        50.0, 60.0,
-    ], vec![3, 2]);
+    let features = Tensor::from_slice(&[10.0, 20.0, 30.0, 40.0, 50.0, 60.0], vec![3, 2]);
 
     let ds = TabularDataset::new(features, None);
     let loader = DataLoader::new(&ds, 2);

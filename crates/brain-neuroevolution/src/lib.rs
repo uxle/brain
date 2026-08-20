@@ -59,8 +59,8 @@ pub use hyperneat::{
 pub use impl_::run_evolution;
 pub use mutation::mutate_gaussian;
 pub use neuro::{
-    flatten_layer_weights, total_neuro_parameters, unflatten_layer_weights,
-    LayerWeightDescriptor, NeuroConfig,
+    flatten_layer_weights, total_neuro_parameters, unflatten_layer_weights, LayerWeightDescriptor,
+    NeuroConfig,
 };
 pub use ops::{apply_to_weights, genome_to_tensor, tensor_to_genome};
 pub use parallel::{evaluate_population_parallel, ParallelConfig};

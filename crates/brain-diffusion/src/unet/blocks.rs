@@ -21,7 +21,12 @@ impl ResBlock {
 
     /// Forward pass through residual layers.
     pub fn forward(&self, x: &Tensor, _time_emb: &Tensor) -> Tensor {
-        Tensor::zeros(vec![x.shape()[0], self.out_channels, x.shape()[2], x.shape()[3]])
+        Tensor::zeros(vec![
+            x.shape()[0],
+            self.out_channels,
+            x.shape()[2],
+            x.shape()[3],
+        ])
     }
 }
 

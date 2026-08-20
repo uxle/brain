@@ -1,10 +1,19 @@
 //! # Consistency Regularization
 //!
 //! Enforces model output invariance under stochastic input perturbations (Pi-model / Mean Teacher style).
-#![allow(missing_docs, clippy::excessive_precision, clippy::approx_constant, clippy::needless_range_loop, clippy::too_many_arguments, clippy::manual_is_multiple_of, clippy::manual_div_ceil, clippy::doc_markdown)]
+#![allow(
+    missing_docs,
+    clippy::excessive_precision,
+    clippy::approx_constant,
+    clippy::needless_range_loop,
+    clippy::too_many_arguments,
+    clippy::manual_is_multiple_of,
+    clippy::manual_div_ceil,
+    clippy::doc_markdown
+)]
 
-use brain_core::Tensor;
 use super::core::{RegError, RegResult};
+use brain_core::Tensor;
 
 /// Configuration for consistency regularization.
 #[derive(Debug, Clone, PartialEq)]
@@ -42,28 +51,39 @@ pub fn compute_consistency_loss(pred1: &Tensor, pred2: &Tensor, weight: f64) -> 
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant, clippy::needless_range_loop, clippy::manual_div_ceil, clippy::manual_is_multiple_of, clippy::too_many_arguments, clippy::doc_markdown)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant,
+        clippy::needless_range_loop,
+        clippy::manual_div_ceil,
+        clippy::manual_is_multiple_of,
+        clippy::too_many_arguments,
+        clippy::doc_markdown
+    )]
     use super::*;
-    use crate::core::*;
-    use crate::config::*;
-    use crate::utils::*;
-    use crate::dropout::*;
-    use crate::normalization::*;
-    use crate::regularizers::*;
-    use crate::decay::*;
-    use crate::earlystop::*;
-    use crate::stopping::*;
     use crate::augment::*;
-    use crate::perturb::*;
-    use crate::dropout_uncertainty::*;
-    use crate::label_smooth::*;
-    use crate::curriculum::*;
+    use crate::config::*;
     use crate::consistency::*;
-    use crate::rules::*;
-    use crate::registry::*;
-    use crate::train_hooks::*;
+    use crate::core::*;
+    use crate::curriculum::*;
+    use crate::decay::*;
+    use crate::dropout::*;
+    use crate::dropout_uncertainty::*;
+    use crate::earlystop::*;
+    use crate::label_smooth::*;
+    use crate::normalization::*;
     use crate::ops::*;
+    use crate::perturb::*;
     use crate::r#impl::*;
+    use crate::registry::*;
+    use crate::regularizers::*;
+    use crate::rules::*;
+    use crate::stopping::*;
+    use crate::train_hooks::*;
+    use crate::utils::*;
     use crate::VERSION;
     use brain_core::Tensor;
 }

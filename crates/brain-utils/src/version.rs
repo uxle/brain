@@ -3,9 +3,9 @@
 //! Provides a SemVer-lite Version structure with major, minor, patch,
 //! pre-release tags, and version range compatibility checks.
 
+use crate::core::{UtilsError, UtilsResult};
 use std::cmp::Ordering;
 use std::fmt;
-use crate::core::{UtilsError, UtilsResult};
 
 /// Semantic version representation.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -41,12 +41,21 @@ impl Version {
 
         let parts: Vec<&str> = ver_part.split('.').collect();
         if parts.len() != 3 {
-            return Err(UtilsError::ParseError(format!("Invalid version format: '{}'", s)));
+            return Err(UtilsError::ParseError(format!(
+                "Invalid version format: '{}'",
+                s
+            )));
         }
 
-        let major = parts[0].parse::<u64>().map_err(|e| UtilsError::ParseError(e.to_string()))?;
-        let minor = parts[1].parse::<u64>().map_err(|e| UtilsError::ParseError(e.to_string()))?;
-        let patch = parts[2].parse::<u64>().map_err(|e| UtilsError::ParseError(e.to_string()))?;
+        let major = parts[0]
+            .parse::<u64>()
+            .map_err(|e| UtilsError::ParseError(e.to_string()))?;
+        let minor = parts[1]
+            .parse::<u64>()
+            .map_err(|e| UtilsError::ParseError(e.to_string()))?;
+        let patch = parts[2]
+            .parse::<u64>()
+            .map_err(|e| UtilsError::ParseError(e.to_string()))?;
 
         Ok(Self {
             major,
@@ -108,12 +117,12 @@ mod tests {
         let v1 = Version::parse("v0.2.0").unwrap();
         let v2 = Version::parse("0.1.9").unwrap();
         let v3 = Version::parse("0.2.0-beta").unwrap();
-    
+
         assert!(v1 > v2);
         assert!(v1 > v3);
         assert!(v1.ge(&v2));
         assert_eq!(v1.to_string(), "0.2.0");
-    
+
         let invalid = Version::parse("1.2");
         assert!(invalid.is_err());
     }

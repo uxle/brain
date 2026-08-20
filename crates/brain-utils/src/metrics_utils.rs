@@ -118,8 +118,17 @@ impl MetricsRegistry {
             if m.labels.is_empty() {
                 out.push_str(&format!("{} {}\n", name, m.value));
             } else {
-                let label_str: Vec<String> = m.labels.iter().map(|(k, v)| format!("{}=\"{}\"", k, v)).collect();
-                out.push_str(&format!("{}{{{}}} {}\n", name, label_str.join(","), m.value));
+                let label_str: Vec<String> = m
+                    .labels
+                    .iter()
+                    .map(|(k, v)| format!("{}=\"{}\"", k, v))
+                    .collect();
+                out.push_str(&format!(
+                    "{}{{{}}} {}\n",
+                    name,
+                    label_str.join(","),
+                    m.value
+                ));
             }
         }
         out
@@ -137,10 +146,10 @@ mod tests {
         registry.inc_counter("tokens_processed", 100.0);
         registry.inc_counter("tokens_processed", 50.0);
         assert_eq!(registry.get_value("tokens_processed"), Some(150.0));
-    
+
         registry.set_gauge("memory_usage_mb", 2048.5);
         assert_eq!(registry.get_value("memory_usage_mb"), Some(2048.5));
-    
+
         let prom = registry.export_prometheus_text();
         assert!(prom.contains("tokens_processed"));
         assert!(prom.contains("memory_usage_mb"));

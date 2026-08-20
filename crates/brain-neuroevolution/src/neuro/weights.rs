@@ -38,15 +38,24 @@ pub fn flatten_layer_weights(tensors: &[Tensor]) -> (Vec<f64>, Vec<LayerWeightDe
 
 /// Reconstructs parameter tensors from a flat genome vector using descriptors.
 pub fn unflatten_layer_weights(flat: &[f64], descriptors: &[LayerWeightDescriptor]) -> Vec<Tensor> {
-    descriptors.iter().map(|desc| {
-        let slice = &flat[desc.offset..desc.offset + desc.length];
-        Tensor::from_vec(slice.to_vec(), desc.shape.clone())
-    }).collect()
+    descriptors
+        .iter()
+        .map(|desc| {
+            let slice = &flat[desc.offset..desc.offset + desc.length];
+            Tensor::from_vec(slice.to_vec(), desc.shape.clone())
+        })
+        .collect()
 }
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

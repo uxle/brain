@@ -33,14 +33,27 @@ pub enum MouseButton {
 /// Mouse action command.
 #[derive(Debug, Clone, PartialEq)]
 pub enum MouseAction {
-    MoveRel { dx: i32, dy: i32 },
-    MoveAbs { x: u32, y: u32 },
+    MoveRel {
+        dx: i32,
+        dy: i32,
+    },
+    MoveAbs {
+        x: u32,
+        y: u32,
+    },
     Click(MouseButton),
     DoubleClick(MouseButton),
     MouseDown(MouseButton),
     MouseUp(MouseButton),
-    Scroll { dy: i32 },
-    Drag { from_x: u32, from_y: u32, to_x: u32, to_y: u32 },
+    Scroll {
+        dy: i32,
+    },
+    Drag {
+        from_x: u32,
+        from_y: u32,
+        to_x: u32,
+        to_y: u32,
+    },
 }
 
 /// Unified HID Action.
@@ -80,7 +93,9 @@ pub struct MockHidDevice {
 
 impl MockHidDevice {
     pub fn new() -> Self {
-        Self { history: Arc::new(Mutex::new(Vec::new())) }
+        Self {
+            history: Arc::new(Mutex::new(Vec::new())),
+        }
     }
 
     pub fn actions(&self) -> Vec<HidAction> {

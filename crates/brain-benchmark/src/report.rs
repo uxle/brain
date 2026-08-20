@@ -19,14 +19,23 @@ pub enum ReportFormat {
 /// Formats benchmark results into a plain or ANSI-color console summary table.
 pub fn format_console(results: &[BenchResult]) -> String {
     let mut out = String::new();
-    out.push_str("Benchmark Results:
-");
-    out.push_str("--------------------------------------------------------------------------------
-");
-    out.push_str(&format!("{:<30} {:>15} {:>15} {:>15}
-", "Name", "Mean", "Median", "StdDev"));
-    out.push_str("--------------------------------------------------------------------------------
-");
+    out.push_str(
+        "Benchmark Results:
+",
+    );
+    out.push_str(
+        "--------------------------------------------------------------------------------
+",
+    );
+    out.push_str(&format!(
+        "{:<30} {:>15} {:>15} {:>15}
+",
+        "Name", "Mean", "Median", "StdDev"
+    ));
+    out.push_str(
+        "--------------------------------------------------------------------------------
+",
+    );
 
     for r in results {
         let stats = r.statistics();
@@ -39,18 +48,24 @@ pub fn format_console(results: &[BenchResult]) -> String {
             format_duration(stats.std_dev)
         ));
     }
-    out.push_str("--------------------------------------------------------------------------------
-");
+    out.push_str(
+        "--------------------------------------------------------------------------------
+",
+    );
     out
 }
 
 /// Formats benchmark results into a GitHub-flavored Markdown table.
 pub fn format_markdown(results: &[BenchResult]) -> String {
     let mut out = String::new();
-    out.push_str("| Benchmark | Mean | Median | StdDev | Throughput |
-");
-    out.push_str("|:---|---:|---:|---:|---:|
-");
+    out.push_str(
+        "| Benchmark | Mean | Median | StdDev | Throughput |
+",
+    );
+    out.push_str(
+        "|:---|---:|---:|---:|---:|
+",
+    );
 
     for r in results {
         let stats = r.statistics();
@@ -77,14 +92,22 @@ pub fn format_markdown(results: &[BenchResult]) -> String {
 
 /// Formats benchmark results into CSV format.
 pub fn format_csv(results: &[BenchResult]) -> String {
-    let mut out = String::from("name,mean_ns,median_ns,stddev_ns,min_ns,max_ns,samples
-");
+    let mut out = String::from(
+        "name,mean_ns,median_ns,stddev_ns,min_ns,max_ns,samples
+",
+    );
     for r in results {
         let stats = r.statistics();
         out.push_str(&format!(
             "{},{:.2},{:.2},{:.2},{:.2},{:.2},{}
 ",
-            r.config.name, stats.mean, stats.median, stats.std_dev, stats.min, stats.max, stats.count
+            r.config.name,
+            stats.mean,
+            stats.median,
+            stats.std_dev,
+            stats.min,
+            stats.max,
+            stats.count
         ));
     }
     out

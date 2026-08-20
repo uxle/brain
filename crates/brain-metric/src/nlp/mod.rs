@@ -4,7 +4,7 @@
 #![allow(missing_docs)]
 
 pub mod other;
-pub use other::{meteor_score_lite, perplexity_score, edit_distance_levenshtein};
+pub use other::{edit_distance_levenshtein, meteor_score_lite, perplexity_score};
 
 use std::collections::HashMap;
 
@@ -16,7 +16,9 @@ pub struct NlpMetricConfig {
 
 /// Computes sentence BLEU score (n-grams up to max_n) with brevity penalty.
 pub fn sentence_bleu(hypothesis: &[&str], reference: &[&str], max_n: usize) -> f64 {
-    if hypothesis.is_empty() || reference.is_empty() { return 0.0; }
+    if hypothesis.is_empty() || reference.is_empty() {
+        return 0.0;
+    }
 
     let mut precisions = Vec::with_capacity(max_n);
 
@@ -65,7 +67,13 @@ pub fn sentence_bleu(hypothesis: &[&str], reference: &[&str], max_n: usize) -> f
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

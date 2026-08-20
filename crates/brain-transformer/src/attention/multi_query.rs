@@ -1,7 +1,15 @@
 //! # Multi-Query (MQA) and Grouped-Query Attention (GQA)
 //!
 //! KV-head sharing optimizations for high-throughput inference with reduced memory bandwidth.
-#![allow(missing_docs, unused_imports, unused_variables, dead_code, unused_mut, unused_comparisons, clippy::all)]
+#![allow(
+    missing_docs,
+    unused_imports,
+    unused_variables,
+    dead_code,
+    unused_mut,
+    unused_comparisons,
+    clippy::all
+)]
 
 use crate::attention::scaled::scaled_dot_product_attention;
 use crate::attention::{Attention, AttentionKind};
@@ -71,12 +79,16 @@ pub fn repeat_kv(tensor: &Tensor, n_rep: usize) -> TransformerResult<Tensor> {
             for r in 0..n_rep {
                 let q_h = kv_h * n_rep + r;
                 let out_head_offset = (b * num_q_heads + q_h) * seq_len * head_dim;
-                out_data[out_head_offset..out_head_offset + seq_len * head_dim].copy_from_slice(in_slice);
+                out_data[out_head_offset..out_head_offset + seq_len * head_dim]
+                    .copy_from_slice(in_slice);
             }
         }
     }
 
-    Ok(Tensor::from_vec(out_data, vec![batch_size, num_q_heads, seq_len, head_dim]))
+    Ok(Tensor::from_vec(
+        out_data,
+        vec![batch_size, num_q_heads, seq_len, head_dim],
+    ))
 }
 
 /// Grouped-Query Attention (GQA) Layer.
@@ -101,9 +113,24 @@ impl GroupedQueryAttention {
         let kv_dim = config.num_kv_heads * config.head_dim;
 
         let q_proj = LinearParams::new(config.hidden_dim, q_dim, config.bias, seed);
-        let k_proj = LinearParams::new(config.hidden_dim, kv_dim, config.bias, seed.wrapping_add(100));
-        let v_proj = LinearParams::new(config.hidden_dim, kv_dim, config.bias, seed.wrapping_add(200));
-        let out_proj = LinearParams::new(q_dim, config.hidden_dim, config.bias, seed.wrapping_add(300));
+        let k_proj = LinearParams::new(
+            config.hidden_dim,
+            kv_dim,
+            config.bias,
+            seed.wrapping_add(100),
+        );
+        let v_proj = LinearParams::new(
+            config.hidden_dim,
+            kv_dim,
+            config.bias,
+            seed.wrapping_add(200),
+        );
+        let out_proj = LinearParams::new(
+            q_dim,
+            config.hidden_dim,
+            config.bias,
+            seed.wrapping_add(300),
+        );
 
         Self {
             q_proj,
@@ -130,25 +157,45 @@ impl GroupedQueryAttention {
 
         let q_4d = Tensor::from_vec(
             q.data().to_vec(),
-            vec![batch_size, self.config.num_query_heads, seq_len, self.config.head_dim],
+            vec![
+                batch_size,
+                self.config.num_query_heads,
+                seq_len,
+                self.config.head_dim,
+            ],
         );
         let k_4d = Tensor::from_vec(
             k.data().to_vec(),
-            vec![batch_size, self.config.num_kv_heads, seq_len, self.config.head_dim],
+            vec![
+                batch_size,
+                self.config.num_kv_heads,
+                seq_len,
+                self.config.head_dim,
+            ],
         );
         let v_4d = Tensor::from_vec(
             v.data().to_vec(),
-            vec![batch_size, self.config.num_kv_heads, seq_len, self.config.head_dim],
+            vec![
+                batch_size,
+                self.config.num_kv_heads,
+                seq_len,
+                self.config.head_dim,
+            ],
         );
 
         let n_rep = self.config.num_query_heads / self.config.num_kv_heads;
         let k_expanded = repeat_kv(&k_4d, n_rep)?;
         let v_expanded = repeat_kv(&v_4d, n_rep)?;
 
-        let (attn_out, _) = scaled_dot_product_attention(&q_4d, &k_expanded, &v_expanded, mask, None)?;
+        let (attn_out, _) =
+            scaled_dot_product_attention(&q_4d, &k_expanded, &v_expanded, mask, None)?;
         let merged = Tensor::from_vec(
             attn_out.data().to_vec(),
-            vec![batch_size, seq_len, self.config.num_query_heads * self.config.head_dim],
+            vec![
+                batch_size,
+                seq_len,
+                self.config.num_query_heads * self.config.head_dim,
+            ],
         );
 
         self.out_proj.forward(&merged)
@@ -173,40 +220,55 @@ impl Attention for GroupedQueryAttention {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant, clippy::needless_range_loop, clippy::manual_div_ceil, clippy::manual_is_multiple_of, clippy::too_many_arguments, clippy::doc_markdown, clippy::excessive_precision, clippy::float_cmp, clippy::len_zero, clippy::all)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant,
+        clippy::needless_range_loop,
+        clippy::manual_div_ceil,
+        clippy::manual_is_multiple_of,
+        clippy::too_many_arguments,
+        clippy::doc_markdown,
+        clippy::excessive_precision,
+        clippy::float_cmp,
+        clippy::len_zero,
+        clippy::all
+    )]
     use super::*;
-    use crate::core::*;
-    use crate::config::*;
-    use crate::utils::*;
-    use crate::ops::*;
-    use crate::attention::*;
-    use crate::attention::scaled::*;
-    use crate::attention::multi_head::*;
-    use crate::attention::relative::*;
     use crate::attention::flash_lite::*;
+    use crate::attention::multi_head::*;
     use crate::attention::multi_query::*;
+    use crate::attention::relative::*;
+    use crate::attention::scaled::*;
     use crate::attention::xformers_lite::*;
-    use crate::position::*;
-    use crate::position::rope::*;
-    use crate::position::alibi::*;
-    use crate::position::learned::*;
+    use crate::attention::*;
+    use crate::builder::*;
+    use crate::config::*;
+    use crate::core::*;
+    use crate::decoder::cross::*;
+    use crate::decoder::layer::*;
+    use crate::decoder::*;
     use crate::embedding_layers::*;
-    use crate::ffn::*;
-    use crate::encoder::*;
     use crate::encoder::block::*;
     use crate::encoder::layer::*;
-    use crate::decoder::*;
-    use crate::decoder::layer::*;
-    use crate::decoder::cross::*;
+    use crate::encoder::*;
+    use crate::ffn::*;
+    use crate::generate::*;
     use crate::head::*;
     use crate::kv_cache::*;
-    use crate::generate::*;
-    use crate::models::*;
     use crate::models::bert_lite::*;
     use crate::models::gpt_lite::*;
-    use crate::models::t5_lite::*;
     use crate::models::llama_lite::*;
-    use crate::builder::*;
+    use crate::models::t5_lite::*;
+    use crate::models::*;
+    use crate::ops::*;
+    use crate::position::alibi::*;
+    use crate::position::learned::*;
+    use crate::position::rope::*;
+    use crate::position::*;
+    use crate::utils::*;
     use brain_core::Tensor;
 
     #[test]

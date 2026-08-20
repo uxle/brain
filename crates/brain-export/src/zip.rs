@@ -19,14 +19,14 @@ pub fn create_zip_archive(files: &[(&str, &[u8])]) -> Vec<u8> {
         // Local file header signature: 0x04034b50
         archive.extend_from_slice(&0x04034b50_u32.to_le_bytes());
         archive.extend_from_slice(&20_u16.to_le_bytes()); // version needed
-        archive.extend_from_slice(&0_u16.to_le_bytes());  // flags
-        archive.extend_from_slice(&0_u16.to_le_bytes());  // compression method (store)
-        archive.extend_from_slice(&0_u32.to_le_bytes());  // mod time/date
+        archive.extend_from_slice(&0_u16.to_le_bytes()); // flags
+        archive.extend_from_slice(&0_u16.to_le_bytes()); // compression method (store)
+        archive.extend_from_slice(&0_u32.to_le_bytes()); // mod time/date
         archive.extend_from_slice(&c_crc.to_le_bytes());
-        archive.extend_from_slice(&size.to_le_bytes());   // compressed size
-        archive.extend_from_slice(&size.to_le_bytes());   // uncompressed size
+        archive.extend_from_slice(&size.to_le_bytes()); // compressed size
+        archive.extend_from_slice(&size.to_le_bytes()); // uncompressed size
         archive.extend_from_slice(&name_len.to_le_bytes());
-        archive.extend_from_slice(&0_u16.to_le_bytes());  // extra len
+        archive.extend_from_slice(&0_u16.to_le_bytes()); // extra len
         archive.extend_from_slice(name_bytes);
         archive.extend_from_slice(content);
 

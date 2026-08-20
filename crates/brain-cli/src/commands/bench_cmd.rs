@@ -13,7 +13,10 @@ pub fn run_bench_command(args: &[String], sink: &OutputSink) -> ExitCode {
     }
 
     let kernel = args[0].to_lowercase();
-    let size = args.get(1).and_then(|s| s.parse::<usize>().ok()).unwrap_or(256);
+    let size = args
+        .get(1)
+        .and_then(|s| s.parse::<usize>().ok())
+        .unwrap_or(256);
 
     sink.println(&format!("Benchmarking {} {}x{}...", kernel, size, size));
 
@@ -34,7 +37,10 @@ pub fn run_bench_command(args: &[String], sink: &OutputSink) -> ExitCode {
         2.68
     };
 
-    sink.println(&format!("Result: {:.2} µs | {:.2} GFLOPS", per_iter_micros, gflops));
+    sink.println(&format!(
+        "Result: {:.2} µs | {:.2} GFLOPS",
+        per_iter_micros, gflops
+    ));
     ExitCode::SUCCESS
 }
 

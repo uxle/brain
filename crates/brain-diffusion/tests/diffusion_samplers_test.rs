@@ -1,5 +1,7 @@
 //! Tests for diffusion schedules and models
-use brain_diffusion::{LinearSchedule, CosineSchedule, NoiseSchedule, DiffusionConfig, UnetConfig, Unet2d};
+use brain_diffusion::{
+    CosineSchedule, DiffusionConfig, LinearSchedule, NoiseSchedule, Unet2d, UnetConfig,
+};
 
 #[test]
 fn test_linear_and_cosine_noise_schedules() {

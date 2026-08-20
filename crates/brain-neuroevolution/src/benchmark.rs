@@ -12,7 +12,9 @@ pub fn sphere_fn(x: &[f64]) -> f64 {
 
 /// Computes Rosenbrock function: f(x) = sum(100 * (x_{i+1} - x_i^2)^2 + (1 - x_i)^2). Minimum f(1, ..., 1) = 0.
 pub fn rosenbrock_fn(x: &[f64]) -> f64 {
-    if x.len() < 2 { return 0.0; }
+    if x.len() < 2 {
+        return 0.0;
+    }
     let mut sum = 0.0f64;
     for i in 0..x.len() - 1 {
         let term1 = x[i + 1] - x[i] * x[i];
@@ -32,7 +34,9 @@ pub fn rastrigin_fn(x: &[f64]) -> f64 {
 /// Computes Ackley function: Minimum f(0, ..., 0) = 0.
 pub fn ackley_fn(x: &[f64]) -> f64 {
     let d = x.len() as f64;
-    if d == 0.0 { return 0.0; }
+    if d == 0.0 {
+        return 0.0;
+    }
 
     let sum_sq: f64 = x.iter().map(|&v| v * v).sum();
     let sum_cos: f64 = x.iter().map(|&v| (2.0 * PI * v).cos()).sum();
@@ -45,7 +49,13 @@ pub fn ackley_fn(x: &[f64]) -> f64 {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

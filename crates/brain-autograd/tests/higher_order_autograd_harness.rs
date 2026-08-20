@@ -19,7 +19,11 @@ fn test_scalar_grad_and_value_grad() {
     let x = Value::scalar(2.0);
     let g = grad(|v| v.mul(v).mul(v), &x).unwrap().unwrap();
     // 3 * (2.0)^2 = 12.0
-    assert!(approx(g.get(0), 12.0, 1e-5), "Expected 12.0, got {}", g.get(0));
+    assert!(
+        approx(g.get(0), 12.0, 1e-5),
+        "Expected 12.0, got {}",
+        g.get(0)
+    );
 
     let (val, g_joint) = value_and_grad(|v| v.mul(v).mul(v), &x).unwrap();
     assert_eq!(val.data().get(0), 8.0);
@@ -65,13 +69,17 @@ fn test_full_jacobian_matrix() {
     let w0 = Value::from_slice(&[1.0, 0.0], vec![1, 2]);
     let w1 = Value::from_slice(&[0.0, 1.0], vec![1, 2]);
 
-    let jac = jacobian(|v| {
-        let x0 = w0.matmul(v);
-        let x1 = w1.matmul(v);
-        let y0 = x0.mul(&x0);
-        let y1 = x0.mul(&x1);
-        y0.add(&y1)
-    }, &x).unwrap();
+    let jac = jacobian(
+        |v| {
+            let x0 = w0.matmul(v);
+            let x1 = w1.matmul(v);
+            let y0 = x0.mul(&x0);
+            let y1 = x0.mul(&x1);
+            y0.add(&y1)
+        },
+        &x,
+    )
+    .unwrap();
 
     assert_eq!(jac.shape(), &[1, 2]);
     // y = x0^2 + x0 * x1 => dy/dx0 = 2*x0 + x1 = 4 + 3 = 7, dy/dx1 = x0 = 2
@@ -99,14 +107,18 @@ fn test_full_hessian_matrix() {
     let w0 = Value::from_slice(&[1.0, 0.0], vec![1, 2]);
     let w1 = Value::from_slice(&[0.0, 1.0], vec![1, 2]);
 
-    let (g, h) = grad_and_hess(|v| {
-        let x0 = w0.matmul(v);
-        let x1 = w1.matmul(v);
-        let term1 = x0.mul(&x0).mul(&x0);
-        let term2 = x0.mul(&x1);
-        let term3 = x1.mul(&x1);
-        term1.add(&term2).add(&term3)
-    }, &x).unwrap();
+    let (g, h) = grad_and_hess(
+        |v| {
+            let x0 = w0.matmul(v);
+            let x1 = w1.matmul(v);
+            let term1 = x0.mul(&x0).mul(&x0);
+            let term2 = x0.mul(&x1);
+            let term3 = x1.mul(&x1);
+            term1.add(&term2).add(&term3)
+        },
+        &x,
+    )
+    .unwrap();
 
     // grad = [3*4 + 3, 2 + 2*3] = [15.0, 8.0]
     assert!(approx(g.get(0), 15.0, 1e-4));
@@ -133,12 +145,16 @@ fn test_stage_d_master_differential_calculus_audit() {
     let a_val = Value::from_tensor(&a_mat);
 
     let x = Value::from_slice(&[1.0, 2.0], vec![2, 1]);
-    let h = hessian(|v| {
-        let av = a_val.matmul(v);
-        let vt = v.transpose(0, 1);
-        let vt_av = vt.matmul(&av);
-        vt_av.mul(&Value::scalar(0.5)).sum()
-    }, &x).unwrap();
+    let h = hessian(
+        |v| {
+            let av = a_val.matmul(v);
+            let vt = v.transpose(0, 1);
+            let vt_av = vt.matmul(&av);
+            vt_av.mul(&Value::scalar(0.5)).sum()
+        },
+        &x,
+    )
+    .unwrap();
 
     assert_eq!(h.shape(), &[2, 2]);
     assert!(approx(h.get_2d(0, 0), 4.0, 1e-3));

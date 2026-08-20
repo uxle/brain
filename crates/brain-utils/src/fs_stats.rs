@@ -2,9 +2,9 @@
 //!
 //! Provides directory size calculations, file counts, and disk statistics.
 
+use crate::core::{UtilsError, UtilsResult};
 use std::fs;
 use std::path::Path;
-use crate::core::{UtilsError, UtilsResult};
 
 /// Aggregated filesystem metrics for a directory hierarchy.
 #[derive(Debug, Clone, PartialEq, Default)]

@@ -20,11 +20,19 @@ impl Default for RunningAverage {
 
 impl RunningAverage {
     pub fn new() -> Self {
-        Self { total: 0.0, count: 0, window: None }
+        Self {
+            total: 0.0,
+            count: 0,
+            window: None,
+        }
     }
 
     pub fn with_window(size: usize) -> Self {
-        Self { total: 0.0, count: 0, window: Some(Vec::with_capacity(size)) }
+        Self {
+            total: 0.0,
+            count: 0,
+            window: Some(Vec::with_capacity(size)),
+        }
     }
 
     pub fn update(&mut self, value: f64) {
@@ -61,7 +69,10 @@ pub struct AccuracyMetric {
 
 impl AccuracyMetric {
     pub fn new() -> Self {
-        Self { correct: 0, total: 0 }
+        Self {
+            correct: 0,
+            total: 0,
+        }
     }
 
     pub fn update(&mut self, logits: &Tensor, targets: &[usize]) {
@@ -112,7 +123,11 @@ pub struct TopKAccuracyMetric {
 
 impl TopKAccuracyMetric {
     pub fn new(k: usize) -> Self {
-        Self { k: k.max(1), correct: 0, total: 0 }
+        Self {
+            k: k.max(1),
+            correct: 0,
+            total: 0,
+        }
     }
 
     pub fn update(&mut self, logits: &Tensor, targets: &[usize]) {

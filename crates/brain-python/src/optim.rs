@@ -1,10 +1,10 @@
 //! Python wrapper for Brain optimizers.
 
+use crate::autograd::PyValue;
+use brain_core::Tensor;
+use brain_optim::{Adam, AdamConfig, Optimizer, ParamGroup, Sgd, SgdConfig};
 #[cfg(feature = "extension-module")]
 use pyo3::prelude::*;
-use brain_optim::{Adam, AdamConfig, Sgd, SgdConfig, ParamGroup, Optimizer};
-use brain_core::Tensor;
-use crate::autograd::PyValue;
 
 #[cfg_attr(feature = "extension-module", pyclass(name = "Adam"))]
 pub struct PyAdam {
@@ -62,7 +62,9 @@ impl PyAdam {
 
         self.inner
             .step(&mut param_tensors, &grad_tensors)
-            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(format!("Optimizer step error: {:?}", e)))?;
+            .map_err(|e| {
+                pyo3::exceptions::PyRuntimeError::new_err(format!("Optimizer step error: {:?}", e))
+            })?;
 
         for (idx, p) in self.params.iter().enumerate() {
             let mut val = p.borrow_mut(py);
@@ -135,7 +137,9 @@ impl PyAdamW {
 
         self.inner
             .step(&mut param_tensors, &grad_tensors)
-            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(format!("Optimizer step error: {:?}", e)))?;
+            .map_err(|e| {
+                pyo3::exceptions::PyRuntimeError::new_err(format!("Optimizer step error: {:?}", e))
+            })?;
 
         for (idx, p) in self.params.iter().enumerate() {
             let mut val = p.borrow_mut(py);
@@ -206,7 +210,9 @@ impl PySgd {
 
         self.inner
             .step(&mut param_tensors, &grad_tensors)
-            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(format!("Optimizer step error: {:?}", e)))?;
+            .map_err(|e| {
+                pyo3::exceptions::PyRuntimeError::new_err(format!("Optimizer step error: {:?}", e))
+            })?;
 
         for (idx, p) in self.params.iter().enumerate() {
             let mut val = p.borrow_mut(py);

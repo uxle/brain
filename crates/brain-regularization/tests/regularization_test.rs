@@ -14,7 +14,11 @@ fn test_inverted_dropout_scaling_and_eval_mode() {
     let train_out = dropout.apply(&x).expect("Dropout train");
     let train_sum: f64 = train_out.data().iter().sum();
     let train_mean = train_sum / 1000.0;
-    assert!((train_mean - 1.0).abs() < 0.15, "Inverted dropout mean should preserve expectation: got {}", train_mean);
+    assert!(
+        (train_mean - 1.0).abs() < 0.15,
+        "Inverted dropout mean should preserve expectation: got {}",
+        train_mean
+    );
 
     // Eval mode: exact identity
     dropout.eval_mode();

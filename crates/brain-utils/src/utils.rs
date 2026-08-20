@@ -80,7 +80,14 @@ pub fn random_uuid_lite() -> String {
     let p3 = (rng.next_u32() & 0x3FFF) | 0x8000; // variant
     let p4 = rng.next_u64() & 0xFFFFFFFFFFFF;
 
-    format!("{:08x}-{:04x}-{:04x}-{:04x}-{:012x}", p1, (p2 >> 16), p2 & 0xFFFF, p3, p4)
+    format!(
+        "{:08x}-{:04x}-{:04x}-{:04x}-{:012x}",
+        p1,
+        (p2 >> 16),
+        p2 & 0xFFFF,
+        p3,
+        p4
+    )
 }
 
 /// Safely quotes an argument for POSIX shell execution.
@@ -88,7 +95,10 @@ pub fn shell_quote(arg: &str) -> String {
     if arg.is_empty() {
         return "''".to_string();
     }
-    if arg.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.' | '/' | '=' | ':' | '@')) {
+    if arg
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.' | '/' | '=' | ':' | '@'))
+    {
         return arg.to_string();
     }
     let mut escaped = String::from("'");
@@ -172,22 +182,22 @@ mod tests {
         let t_ms = now_ms();
         let t_us = now_us();
         assert!(t_us >= t_ms * 1000 || t_ms > 0);
-        
+
         let uuid = random_uuid_lite();
         assert_eq!(uuid.len(), 36);
         assert_eq!(uuid.matches('-').count(), 4);
-        
+
         let safe = shell_quote("simple_arg_123");
         assert_eq!(safe, "simple_arg_123");
         let unsafe_arg = shell_quote("hello world; rm -rf /");
         assert!(unsafe_arg.starts_with("'"));
-        
+
         let clean = sanitize_filename("bad/file:name*?.txt");
         assert_eq!(clean, "bad_file_name__.txt");
-        
+
         let trunc = truncate_str("superlongstringexample", 10);
         assert_eq!(trunc, "superlo...");
-        
+
         let left = pad_left("42", 5, '0');
         assert_eq!(left, "00042");
         let right = pad_right("hi", 5, '.');

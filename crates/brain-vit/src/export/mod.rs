@@ -6,9 +6,9 @@
 //! - [`TorchScriptStub`] — TorchScript-compatible description of the model
 //! - [`ModelCard`] — structured model metadata card
 
+use crate::core::{VitError, VitResult};
 use std::collections::HashMap;
 use std::fmt;
-use crate::core::{VitError, VitResult};
 
 /// JSON-style checkpoint format (text-based, portable).
 ///
@@ -37,13 +37,17 @@ impl JsonCheckpoint {
     /// Header: `# brain-vit checkpoint: <name> v<version>\n`
     /// Then one `key:v1,v2,...` per line.
     pub fn serialize(&self) -> String {
-        let mut lines = vec![
-            format!("# brain-vit checkpoint: {} v{}", self.model_name, self.version),
-        ];
+        let mut lines = vec![format!(
+            "# brain-vit checkpoint: {} v{}",
+            self.model_name, self.version
+        )];
         let mut keys: Vec<&String> = self.weights.keys().collect();
         keys.sort();
         for key in keys {
-            let vals: Vec<String> = self.weights[key].iter().map(|v| format!("{:.10e}", v)).collect();
+            let vals: Vec<String> = self.weights[key]
+                .iter()
+                .map(|v| format!("{:.10e}", v))
+                .collect();
             lines.push(format!("{}:{}", key, vals.join(",")));
         }
         lines.join("\n") + "\n"
@@ -59,26 +63,43 @@ impl JsonCheckpoint {
             if line.starts_with("# brain-vit checkpoint:") {
                 let rest = line.trim_start_matches("# brain-vit checkpoint:").trim();
                 let parts: Vec<&str> = rest.splitn(2, " v").collect();
-                if !parts.is_empty() { model_name = parts[0].trim().to_string(); }
-                if parts.len() > 1 { version = parts[1].trim().to_string(); }
+                if !parts.is_empty() {
+                    model_name = parts[0].trim().to_string();
+                }
+                if parts.len() > 1 {
+                    version = parts[1].trim().to_string();
+                }
                 continue;
             }
-            if line.starts_with('#') || line.is_empty() { continue; }
-            let colon = line.find(':').ok_or_else(|| VitError::Checkpoint(
-                format!("Malformed line (no colon): {}", &line[..line.len().min(40)])
-            ))?;
+            if line.starts_with('#') || line.is_empty() {
+                continue;
+            }
+            let colon = line.find(':').ok_or_else(|| {
+                VitError::Checkpoint(format!(
+                    "Malformed line (no colon): {}",
+                    &line[..line.len().min(40)]
+                ))
+            })?;
             let key = line[..colon].to_string();
             let vals_str = &line[colon + 1..];
             let vals: Result<Vec<f64>, _> = vals_str.split(',').map(|s| s.parse::<f64>()).collect();
-            let vals = vals.map_err(|e| VitError::Checkpoint(format!("Parse error in key '{}': {}", key, e)))?;
+            let vals = vals.map_err(|e| {
+                VitError::Checkpoint(format!("Parse error in key '{}': {}", key, e))
+            })?;
             weights.insert(key, vals);
         }
 
-        Ok(Self { weights, version, model_name })
+        Ok(Self {
+            weights,
+            version,
+            model_name,
+        })
     }
 
     /// Number of parameters total.
-    pub fn total_params(&self) -> usize { self.weights.values().map(|v| v.len()).sum() }
+    pub fn total_params(&self) -> usize {
+        self.weights.values().map(|v| v.len()).sum()
+    }
 
     /// List all keys.
     pub fn keys(&self) -> Vec<&String> {
@@ -125,11 +146,23 @@ impl OnnxStub {
         num_heads: usize,
     ) -> Self {
         let mut layers = vec![];
-        layers.push(format!("PatchEmbedding: Conv2d(in={}, out={}, ks=16, stride=16)", in_channels, embed_dim));
+        layers.push(format!(
+            "PatchEmbedding: Conv2d(in={}, out={}, ks=16, stride=16)",
+            in_channels, embed_dim
+        ));
         layers.push(format!("CLSTokenPrepend: embed_dim={}", embed_dim));
-        layers.push(format!("PositionalEncoding: learnable [{}+1, {}]", (image_size/16).pow(2), embed_dim));
+        layers.push(format!(
+            "PositionalEncoding: learnable [{}+1, {}]",
+            (image_size / 16).pow(2),
+            embed_dim
+        ));
         for d in 0..depth {
-            layers.push(format!("TransformerBlock({}): MHSA(heads={}) + FFN(dim={})", d, num_heads, embed_dim * 4));
+            layers.push(format!(
+                "TransformerBlock({}): MHSA(heads={}) + FFN(dim={})",
+                d,
+                num_heads,
+                embed_dim * 4
+            ));
         }
         layers.push(format!("LayerNorm: dim={}", embed_dim));
         layers.push(format!("Linear: [{}, {}] (head)", embed_dim, num_classes));
@@ -151,12 +184,16 @@ impl OnnxStub {
             format!("Output: {:?}", self.output_shape),
             "Layers:".to_string(),
         ];
-        for l in &self.layers { lines.push(format!("  {}", l)); }
+        for l in &self.layers {
+            lines.push(format!("  {}", l));
+        }
         lines.join("\n")
     }
 
     /// Total number of layer descriptions.
-    pub fn num_layers(&self) -> usize { self.layers.len() }
+    pub fn num_layers(&self) -> usize {
+        self.layers.len()
+    }
 }
 
 impl fmt::Display for OnnxStub {
@@ -401,7 +438,10 @@ mod tests {
     #[test]
     fn test_checkpoint_large_values() {
         let mut m = HashMap::new();
-        m.insert("w".to_string(), vec![f64::MAX * 0.5, f64::MIN_POSITIVE, -1e-300]);
+        m.insert(
+            "w".to_string(),
+            vec![f64::MAX * 0.5, f64::MIN_POSITIVE, -1e-300],
+        );
         let ckpt = JsonCheckpoint::new("big", m);
         let text = ckpt.serialize();
         let loaded = JsonCheckpoint::deserialize(&text).unwrap();

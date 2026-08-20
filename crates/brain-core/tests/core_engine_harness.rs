@@ -4,9 +4,9 @@
 //! reduction algebra, GEMM cache blocking, and linear algebra decompositions.
 
 use brain_core::dtype::DType;
-use brain_core::memory::{is_aligned, PAGE_SIZE, CACHE_LINE_SIZE};
-use brain_core::random::{BrainRng, PCG32, Rng, NormalDist};
-use brain_core::serialization::{TensorArchive, Crc32};
+use brain_core::memory::{is_aligned, CACHE_LINE_SIZE, PAGE_SIZE};
+use brain_core::random::{BrainRng, NormalDist, Rng, PCG32};
+use brain_core::serialization::{Crc32, TensorArchive};
 use brain_core::shape::broadcast_shapes;
 use brain_core::tensor::arithmetic as arith;
 use brain_core::tensor::fft;
@@ -54,11 +54,7 @@ fn test_phase36_memory_alignment_invariants() {
 // -----------------------------------------------------------------------------
 #[test]
 fn test_phase37_tensor_strided_views_and_indexing() {
-    let t = Tensor::from_slice(&[
-        1.0, 2.0, 3.0,
-        4.0, 5.0, 6.0,
-        7.0, 8.0, 9.0,
-    ], vec![3, 3]);
+    let t = Tensor::from_slice(&[1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0], vec![3, 3]);
 
     assert_eq!(t.get_2d(1, 2), 6.0);
     assert_eq!(t.get_2d(2, 0), 7.0);
@@ -82,7 +78,10 @@ fn test_phase38_deterministic_prng_sampling() {
 
     let sample1 = rng1.next_f64();
     let sample2 = rng2.next_f64();
-    assert_eq!(sample1, sample2, "PRNG must be bit-exact reproducible from identical seed");
+    assert_eq!(
+        sample1, sample2,
+        "PRNG must be bit-exact reproducible from identical seed"
+    );
 
     let mut pcg = PCG32::new(12345, 54321);
     let normal = NormalDist::new(0.0, 1.0);
@@ -92,7 +91,11 @@ fn test_phase38_deterministic_prng_sampling() {
         sum += normal.sample(&mut pcg);
     }
     let mean = sum / (n as f64);
-    assert!(mean.abs() < 0.15, "Standard normal sample mean should be near 0: got {}", mean);
+    assert!(
+        mean.abs() < 0.15,
+        "Standard normal sample mean should be near 0: got {}",
+        mean
+    );
 }
 
 // -----------------------------------------------------------------------------
@@ -153,10 +156,7 @@ fn test_phase41_tensor_arithmetic_ops() {
 // -----------------------------------------------------------------------------
 #[test]
 fn test_phase42_reduction_algebra() {
-    let t = Tensor::from_slice(&[
-        1.0, 2.0, 3.0,
-        4.0, 5.0, 6.0,
-    ], vec![2, 3]);
+    let t = Tensor::from_slice(&[1.0, 2.0, 3.0, 4.0, 5.0, 6.0], vec![2, 3]);
 
     let sum_0 = red::sum_along_dim(&t, 0, false);
     assert_eq!(sum_0.to_vec(), vec![5.0, 7.0, 9.0]);
@@ -226,7 +226,13 @@ fn test_phase44_fft_and_ifft_exact_reconstruction() {
     fft::fft_radix2(&mut re, &mut im, true);
 
     for i in 0..8 {
-        assert!(approx(re[i], orig_re[i], 1e-6), "Re diff at {}: got {}, expected {}", i, re[i], orig_re[i]);
+        assert!(
+            approx(re[i], orig_re[i], 1e-6),
+            "Re diff at {}: got {}, expected {}",
+            i,
+            re[i],
+            orig_re[i]
+        );
         assert!(approx(im[i], 0.0, 1e-6), "Im diff at {}: got {}", i, im[i]);
     }
 }

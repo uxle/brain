@@ -3,9 +3,9 @@
 //! StepLR, MultiStepLR, ExponentialLR, and PolynomialLR implementations.
 #![allow(missing_docs)]
 
-use std::collections::HashMap;
-use crate::optimizer::{Optimizer, OptimResult};
 use super::LrScheduler;
+use crate::optimizer::{OptimResult, Optimizer};
+use std::collections::HashMap;
 
 /// Configuration container for step-based schedulers.
 #[derive(Debug, Clone, PartialEq)]
@@ -294,7 +294,13 @@ impl LrScheduler for PolynomialLR {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

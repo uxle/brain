@@ -5,7 +5,7 @@
 //! - [`SegMetrics`] — mIoU, pixel accuracy, per-class IoU computation
 //! - [`UpscaleDecoder`] — bilinear upsampling then linear decode
 
-use crate::core::{VitError, VitResult, Tensor2D, SimpleRng};
+use crate::core::{SimpleRng, Tensor2D, VitError, VitResult};
 use crate::ops::linear;
 
 /// Segmentation decoder: maps patch tokens to per-pixel class logits.
@@ -31,13 +31,20 @@ impl SegDecoder {
         let mut rng = SimpleRng::new(seed);
         let weight = rng.xavier_uniform(num_classes, embed_dim);
         let bias = vec![0.0f64; num_classes];
-        Ok(Self { weight, bias, embed_dim, num_classes })
+        Ok(Self {
+            weight,
+            bias,
+            embed_dim,
+            num_classes,
+        })
     }
 
     /// Forward: `[B, N, D]` → `[B, N, C]` flat class logits.
     pub fn forward(&self, patch_tokens: &[f64], batch: usize, n: usize) -> VitResult<Vec<f64>> {
         if patch_tokens.len() != batch * n * self.embed_dim {
-            return Err(VitError::Shape("SegDecoder: tokens shape mismatch".to_string()));
+            return Err(VitError::Shape(
+                "SegDecoder: tokens shape mismatch".to_string(),
+            ));
         }
         let input = Tensor2D::from_data(batch * n, self.embed_dim, patch_tokens.to_vec())?;
         let w = Tensor2D::from_data(self.num_classes, self.embed_dim, self.weight.clone())?;
@@ -48,12 +55,16 @@ impl SegDecoder {
     /// Predict class per patch: argmax over logits `[B, N, C]` → `[B, N]`.
     pub fn predict_class(&self, logits: &[f64], batch: usize, n: usize) -> VitResult<Vec<usize>> {
         if logits.len() != batch * n * self.num_classes {
-            return Err(VitError::Shape("predict_class: logits shape mismatch".to_string()));
+            return Err(VitError::Shape(
+                "predict_class: logits shape mismatch".to_string(),
+            ));
         }
         let mut preds = vec![0usize; batch * n];
         for i in 0..batch * n {
             let row = &logits[i * self.num_classes..(i + 1) * self.num_classes];
-            preds[i] = row.iter().enumerate()
+            preds[i] = row
+                .iter()
+                .enumerate()
                 .max_by(|a, b| a.1.partial_cmp(b.1).unwrap_or(std::cmp::Ordering::Equal))
                 .map(|(j, _)| j)
                 .unwrap_or(0);
@@ -62,7 +73,9 @@ impl SegDecoder {
     }
 
     /// Parameter count.
-    pub fn num_params(&self) -> usize { self.weight.len() + self.bias.len() }
+    pub fn num_params(&self) -> usize {
+        self.weight.len() + self.bias.len()
+    }
 }
 
 /// Compute per-class and mean IoU for segmentation.
@@ -76,7 +89,9 @@ pub fn per_class_iou(
     num_classes: usize,
 ) -> VitResult<(Vec<f64>, f64)> {
     if preds.len() != gts.len() {
-        return Err(VitError::Shape("per_class_iou: length mismatch".to_string()));
+        return Err(VitError::Shape(
+            "per_class_iou: length mismatch".to_string(),
+        ));
     }
     let mut tp = vec![0usize; num_classes];
     let mut fp = vec![0usize; num_classes];
@@ -93,22 +108,36 @@ pub fn per_class_iou(
         }
     }
 
-    let ious: Vec<f64> = (0..num_classes).map(|c| {
-        let denom = tp[c] + fp[c] + fn_[c];
-        if denom == 0 { f64::NAN } else { tp[c] as f64 / denom as f64 }
-    }).collect();
+    let ious: Vec<f64> = (0..num_classes)
+        .map(|c| {
+            let denom = tp[c] + fp[c] + fn_[c];
+            if denom == 0 {
+                f64::NAN
+            } else {
+                tp[c] as f64 / denom as f64
+            }
+        })
+        .collect();
 
     let valid: Vec<f64> = ious.iter().filter(|&&v| !v.is_nan()).copied().collect();
-    let miou = if valid.is_empty() { 0.0 } else { valid.iter().sum::<f64>() / valid.len() as f64 };
+    let miou = if valid.is_empty() {
+        0.0
+    } else {
+        valid.iter().sum::<f64>() / valid.len() as f64
+    };
     Ok((ious, miou))
 }
 
 /// Compute pixel accuracy.
 pub fn pixel_accuracy(preds: &[usize], gts: &[usize]) -> VitResult<f64> {
     if preds.len() != gts.len() {
-        return Err(VitError::Shape("pixel_accuracy: length mismatch".to_string()));
+        return Err(VitError::Shape(
+            "pixel_accuracy: length mismatch".to_string(),
+        ));
     }
-    if preds.is_empty() { return Ok(0.0); }
+    if preds.is_empty() {
+        return Ok(0.0);
+    }
     let correct = preds.iter().zip(gts.iter()).filter(|(a, b)| a == b).count();
     Ok(correct as f64 / preds.len() as f64)
 }
@@ -120,7 +149,9 @@ pub fn confusion_matrix(
     num_classes: usize,
 ) -> VitResult<Vec<Vec<usize>>> {
     if preds.len() != gts.len() {
-        return Err(VitError::Shape("confusion_matrix: length mismatch".to_string()));
+        return Err(VitError::Shape(
+            "confusion_matrix: length mismatch".to_string(),
+        ));
     }
     let mut cm = vec![vec![0usize; num_classes]; num_classes];
     for (&p, &g) in preds.iter().zip(gts.iter()) {
@@ -136,11 +167,17 @@ pub fn confusion_matrix(
 /// `pred`, `gt`: binary (0 or 1) per-pixel predictions.
 pub fn dice_coefficient(pred: &[bool], gt: &[bool]) -> VitResult<f64> {
     if pred.len() != gt.len() {
-        return Err(VitError::Shape("dice_coefficient: length mismatch".to_string()));
+        return Err(VitError::Shape(
+            "dice_coefficient: length mismatch".to_string(),
+        ));
     }
     let tp = pred.iter().zip(gt.iter()).filter(|(&p, &g)| p && g).count() as f64;
     let sum = (pred.iter().filter(|&&v| v).count() + gt.iter().filter(|&&v| v).count()) as f64;
-    if sum < 1e-10 { Ok(1.0) } else { Ok(2.0 * tp / sum) }
+    if sum < 1e-10 {
+        Ok(1.0)
+    } else {
+        Ok(2.0 * tp / sum)
+    }
 }
 
 /// Upscale + decode segmentation decoder.
@@ -160,9 +197,21 @@ pub struct UpscaleDecoder {
 
 impl UpscaleDecoder {
     /// Create a new upscale decoder.
-    pub fn new(embed_dim: usize, num_classes: usize, grid_size: usize, out_h: usize, out_w: usize, seed: u64) -> VitResult<Self> {
+    pub fn new(
+        embed_dim: usize,
+        num_classes: usize,
+        grid_size: usize,
+        out_h: usize,
+        out_w: usize,
+        seed: u64,
+    ) -> VitResult<Self> {
         let linear_dec = SegDecoder::new(embed_dim, num_classes, seed)?;
-        Ok(Self { linear_dec, out_h, out_w, grid_size })
+        Ok(Self {
+            linear_dec,
+            out_h,
+            out_w,
+            grid_size,
+        })
     }
 
     /// Forward: decode patch tokens → per-patch logits `[B, N, C]`.
@@ -172,7 +221,9 @@ impl UpscaleDecoder {
     }
 
     /// Total parameters.
-    pub fn num_params(&self) -> usize { self.linear_dec.num_params() }
+    pub fn num_params(&self) -> usize {
+        self.linear_dec.num_params()
+    }
 }
 
 /// Compute Intersection over Union for a pair of segmentation maps.
@@ -180,9 +231,21 @@ pub fn seg_iou_pair(pred_mask: &[bool], gt_mask: &[bool]) -> VitResult<f64> {
     if pred_mask.len() != gt_mask.len() {
         return Err(VitError::Shape("seg_iou_pair: length mismatch".to_string()));
     }
-    let inter = pred_mask.iter().zip(gt_mask.iter()).filter(|(&p, &g)| p && g).count() as f64;
-    let union = pred_mask.iter().zip(gt_mask.iter()).filter(|(&p, &g)| p || g).count() as f64;
-    if union < 1e-10 { Ok(1.0) } else { Ok(inter / union) }
+    let inter = pred_mask
+        .iter()
+        .zip(gt_mask.iter())
+        .filter(|(&p, &g)| p && g)
+        .count() as f64;
+    let union = pred_mask
+        .iter()
+        .zip(gt_mask.iter())
+        .filter(|(&p, &g)| p || g)
+        .count() as f64;
+    if union < 1e-10 {
+        Ok(1.0)
+    } else {
+        Ok(inter / union)
+    }
 }
 
 #[cfg(test)]
@@ -251,7 +314,9 @@ mod tests {
         let preds = vec![0usize, 1, 2, 0, 1, 2];
         let gts = vec![0usize, 1, 2, 0, 1, 2];
         let (ious, miou) = per_class_iou(&preds, &gts, 3).unwrap();
-        for &iou in &ious { assert!((iou - 1.0).abs() < 1e-9); }
+        for &iou in &ious {
+            assert!((iou - 1.0).abs() < 1e-9);
+        }
         assert!((miou - 1.0).abs() < 1e-9);
     }
 
@@ -309,7 +374,9 @@ mod tests {
         let preds = vec![0usize, 1, 2];
         let gts = vec![0usize, 1, 2];
         let cm = confusion_matrix(&preds, &gts, 3).unwrap();
-        for c in 0..3 { assert_eq!(cm[c][c], 1); }
+        for c in 0..3 {
+            assert_eq!(cm[c][c], 1);
+        }
     }
 
     #[test]

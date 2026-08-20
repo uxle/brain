@@ -3,9 +3,9 @@
 //! Uniform neighbor sampling, importance sampling, SampledSubgraph, and batch collation.
 #![allow(missing_docs)]
 
-use brain_core::Tensor;
 use super::Graph;
 use crate::core::BatchGraph;
+use brain_core::Tensor;
 
 /// Represents a sampled subgraph (for GraphSAGE/large-graph training).
 #[derive(Debug, Clone)]
@@ -17,10 +17,17 @@ pub struct SampledSubgraph {
 }
 
 /// Uniformly samples at most `num_samples` neighbors for each target node.
-pub fn sample_neighbors(graph: &Graph, target_nodes: &[usize], num_samples: usize, seed: u64) -> SampledSubgraph {
+pub fn sample_neighbors(
+    graph: &Graph,
+    target_nodes: &[usize],
+    num_samples: usize,
+    seed: u64,
+) -> SampledSubgraph {
     let mut rng = seed;
     let lcg = |s: &mut u64| -> usize {
-        *s = s.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+        *s = s
+            .wrapping_mul(6364136223846793005)
+            .wrapping_add(1442695040888963407);
         (*s >> 32) as usize
     };
 
@@ -67,7 +74,11 @@ pub fn collate_graphs(graphs: &[Graph]) -> BatchGraph {
     let mut graph_ids = Vec::new();
 
     let mut current_offset = 0;
-    let feat_dim = if !graphs.is_empty() { graphs[0].feature_dim() } else { 0 };
+    let feat_dim = if !graphs.is_empty() {
+        graphs[0].feature_dim()
+    } else {
+        0
+    };
 
     for (g_idx, g) in graphs.iter().enumerate() {
         offsets.push(current_offset);
@@ -92,7 +103,13 @@ pub fn collate_graphs(graphs: &[Graph]) -> BatchGraph {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

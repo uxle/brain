@@ -2,9 +2,9 @@
 //!
 //! Provides top-level initialization, shutdown orchestration, and runtime summaries.
 
-use std::sync::{Arc, Mutex};
 use crate::core::{GlobalState, UtilsConfig, UtilsResult};
 use crate::panic::set_panic_hook;
+use std::sync::{Arc, Mutex};
 
 static GLOBAL_STATE: Mutex<Option<Arc<GlobalState>>> = Mutex::new(None);
 
@@ -34,7 +34,10 @@ pub fn utils_summary() -> String {
         let cfg = state.get_config();
         format!(
             "Brain Utils [App: {}, Level: {}, Profiling: {}, Uptime: {:?}]",
-            cfg.app_name, cfg.log_level, cfg.profiling_enabled, state.uptime()
+            cfg.app_name,
+            cfg.log_level,
+            cfg.profiling_enabled,
+            state.uptime()
         )
     } else {
         "Brain Utils [Uninitialized]".to_string()
@@ -52,7 +55,7 @@ mod tests {
         let state = init_utils(cfg).unwrap();
         assert!(state.is_initialized());
         let _ = state.uptime();
-    
+
         let summary = utils_summary();
         assert!(summary.starts_with("Brain Utils"));
     }

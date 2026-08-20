@@ -30,13 +30,20 @@ pub fn diff_graphs(a: &GraphIr, b: &GraphIr) -> GraphDiff {
         }
     }
 
-    diff.is_structurally_identical = diff.added_nodes == 0 && diff.removed_nodes == 0 && diff.modified_nodes == 0;
+    diff.is_structurally_identical =
+        diff.added_nodes == 0 && diff.removed_nodes == 0 && diff.modified_nodes == 0;
     diff
 }
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

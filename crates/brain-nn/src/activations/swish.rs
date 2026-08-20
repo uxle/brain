@@ -21,10 +21,14 @@ pub enum ActivationKind {
 
 /// Computes SiLU (Swish-1) activation: x * sigmoid(x).
 pub fn silu(input: &Tensor) -> Tensor {
-    let data: Vec<f64> = input.to_vec().iter().map(|&x| {
-        let s = 1.0 / (1.0 + (-x).exp());
-        x * s
-    }).collect();
+    let data: Vec<f64> = input
+        .to_vec()
+        .iter()
+        .map(|&x| {
+            let s = 1.0 / (1.0 + (-x).exp());
+            x * s
+        })
+        .collect();
     Tensor::from_vec(data, input.shape().to_vec())
 }
 
@@ -35,10 +39,14 @@ pub fn swish(input: &Tensor) -> Tensor {
 
 /// Computes Mish activation: x * tanh(ln(1 + exp(x))).
 pub fn mish(input: &Tensor) -> Tensor {
-    let data: Vec<f64> = input.to_vec().iter().map(|&x| {
-        let softplus = if x > 20.0 { x } else { (1.0 + x.exp()).ln() };
-        x * softplus.tanh()
-    }).collect();
+    let data: Vec<f64> = input
+        .to_vec()
+        .iter()
+        .map(|&x| {
+            let softplus = if x > 20.0 { x } else { (1.0 + x.exp()).ln() };
+            x * softplus.tanh()
+        })
+        .collect();
     Tensor::from_vec(data, input.shape().to_vec())
 }
 
@@ -67,7 +75,13 @@ impl Mish {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

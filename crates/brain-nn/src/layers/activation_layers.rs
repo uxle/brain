@@ -3,9 +3,9 @@
 //! Object-oriented `Module` wrappers for point-wise activation functions.
 #![allow(missing_docs)]
 
-use brain_autograd::Value;
+use crate::activations::{gelu, mish, relu, sigmoid, silu, tanh};
 use crate::module::{Module, ModuleResult};
-use crate::activations::{relu, sigmoid, tanh, gelu, silu, mish};
+use brain_autograd::Value;
 
 macro_rules! impl_activation_module {
     ($name:ident, $func:ident) => {
@@ -29,7 +29,13 @@ impl_activation_module!(Mish, mish);
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

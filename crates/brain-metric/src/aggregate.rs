@@ -17,7 +17,9 @@ pub struct AggregateReport {
 /// Aggregates a series of metric values across multiple training runs or cross-validation folds.
 pub fn aggregate_metric_runs(values: &[f64]) -> AggregateReport {
     let n = values.len();
-    if n == 0 { return AggregateReport::default(); }
+    if n == 0 {
+        return AggregateReport::default();
+    }
 
     let mean = values.iter().sum::<f64>() / n as f64;
     let var = if n > 1 {
@@ -29,7 +31,11 @@ pub fn aggregate_metric_runs(values: &[f64]) -> AggregateReport {
     let min = values.iter().copied().fold(f64::INFINITY, f64::min);
     let max = values.iter().copied().fold(f64::NEG_INFINITY, f64::max);
 
-    let margin = if n > 1 { 1.96 * std_dev / (n as f64).sqrt() } else { 0.0 };
+    let margin = if n > 1 {
+        1.96 * std_dev / (n as f64).sqrt()
+    } else {
+        0.0
+    };
 
     AggregateReport {
         mean,
@@ -43,7 +49,13 @@ pub fn aggregate_metric_runs(values: &[f64]) -> AggregateReport {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

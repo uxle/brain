@@ -3,8 +3,8 @@
 //! Sanitized graph representation: `OnnxModel`, `OnnxGraph`, `OnnxNode`, `OnnxValue`.
 #![allow(missing_docs)]
 
-use std::collections::HashMap;
 use brain_core::Tensor;
+use std::collections::HashMap;
 
 /// Canonical ONNX Node in intermediate representation.
 #[derive(Debug, Clone)]
@@ -47,7 +47,13 @@ pub struct OnnxModel {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

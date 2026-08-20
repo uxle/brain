@@ -155,8 +155,14 @@ impl DType {
 
     /// All integer types (signed + unsigned) in order.
     pub const INT_TYPES: [DType; 8] = [
-        DType::I8, DType::I16, DType::I32, DType::I64,
-        DType::U8, DType::U16, DType::U32, DType::U64,
+        DType::I8,
+        DType::I16,
+        DType::I32,
+        DType::I64,
+        DType::U8,
+        DType::U16,
+        DType::U32,
+        DType::U64,
     ];
 
     /// All complex types in order of increasing size.
@@ -164,18 +170,39 @@ impl DType {
 
     /// All numeric types (float + int + complex) in order.
     pub const ALL_NUMERIC: [DType; 14] = [
-        DType::F16, DType::BF16, DType::F32, DType::F64,
-        DType::I8, DType::I16, DType::I32, DType::I64,
-        DType::U8, DType::U16, DType::U32, DType::U64,
-        DType::Complex64, DType::Complex128,
+        DType::F16,
+        DType::BF16,
+        DType::F32,
+        DType::F64,
+        DType::I8,
+        DType::I16,
+        DType::I32,
+        DType::I64,
+        DType::U8,
+        DType::U16,
+        DType::U32,
+        DType::U64,
+        DType::Complex64,
+        DType::Complex128,
     ];
 
     /// All data types.
     pub const ALL: [DType; 15] = [
-        DType::F16, DType::BF16, DType::F32, DType::F64,
-        DType::I8, DType::I16, DType::I32, DType::I64,
-        DType::U8, DType::U16, DType::U32, DType::U64,
-        DType::Bool, DType::Complex64, DType::Complex128,
+        DType::F16,
+        DType::BF16,
+        DType::F32,
+        DType::F64,
+        DType::I8,
+        DType::I16,
+        DType::I32,
+        DType::I64,
+        DType::U8,
+        DType::U16,
+        DType::U32,
+        DType::U64,
+        DType::Bool,
+        DType::Complex64,
+        DType::Complex128,
     ];
 }
 
@@ -260,8 +287,14 @@ impl DType {
     pub fn is_int(&self) -> bool {
         matches!(
             self,
-            DType::I8 | DType::I16 | DType::I32 | DType::I64
-                | DType::U8 | DType::U16 | DType::U32 | DType::U64
+            DType::I8
+                | DType::I16
+                | DType::I32
+                | DType::I64
+                | DType::U8
+                | DType::U16
+                | DType::U32
+                | DType::U64
         )
     }
 
@@ -1289,7 +1322,9 @@ pub fn cast_slice_f32_to_i32(data: &[f32]) -> Vec<i32> {
 ///
 /// A Vec<f32> with 0.0 for false and 1.0 for true.
 pub fn cast_slice_bool_to_f32(data: &[bool]) -> Vec<f32> {
-    data.iter().map(|&v| if v { 1.0f32 } else { 0.0f32 }).collect()
+    data.iter()
+        .map(|&v| if v { 1.0f32 } else { 0.0f32 })
+        .collect()
 }
 
 /// Converts a slice of `f32` values to a `Vec<bool>` (0.0 -> false, non-zero -> true).
@@ -1556,7 +1591,10 @@ impl DTypeInfo {
     /// ```
     pub fn summary(&self) -> String {
         let mut lines = Vec::new();
-        lines.push(format!("{} ({} bits, {} bytes)", self.name, self.bit_width, self.size_bytes));
+        lines.push(format!(
+            "{} ({} bits, {} bytes)",
+            self.name, self.bit_width, self.size_bytes
+        ));
         lines.push(format!("  Category: {}", self.category));
         lines.push(format!("  NumPy: {}", self.numpy_name));
         lines.push(format!("  C type: {}", self.c_type_name));
@@ -1573,7 +1611,10 @@ impl DTypeInfo {
 
     /// Returns DTypeInfo for all data types.
     pub fn all() -> Vec<DTypeInfo> {
-        DType::ALL.iter().map(|dt| DTypeInfo::for_dtype(*dt)).collect()
+        DType::ALL
+            .iter()
+            .map(|dt| DTypeInfo::for_dtype(*dt))
+            .collect()
     }
 }
 
@@ -2171,9 +2212,18 @@ mod tests {
 
     #[test]
     fn test_promote_complex() {
-        assert_eq!(DType::promote(DType::Complex64, DType::F32), DType::Complex64);
-        assert_eq!(DType::promote(DType::Complex128, DType::Complex64), DType::Complex128);
-        assert_eq!(DType::promote(DType::Complex64, DType::Complex128), DType::Complex128);
+        assert_eq!(
+            DType::promote(DType::Complex64, DType::F32),
+            DType::Complex64
+        );
+        assert_eq!(
+            DType::promote(DType::Complex128, DType::Complex64),
+            DType::Complex128
+        );
+        assert_eq!(
+            DType::promote(DType::Complex64, DType::Complex128),
+            DType::Complex128
+        );
     }
 
     #[test]
@@ -2186,7 +2236,10 @@ mod tests {
     #[test]
     fn test_promote_symmetric() {
         // promote should be symmetric for most types
-        assert_eq!(DType::promote(DType::I8, DType::F32), DType::promote(DType::F32, DType::I8));
+        assert_eq!(
+            DType::promote(DType::I8, DType::F32),
+            DType::promote(DType::F32, DType::I8)
+        );
     }
 
     // =========================================================================
@@ -2232,7 +2285,13 @@ mod tests {
 
     #[test]
     fn test_cast_f64_to_f32_preserves_special() {
-        let input = vec![f64::NAN, f64::INFINITY, f64::NEG_INFINITY, f64::MIN, f64::MAX];
+        let input = vec![
+            f64::NAN,
+            f64::INFINITY,
+            f64::NEG_INFINITY,
+            f64::MIN,
+            f64::MAX,
+        ];
         let output = cast_slice_f64_to_f32(&input);
         assert!(output[0].is_nan());
         assert!(output[1].is_infinite() && output[1] > 0.0);
@@ -2990,9 +3049,20 @@ mod tests {
     #[test]
     fn test_common_dtype_various() {
         assert_eq!(DType::common_dtype(&[DType::U8]).unwrap(), DType::U8);
-        assert_eq!(DType::common_dtype(&[DType::F32, DType::F32]).unwrap(), DType::F32);
         assert_eq!(
-            DType::common_dtype(&[DType::I8, DType::U8, DType::I16, DType::U16, DType::F16, DType::BF16]).unwrap(),
+            DType::common_dtype(&[DType::F32, DType::F32]).unwrap(),
+            DType::F32
+        );
+        assert_eq!(
+            DType::common_dtype(&[
+                DType::I8,
+                DType::U8,
+                DType::I16,
+                DType::U16,
+                DType::F16,
+                DType::BF16
+            ])
+            .unwrap(),
             DType::F32
         );
     }
@@ -3004,7 +3074,11 @@ mod tests {
     #[test]
     fn test_supports_comparison_all_types() {
         for dt in DType::ALL.iter() {
-            assert!(dt.supports_comparison(), "{:?} should support comparison", dt);
+            assert!(
+                dt.supports_comparison(),
+                "{:?} should support comparison",
+                dt
+            );
         }
     }
 
@@ -3012,7 +3086,11 @@ mod tests {
     fn test_supports_arithmetic_all() {
         for dt in DType::ALL.iter() {
             if *dt != DType::Bool {
-                assert!(dt.supports_arithmetic(), "{:?} should support arithmetic", dt);
+                assert!(
+                    dt.supports_arithmetic(),
+                    "{:?} should support arithmetic",
+                    dt
+                );
             } else {
                 assert!(!dt.supports_arithmetic());
             }
@@ -3072,7 +3150,11 @@ mod tests {
     fn test_numpy_names_unique() {
         let mut names = std::collections::HashSet::new();
         for dt in DType::ALL.iter() {
-            assert!(names.insert(dt.numpy_name()), "duplicate numpy name: {:?}", dt);
+            assert!(
+                names.insert(dt.numpy_name()),
+                "duplicate numpy name: {:?}",
+                dt
+            );
         }
     }
 
@@ -3080,7 +3162,11 @@ mod tests {
     fn test_c_type_names_unique() {
         let mut names = std::collections::HashSet::new();
         for dt in DType::ALL.iter() {
-            assert!(names.insert(dt.c_type_name()), "duplicate C type name: {:?}", dt);
+            assert!(
+                names.insert(dt.c_type_name()),
+                "duplicate C type name: {:?}",
+                dt
+            );
         }
     }
 
@@ -3128,24 +3214,39 @@ mod tests {
 
     #[test]
     fn test_float_types_correct() {
-        assert_eq!(DType::FLOAT_TYPES, [DType::F16, DType::BF16, DType::F32, DType::F64]);
+        assert_eq!(
+            DType::FLOAT_TYPES,
+            [DType::F16, DType::BF16, DType::F32, DType::F64]
+        );
     }
 
     #[test]
     fn test_signed_int_types_correct() {
-        assert_eq!(DType::SIGNED_INT_TYPES, [DType::I8, DType::I16, DType::I32, DType::I64]);
+        assert_eq!(
+            DType::SIGNED_INT_TYPES,
+            [DType::I8, DType::I16, DType::I32, DType::I64]
+        );
     }
 
     #[test]
     fn test_unsigned_int_types_correct() {
-        assert_eq!(DType::UNSIGNED_INT_TYPES, [DType::U8, DType::U16, DType::U32, DType::U64]);
+        assert_eq!(
+            DType::UNSIGNED_INT_TYPES,
+            [DType::U8, DType::U16, DType::U32, DType::U64]
+        );
     }
 
     #[test]
     fn test_int_types_correct() {
         let expected = [
-            DType::I8, DType::I16, DType::I32, DType::I64,
-            DType::U8, DType::U16, DType::U32, DType::U64,
+            DType::I8,
+            DType::I16,
+            DType::I32,
+            DType::I64,
+            DType::U8,
+            DType::U16,
+            DType::U32,
+            DType::U64,
         ];
         assert_eq!(DType::INT_TYPES, expected);
     }

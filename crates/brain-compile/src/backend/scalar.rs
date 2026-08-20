@@ -6,7 +6,10 @@ use crate::ir::IrGraph;
 
 /// Generates a Rust function source string for an IR graph.
 pub fn generate_rust_kernel(_graph: &IrGraph, kernel_name: &str) -> String {
-    let mut code = format!("pub fn {}(_inputs: &[&[f64]], output: &mut [f64]) {{\n", kernel_name);
+    let mut code = format!(
+        "pub fn {}(_inputs: &[&[f64]], output: &mut [f64]) {{\n",
+        kernel_name
+    );
     code.push_str("    let n = output.len();\n");
     code.push_str("    for i in 0..n {\n");
     code.push_str("        output[i] = 0.0;\n");

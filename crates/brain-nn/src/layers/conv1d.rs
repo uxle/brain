@@ -2,9 +2,9 @@
 //!
 //! Multi-channel 1D temporal/sequence convolution with padding, stride, and bias parameters.
 
-use brain_core::Tensor;
-use crate::module::{Module, ModuleResult, ModuleError};
 use crate::init::kaiming_uniform;
+use crate::module::{Module, ModuleError, ModuleResult};
+use brain_core::Tensor;
 
 /// Configuration for 1D convolution operations.
 #[derive(Debug, Clone)]
@@ -37,9 +37,18 @@ pub struct Conv1d {
 }
 
 impl Conv1d {
-    pub fn new(in_channels: usize, out_channels: usize, kernel_size: usize, has_bias: bool) -> Self {
+    pub fn new(
+        in_channels: usize,
+        out_channels: usize,
+        kernel_size: usize,
+        has_bias: bool,
+    ) -> Self {
         let weight = kaiming_uniform(&[out_channels, in_channels, kernel_size], 0.0);
-        let bias = if has_bias { Some(Tensor::zeros(vec![out_channels])) } else { None };
+        let bias = if has_bias {
+            Some(Tensor::zeros(vec![out_channels]))
+        } else {
+            None
+        };
         let config = Conv1dConfig {
             in_channels,
             out_channels,
@@ -47,7 +56,11 @@ impl Conv1d {
             stride: 1,
             padding: kernel_size / 2,
         };
-        Self { weight, bias, config }
+        Self {
+            weight,
+            bias,
+            config,
+        }
     }
 }
 
@@ -58,7 +71,11 @@ impl Module for Conv1d {
         let shape = input.shape();
         if shape.len() != 3 || shape[1] != self.config.in_channels {
             return Err(ModuleError::ShapeMismatch {
-                expected: vec![shape.first().copied().unwrap_or(1), self.config.in_channels, shape.get(2).copied().unwrap_or(1)],
+                expected: vec![
+                    shape.first().copied().unwrap_or(1),
+                    self.config.in_channels,
+                    shape.get(2).copied().unwrap_or(1),
+                ],
                 got: shape.to_vec(),
             });
         }
@@ -76,7 +93,9 @@ impl Module for Conv1d {
 
     fn parameters(&self) -> Vec<Value> {
         let mut p = vec![Value::new(self.weight.clone(), true)];
-        if let Some(ref b) = self.bias { p.push(Value::new(b.clone(), true)); }
+        if let Some(ref b) = self.bias {
+            p.push(Value::new(b.clone(), true));
+        }
         p
     }
 }
@@ -88,7 +107,10 @@ mod tests {
     #[test]
     fn test_conv1d_forward() {
         let conv = Conv1d::new(1, 1, 3, false);
-        let x = Value::new(Tensor::from_slice(&[1.0, 2.0, 3.0, 4.0, 5.0], vec![1, 1, 5]), false);
+        let x = Value::new(
+            Tensor::from_slice(&[1.0, 2.0, 3.0, 4.0, 5.0], vec![1, 1, 5]),
+            false,
+        );
         let out = conv.forward(&x).unwrap();
         assert_eq!(out.shape().len(), 3);
         assert_eq!(out.shape()[0], 1);

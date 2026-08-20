@@ -33,17 +33,13 @@ impl Dataset {
     pub fn feature_matrix(&self) -> Tensor {
         let n = self.features.len();
 
-        let mut data =
-            Vec::with_capacity(n * self.n_features);
+        let mut data = Vec::with_capacity(n * self.n_features);
 
         for row in &self.features {
             data.extend_from_slice(row);
         }
 
-        Tensor::from_vec(
-            data,
-            vec![n, self.n_features],
-        )
+        Tensor::from_vec(data, vec![n, self.n_features])
     }
 
     pub fn parse_sample(text: &str) -> Result<Vec<f64>, String> {
@@ -61,12 +57,7 @@ impl Dataset {
             values.push(
                 token
                     .parse::<f64>()
-                    .map_err(|err| {
-                        format!(
-                            "failed to parse '{}' as number: {}",
-                            token, err
-                        )
-                    })?,
+                    .map_err(|err| format!("failed to parse '{}' as number: {}", token, err))?,
             );
         }
 
@@ -78,15 +69,15 @@ impl Dataset {
 ///
 /// Last column = integer class.
 /// Previous columns = features.
-pub fn load(
-    path: &str,
-    labeled: bool,
-) -> Result<Dataset, String> {
-    load_task(path, if labeled {
-        DatasetTask::Classification
-    } else {
-        DatasetTask::Unlabeled
-    })
+pub fn load(path: &str, labeled: bool) -> Result<Dataset, String> {
+    load_task(
+        path,
+        if labeled {
+            DatasetTask::Classification
+        } else {
+            DatasetTask::Unlabeled
+        },
+    )
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -97,19 +88,9 @@ pub enum DatasetTask {
 }
 
 /// Load dataset according to task.
-pub fn load_task(
-    path: &str,
-    task: DatasetTask,
-) -> Result<Dataset, String> {
-    let text = std::fs::read_to_string(
-        std::path::Path::new(path),
-    )
-    .map_err(|err| {
-        format!(
-            "could not read dataset '{}': {}",
-            path, err
-        )
-    })?;
+pub fn load_task(path: &str, task: DatasetTask) -> Result<Dataset, String> {
+    let text = std::fs::read_to_string(std::path::Path::new(path))
+        .map_err(|err| format!("could not read dataset '{}': {}", path, err))?;
 
     let mut features = Vec::<Vec<f64>>::new();
     let mut labels = Vec::<usize>::new();
@@ -154,13 +135,9 @@ pub fn load_task(
                     ));
                 }
 
-                let label_value =
-                    values[values.len() - 1];
+                let label_value = values[values.len() - 1];
 
-                if !label_value.is_finite()
-                    || label_value.fract() != 0.0
-                    || label_value < 0.0
-                {
+                if !label_value.is_finite() || label_value.fract() != 0.0 || label_value < 0.0 {
                     return Err(format!(
                         "line {}: label must be a non-negative integer, got {}",
                         lineno + 1,
@@ -168,16 +145,11 @@ pub fn load_task(
                     ));
                 }
 
-                let row =
-                    values[..values.len() - 1].to_vec();
+                let row = values[..values.len() - 1].to_vec();
 
                 let label = label_value as usize;
 
-                validate_feature_count(
-                    &mut n_features,
-                    row.len(),
-                    lineno + 1,
-                )?;
+                validate_feature_count(&mut n_features, row.len(), lineno + 1)?;
 
                 features.push(row);
                 labels.push(label);
@@ -191,8 +163,7 @@ pub fn load_task(
                     ));
                 }
 
-                let target =
-                    values[values.len() - 1];
+                let target = values[values.len() - 1];
 
                 if !target.is_finite() {
                     return Err(format!(
@@ -202,25 +173,16 @@ pub fn load_task(
                     ));
                 }
 
-                let row =
-                    values[..values.len() - 1].to_vec();
+                let row = values[..values.len() - 1].to_vec();
 
-                validate_feature_count(
-                    &mut n_features,
-                    row.len(),
-                    lineno + 1,
-                )?;
+                validate_feature_count(&mut n_features, row.len(), lineno + 1)?;
 
                 features.push(row);
                 targets.push(target);
             }
 
             DatasetTask::Unlabeled => {
-                validate_feature_count(
-                    &mut n_features,
-                    values.len(),
-                    lineno + 1,
-                )?;
+                validate_feature_count(&mut n_features, values.len(), lineno + 1)?;
 
                 features.push(values);
             }
@@ -228,10 +190,7 @@ pub fn load_task(
     }
 
     if features.is_empty() {
-        return Err(format!(
-            "dataset '{}' contains no samples",
-            path
-        ));
+        return Err(format!("dataset '{}' contains no samples", path));
     }
 
     Ok(Dataset {
@@ -242,11 +201,7 @@ pub fn load_task(
     })
 }
 
-fn validate_feature_count(
-    n_features: &mut usize,
-    count: usize,
-    line: usize,
-) -> Result<(), String> {
+fn validate_feature_count(n_features: &mut usize, count: usize, line: usize) -> Result<(), String> {
     if *n_features == 0 {
         *n_features = count;
         return Ok(());
@@ -255,9 +210,7 @@ fn validate_feature_count(
     if count != *n_features {
         return Err(format!(
             "line {}: expected {} features, got {}",
-            line,
-            *n_features,
-            count
+            line, *n_features, count
         ));
     }
 

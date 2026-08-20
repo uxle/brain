@@ -31,6 +31,11 @@ fn test_compile_graph_eval_equivalence() {
 
     assert_eq!(out_tensor.shape(), expected.shape());
     for (a, b) in out_tensor.data().iter().zip(expected.data()) {
-        assert!((a - b).abs() < 1e-6, "Compiled output diff: got {}, expected {}", a, b);
+        assert!(
+            (a - b).abs() < 1e-6,
+            "Compiled output diff: got {}, expected {}",
+            a,
+            b
+        );
     }
 }

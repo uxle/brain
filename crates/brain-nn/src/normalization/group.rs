@@ -3,8 +3,8 @@
 //! Normalization dividing channels into groups, independent of mini-batch size.
 #![allow(missing_docs)]
 
-use brain_core::Tensor;
 use crate::module::{Module, ModuleResult};
+use brain_core::Tensor;
 
 /// Group Normalization module.
 #[derive(Debug, Clone)]
@@ -36,13 +36,22 @@ impl Module for GroupNorm {
     }
 
     fn parameters(&self) -> Vec<Value> {
-        vec![Value::new(self.weight.clone(), true), Value::new(self.bias.clone(), true)]
+        vec![
+            Value::new(self.weight.clone(), true),
+            Value::new(self.bias.clone(), true),
+        ]
     }
 }
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

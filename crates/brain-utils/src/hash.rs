@@ -29,7 +29,10 @@ pub fn fnv1a_32(bytes: &[u8]) -> u32 {
 
 /// Combines two 64-bit hash values using Boost-style mix.
 pub fn hash_combine_64(h1: u64, h2: u64) -> u64 {
-    h1 ^ (h2.wrapping_add(0x9e3779b97f4a7c15).wrapping_add(h1 << 6).wrapping_add(h1 >> 2))
+    h1 ^ (h2
+        .wrapping_add(0x9e3779b97f4a7c15)
+        .wrapping_add(h1 << 6)
+        .wrapping_add(h1 >> 2))
 }
 
 /// Murmur3 32-bit hash implementation.
@@ -84,14 +87,14 @@ mod tests {
         let h32 = fnv1a_32(data);
         assert_ne!(h64, 0);
         assert_ne!(h32, 0);
-    
+
         let m3 = murmur3_32(data, 0);
         assert_ne!(m3, 0);
-    
+
         let combined = hash_combine_64(h64, m3 as u64);
         assert_ne!(combined, h64);
         assert_ne!(combined, m3 as u64);
-    
+
         assert_eq!(hash_str("test_string"), fnv1a_64(b"test_string"));
     }
 }

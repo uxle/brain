@@ -37,7 +37,12 @@ pub fn ge_tensor(a: &Tensor, b: &Tensor) -> Tensor {
 
 /// Returns the k largest elements and their indices along dimension `dim`.
 pub fn topk(input: &Tensor, k: usize, dim: usize, largest: bool) -> (Tensor, Vec<usize>) {
-    assert!(dim < input.ndim(), "topk: dim {} out of bounds for tensor of rank {}", dim, input.ndim());
+    assert!(
+        dim < input.ndim(),
+        "topk: dim {} out of bounds for tensor of rank {}",
+        dim,
+        input.ndim()
+    );
     let shape = input.shape();
     let d_len = shape[dim];
     let k_actual = k.min(d_len);

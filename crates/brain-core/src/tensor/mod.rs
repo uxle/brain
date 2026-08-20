@@ -14,8 +14,6 @@ pub mod fft;
 pub mod fold;
 pub mod function;
 pub mod hist;
-#[path = "impl.rs"]
-pub mod tensor_impl;
 pub mod indexing;
 pub mod linalg;
 pub mod math;
@@ -30,6 +28,8 @@ pub mod reduction;
 pub mod simd;
 pub mod sparse;
 pub mod special;
+#[path = "impl.rs"]
+pub mod tensor_impl;
 pub mod view;
 
 pub use tensor_impl::Tensor;
@@ -92,8 +92,12 @@ impl TensorStats {
             } else if x.is_infinite() {
                 has_inf = true;
             } else {
-                if x < min { min = x; }
-                if x > max { max = x; }
+                if x < min {
+                    min = x;
+                }
+                if x > max {
+                    max = x;
+                }
                 sum += x;
             }
             if x == 0.0 {

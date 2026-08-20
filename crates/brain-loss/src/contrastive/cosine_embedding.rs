@@ -5,9 +5,9 @@
 //! Measures cosine distance between pairs $(x_1, x_2)$ given target $y \in \{1, -1\}$:
 //! $$\mathcal{L}(x_1, x_2, y) = \begin{cases} 1 - \cos(x_1, x_2) & \text{if } y = 1 \\ \max(0, \cos(x_1, x_2) - \text{margin}) & \text{if } y = -1 \end{cases}$$
 
-use brain_core::Tensor;
 use crate::core::{LossResult, Reduction};
 use crate::utils::reduction_apply;
+use brain_core::Tensor;
 
 /// Cosine Embedding Loss.
 #[derive(Debug, Clone)]
@@ -18,7 +18,10 @@ pub struct CosineEmbeddingLoss {
 
 impl Default for CosineEmbeddingLoss {
     fn default() -> Self {
-        Self { margin: 0.0, reduction: Reduction::Mean }
+        Self {
+            margin: 0.0,
+            reduction: Reduction::Mean,
+        }
     }
 }
 

@@ -133,7 +133,10 @@ pub fn global_max_pool2d(input: &Tensor) -> Tensor {
 /// Adaptive Average Pooling 2D to a fixed output size (torch semantics).
 pub fn adaptive_avg_pool2d(input: &Tensor, out_h: usize, out_w: usize) -> Tensor {
     assert_eq!(input.ndim(), 4, "adaptive_avg_pool2d requires 4D tensor");
-    assert!(out_h > 0 && out_w > 0, "adaptive pooling output size must be positive");
+    assert!(
+        out_h > 0 && out_w > 0,
+        "adaptive pooling output size must be positive"
+    );
     let (n, c, in_h, in_w) = (
         input.shape()[0],
         input.shape()[1],
@@ -158,7 +161,13 @@ pub fn adaptive_avg_pool2d(input: &Tensor, out_h: usize, out_w: usize) -> Tensor
                             count += 1;
                         }
                     }
-                    out.set_4d(b, ch, oh, ow, if count > 0 { sum / (count as f64) } else { 0.0 });
+                    out.set_4d(
+                        b,
+                        ch,
+                        oh,
+                        ow,
+                        if count > 0 { sum / (count as f64) } else { 0.0 },
+                    );
                 }
             }
         }
@@ -169,7 +178,10 @@ pub fn adaptive_avg_pool2d(input: &Tensor, out_h: usize, out_w: usize) -> Tensor
 /// Adaptive Max Pooling 2D to a fixed output size (torch semantics).
 pub fn adaptive_max_pool2d(input: &Tensor, out_h: usize, out_w: usize) -> Tensor {
     assert_eq!(input.ndim(), 4, "adaptive_max_pool2d requires 4D tensor");
-    assert!(out_h > 0 && out_w > 0, "adaptive pooling output size must be positive");
+    assert!(
+        out_h > 0 && out_w > 0,
+        "adaptive pooling output size must be positive"
+    );
     let (n, c, in_h, in_w) = (
         input.shape()[0],
         input.shape()[1],
@@ -229,12 +241,13 @@ mod tests {
 
     #[test]
     fn test_pooling_spatial_downsampling() {
-        let input = Tensor::from_slice(&[
-            1.0, 2.0, 3.0, 4.0,
-            5.0, 6.0, 7.0, 8.0,
-            9.0, 10.0, 11.0, 12.0,
-            13.0, 14.0, 15.0, 16.0,
-        ], vec![1, 1, 4, 4]);
+        let input = Tensor::from_slice(
+            &[
+                1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0, 13.0, 14.0, 15.0,
+                16.0,
+            ],
+            vec![1, 1, 4, 4],
+        );
 
         let max_p = max_pool2d(&input, (2, 2), (2, 2), (0, 0));
         assert_eq!(max_p.shape(), &[1, 1, 2, 2]);
@@ -251,12 +264,13 @@ mod tests {
 
     #[test]
     fn test_adaptive_pool2d() {
-        let input = Tensor::from_slice(&[
-            1.0, 2.0, 3.0, 4.0,
-            5.0, 6.0, 7.0, 8.0,
-            9.0, 10.0, 11.0, 12.0,
-            13.0, 14.0, 15.0, 16.0,
-        ], vec![1, 1, 4, 4]);
+        let input = Tensor::from_slice(
+            &[
+                1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0, 13.0, 14.0, 15.0,
+                16.0,
+            ],
+            vec![1, 1, 4, 4],
+        );
 
         // Upsample to 6x6 via adaptive avg: overlaps produce repeats of pooled regions
         let up = adaptive_avg_pool2d(&input, 6, 6);

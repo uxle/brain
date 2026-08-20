@@ -10,20 +10,27 @@ use brain_core::Tensor;
 pub fn knn_graph(features: &Tensor, k: usize) -> (Vec<usize>, Vec<usize>) {
     let data = features.to_vec();
     let num_nodes = features.shape()[0];
-    let dim = if features.shape().len() > 1 { features.shape()[1] } else { 1 };
+    let dim = if features.shape().len() > 1 {
+        features.shape()[1]
+    } else {
+        1
+    };
 
     let mut src = Vec::new();
     let mut dst = Vec::new();
 
     for i in 0..num_nodes {
-        let mut dists: Vec<(usize, f64)> = (0..num_nodes).filter(|&j| j != i).map(|j| {
-            let mut d2 = 0.0f64;
-            for d in 0..dim {
-                let diff = data[i * dim + d] - data[j * dim + d];
-                d2 += diff * diff;
-            }
-            (j, d2.sqrt())
-        }).collect();
+        let mut dists: Vec<(usize, f64)> = (0..num_nodes)
+            .filter(|&j| j != i)
+            .map(|j| {
+                let mut d2 = 0.0f64;
+                for d in 0..dim {
+                    let diff = data[i * dim + d] - data[j * dim + d];
+                    d2 += diff * diff;
+                }
+                (j, d2.sqrt())
+            })
+            .collect();
 
         dists.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal));
 
@@ -40,7 +47,11 @@ pub fn knn_graph(features: &Tensor, k: usize) -> (Vec<usize>, Vec<usize>) {
 pub fn radius_graph(features: &Tensor, r: f64) -> (Vec<usize>, Vec<usize>) {
     let data = features.to_vec();
     let num_nodes = features.shape()[0];
-    let dim = if features.shape().len() > 1 { features.shape()[1] } else { 1 };
+    let dim = if features.shape().len() > 1 {
+        features.shape()[1]
+    } else {
+        1
+    };
 
     let mut src = Vec::new();
     let mut dst = Vec::new();
@@ -81,7 +92,9 @@ pub fn random_graph_er(n: usize, p: f64, seed: u64) -> (Vec<usize>, Vec<usize>) 
     for i in 0..n {
         for j in 0..n {
             if i != j {
-                rng = rng.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+                rng = rng
+                    .wrapping_mul(6364136223846793005)
+                    .wrapping_add(1442695040888963407);
                 let val = (rng >> 11) as f64 / (1u64 << 53) as f64;
                 if val < p {
                     src.push(i);
@@ -96,7 +109,13 @@ pub fn random_graph_er(n: usize, p: f64, seed: u64) -> (Vec<usize>, Vec<usize>) 
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

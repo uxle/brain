@@ -3,14 +3,13 @@
 //! Provides the primary forward pass orchestration, feature extraction,
 //! prediction, and checkpoint save/load for ViT models.
 
-use std::collections::HashMap;
-use crate::core::{VitError, VitResult, VitState, VitOutput, Tensor2D, Tensor3D, SimpleRng};
 use crate::config::VitConfig;
+use crate::core::{SimpleRng, Tensor2D, Tensor3D, VitError, VitOutput, VitResult, VitState};
 use crate::ops::{
-    extract_patches, add_cls_token,
-    add_pos_embed, scaled_dot_product_attention, layer_norm_2d,
-    mlp_forward, linear,
+    add_cls_token, add_pos_embed, extract_patches, layer_norm_2d, linear, mlp_forward,
+    scaled_dot_product_attention,
 };
+use std::collections::HashMap;
 
 /// Minimal ViT model for forward pass simulation.
 ///
@@ -106,16 +105,28 @@ impl VitModel {
         state.register_layer("patch_embed", embed_dim * patch_dim);
         state.register_layer("cls_token", embed_dim);
         state.register_layer("pos_embed", seq_len * embed_dim);
-        state.register_layer("blocks", depth * (3 * embed_dim * embed_dim + mlp_dim * embed_dim * 2 + embed_dim * embed_dim));
+        state.register_layer(
+            "blocks",
+            depth * (3 * embed_dim * embed_dim + mlp_dim * embed_dim * 2 + embed_dim * embed_dim),
+        );
         state.register_layer("head", num_classes * embed_dim);
 
         Ok(Self {
-            config, state,
-            patch_proj_w, patch_proj_b,
-            cls_token, pos_embed,
-            block_qkv_w, block_qkv_b, block_out_w,
-            block_mlp1_w, block_mlp1_b, block_mlp2_w, block_mlp2_b,
-            head_w, head_b,
+            config,
+            state,
+            patch_proj_w,
+            patch_proj_b,
+            cls_token,
+            pos_embed,
+            block_qkv_w,
+            block_qkv_b,
+            block_out_w,
+            block_mlp1_w,
+            block_mlp1_b,
+            block_mlp2_w,
+            block_mlp2_b,
+            head_w,
+            head_b,
             rng,
         })
     }
@@ -125,12 +136,18 @@ impl VitModel {
     /// - `pixels`: `[B, C, H, W]` flat.
     /// - Returns `[B, N, D]` flat patch embeddings.
     pub fn embed_patches(&self, pixels: &[f64], batch: usize) -> VitResult<Vec<f64>> {
-        if batch == 0 { return Err(VitError::EmptyBatch); }
+        if batch == 0 {
+            return Err(VitError::EmptyBatch);
+        }
         let cfg = &self.config.patch_embed;
         let patches_flat = extract_patches(
-            pixels, batch, cfg.in_channels,
-            cfg.image_size, cfg.image_size,
-            cfg.patch_size, cfg.patch_size,
+            pixels,
+            batch,
+            cfg.in_channels,
+            cfg.image_size,
+            cfg.image_size,
+            cfg.patch_size,
+            cfg.patch_size,
         )?;
         let n = cfg.num_patches();
         let patch_dim = cfg.in_channels * cfg.patch_size * cfg.patch_size;
@@ -142,8 +159,11 @@ impl VitModel {
         for b in 0..batch {
             for p in 0..n {
                 let patch_start = (b * n + p) * patch_dim;
-                let patch = Tensor2D::from_data(1, patch_dim,
-                    patches_flat[patch_start..patch_start + patch_dim].to_vec())?;
+                let patch = Tensor2D::from_data(
+                    1,
+                    patch_dim,
+                    patches_flat[patch_start..patch_start + patch_dim].to_vec(),
+                )?;
                 let proj = linear(&patch, &proj_w, Some(&self.patch_proj_b))?;
                 let out_start = (b * n + p) * embed_dim;
                 out[out_start..out_start + embed_dim].copy_from_slice(&proj.data);
@@ -183,28 +203,44 @@ impl VitModel {
                 let normed = layer_norm_2d(&tokens_2d, eps);
 
                 // Multi-head attention
-                let qkv_w = Tensor2D::from_data(3 * embed_dim, embed_dim,
-                    self.block_qkv_w[block_idx].clone())?;
+                let qkv_w = Tensor2D::from_data(
+                    3 * embed_dim,
+                    embed_dim,
+                    self.block_qkv_w[block_idx].clone(),
+                )?;
                 let qkv = linear(&normed, &qkv_w, Some(&self.block_qkv_b[block_idx]))?;
 
                 // Split into Q, K, V
-                let q_data: Vec<f64> = (0..seq_len).flat_map(|s|
-                    qkv.data[s * 3 * embed_dim..s * 3 * embed_dim + embed_dim].iter().copied()
-                ).collect();
-                let k_data: Vec<f64> = (0..seq_len).flat_map(|s|
-                    qkv.data[s * 3 * embed_dim + embed_dim..s * 3 * embed_dim + 2 * embed_dim].iter().copied()
-                ).collect();
-                let v_data: Vec<f64> = (0..seq_len).flat_map(|s|
-                    qkv.data[s * 3 * embed_dim + 2 * embed_dim..s * 3 * embed_dim + 3 * embed_dim].iter().copied()
-                ).collect();
+                let q_data: Vec<f64> = (0..seq_len)
+                    .flat_map(|s| {
+                        qkv.data[s * 3 * embed_dim..s * 3 * embed_dim + embed_dim]
+                            .iter()
+                            .copied()
+                    })
+                    .collect();
+                let k_data: Vec<f64> = (0..seq_len)
+                    .flat_map(|s| {
+                        qkv.data[s * 3 * embed_dim + embed_dim..s * 3 * embed_dim + 2 * embed_dim]
+                            .iter()
+                            .copied()
+                    })
+                    .collect();
+                let v_data: Vec<f64> = (0..seq_len)
+                    .flat_map(|s| {
+                        qkv.data
+                            [s * 3 * embed_dim + 2 * embed_dim..s * 3 * embed_dim + 3 * embed_dim]
+                            .iter()
+                            .copied()
+                    })
+                    .collect();
 
                 // Simplified single-head attention (use first head only for speed in tests)
-                let q = Tensor2D::from_data(seq_len, head_dim,
-                    q_data[..seq_len * head_dim].to_vec())?;
-                let k = Tensor2D::from_data(seq_len, head_dim,
-                    k_data[..seq_len * head_dim].to_vec())?;
-                let v = Tensor2D::from_data(seq_len, head_dim,
-                    v_data[..seq_len * head_dim].to_vec())?;
+                let q =
+                    Tensor2D::from_data(seq_len, head_dim, q_data[..seq_len * head_dim].to_vec())?;
+                let k =
+                    Tensor2D::from_data(seq_len, head_dim, k_data[..seq_len * head_dim].to_vec())?;
+                let v =
+                    Tensor2D::from_data(seq_len, head_dim, v_data[..seq_len * head_dim].to_vec())?;
                 let (attn_out, _) = scaled_dot_product_attention(&q, &k, &v)?;
 
                 // Pad attn_out back to embed_dim by repeating (simplified)
@@ -215,7 +251,8 @@ impl VitModel {
                     }
                 }
                 let attn_full_mat = Tensor2D::from_data(seq_len, embed_dim, attn_full)?;
-                let out_w = Tensor2D::from_data(embed_dim, embed_dim, self.block_out_w[block_idx].clone())?;
+                let out_w =
+                    Tensor2D::from_data(embed_dim, embed_dim, self.block_out_w[block_idx].clone())?;
                 let attn_projected = linear(&attn_full_mat, &out_w, None)?;
 
                 // Residual
@@ -223,12 +260,16 @@ impl VitModel {
 
                 // Pre-LN for MLP
                 let normed2 = layer_norm_2d(&residual1, eps);
-                let mlp1_w = Tensor2D::from_data(mlp_dim, embed_dim, self.block_mlp1_w[block_idx].clone())?;
-                let mlp2_w = Tensor2D::from_data(embed_dim, mlp_dim, self.block_mlp2_w[block_idx].clone())?;
+                let mlp1_w =
+                    Tensor2D::from_data(mlp_dim, embed_dim, self.block_mlp1_w[block_idx].clone())?;
+                let mlp2_w =
+                    Tensor2D::from_data(embed_dim, mlp_dim, self.block_mlp2_w[block_idx].clone())?;
                 let mlp_out = mlp_forward(
                     &normed2,
-                    &mlp1_w, &self.block_mlp1_b[block_idx],
-                    &mlp2_w, &self.block_mlp2_b[block_idx],
+                    &mlp1_w,
+                    &self.block_mlp1_b[block_idx],
+                    &mlp2_w,
+                    &self.block_mlp2_b[block_idx],
                     &activation,
                 )?;
 
@@ -249,7 +290,9 @@ impl VitModel {
     /// - `pixels`: `[B, C, H, W]` flat image data.
     /// - `batch`: batch size.
     pub fn forward(&mut self, pixels: &[f64], batch: usize) -> VitResult<VitOutput> {
-        if batch == 0 { return Err(VitError::EmptyBatch); }
+        if batch == 0 {
+            return Err(VitError::EmptyBatch);
+        }
         let embed_dim = self.config.embed_dim();
         let seq_len = self.config.seq_len();
         let num_patches = self.config.num_patches();
@@ -259,11 +302,23 @@ impl VitModel {
 
         // 2. Add CLS token
         if self.config.use_cls_token {
-            patch_embeds = add_cls_token(&patch_embeds, &self.cls_token, batch, num_patches, embed_dim)?;
+            patch_embeds = add_cls_token(
+                &patch_embeds,
+                &self.cls_token,
+                batch,
+                num_patches,
+                embed_dim,
+            )?;
         }
 
         // 3. Add position embedding
-        add_pos_embed(&mut patch_embeds, &self.pos_embed, batch, seq_len, embed_dim)?;
+        add_pos_embed(
+            &mut patch_embeds,
+            &self.pos_embed,
+            batch,
+            seq_len,
+            embed_dim,
+        )?;
 
         // 4. Encoder
         let encoded = self.encoder_forward(&patch_embeds, batch, seq_len, embed_dim)?;
@@ -279,20 +334,28 @@ impl VitModel {
         let head_w = Tensor2D::from_data(self.config.num_classes, embed_dim, self.head_w.clone())?;
         let logits_mat = linear(&pooled, &head_w, Some(&self.head_b))?;
         let logits: Vec<Vec<f64>> = (0..batch)
-            .map(|b| logits_mat.data[b * self.config.num_classes..(b + 1) * self.config.num_classes].to_vec())
+            .map(|b| {
+                logits_mat.data[b * self.config.num_classes..(b + 1) * self.config.num_classes]
+                    .to_vec()
+            })
             .collect();
 
         // Build CLS and patch outputs
         let cls_token: Vec<Vec<f64>> = (0..batch)
             .map(|b| encoded_3d.batch_slice(b).data[..embed_dim].to_vec())
             .collect();
-        let patch_tokens: Vec<Vec<Vec<f64>>> = (0..batch).map(|b| {
-            let start = if self.config.use_cls_token { 1 } else { 0 };
-            (start..seq_len)
-                .map(|s| encoded_3d.data[b * seq_len * embed_dim + s * embed_dim
-                    ..b * seq_len * embed_dim + s * embed_dim + embed_dim].to_vec())
-                .collect()
-        }).collect();
+        let patch_tokens: Vec<Vec<Vec<f64>>> = (0..batch)
+            .map(|b| {
+                let start = if self.config.use_cls_token { 1 } else { 0 };
+                (start..seq_len)
+                    .map(|s| {
+                        encoded_3d.data[b * seq_len * embed_dim + s * embed_dim
+                            ..b * seq_len * embed_dim + s * embed_dim + embed_dim]
+                            .to_vec()
+                    })
+                    .collect()
+            })
+            .collect();
 
         self.state.record_forward((seq_len * batch) as u64);
         self.state.step();
@@ -309,16 +372,30 @@ impl VitModel {
 
     /// Forward to extract features only (no head applied).
     pub fn forward_features(&mut self, pixels: &[f64], batch: usize) -> VitResult<Tensor3D> {
-        if batch == 0 { return Err(VitError::EmptyBatch); }
+        if batch == 0 {
+            return Err(VitError::EmptyBatch);
+        }
         let embed_dim = self.config.embed_dim();
         let seq_len = self.config.seq_len();
         let num_patches = self.config.num_patches();
 
         let mut patch_embeds = self.embed_patches(pixels, batch)?;
         if self.config.use_cls_token {
-            patch_embeds = add_cls_token(&patch_embeds, &self.cls_token, batch, num_patches, embed_dim)?;
+            patch_embeds = add_cls_token(
+                &patch_embeds,
+                &self.cls_token,
+                batch,
+                num_patches,
+                embed_dim,
+            )?;
         }
-        add_pos_embed(&mut patch_embeds, &self.pos_embed, batch, seq_len, embed_dim)?;
+        add_pos_embed(
+            &mut patch_embeds,
+            &self.pos_embed,
+            batch,
+            seq_len,
+            embed_dim,
+        )?;
         let encoded = self.encoder_forward(&patch_embeds, batch, seq_len, embed_dim)?;
         Tensor3D::from_data(batch, seq_len, embed_dim, encoded)
     }
@@ -365,7 +442,9 @@ impl VitModel {
                     if v.len() != $field.len() {
                         return Err(VitError::Checkpoint(format!(
                             "load: key '{}' size mismatch: expected {}, got {}",
-                            $key, $field.len(), v.len()
+                            $key,
+                            $field.len(),
+                            v.len()
                         )));
                     }
                     $field.copy_from_slice(v);
@@ -389,10 +468,14 @@ impl VitModel {
     }
 
     /// Set model to training mode.
-    pub fn train(&mut self) { self.state.set_training(true); }
+    pub fn train(&mut self) {
+        self.state.set_training(true);
+    }
 
     /// Set model to evaluation mode.
-    pub fn eval(&mut self) { self.state.set_training(false); }
+    pub fn eval(&mut self) {
+        self.state.set_training(false);
+    }
 
     /// Generate a human-readable model summary.
     pub fn summary(&self) -> String {
@@ -568,7 +651,9 @@ mod tests {
         let pixels = tiny_pixels(2);
         let out = model.forward(&pixels, 2).unwrap();
         for row in &out.logits {
-            for &v in row { assert!(v.is_finite()); }
+            for &v in row {
+                assert!(v.is_finite());
+            }
         }
     }
 
@@ -602,7 +687,9 @@ mod tests {
         let mut model = tiny_model();
         let pixels = tiny_pixels(1);
         let probs = model.predict(&pixels, 1).unwrap();
-        for &p in probs[0].iter() { assert!(p >= 0.0); }
+        for &p in probs[0].iter() {
+            assert!(p >= 0.0);
+        }
     }
 
     #[test]
@@ -649,7 +736,9 @@ mod tests {
         let pixels = tiny_pixels(1);
         let out = model.forward(&pixels, 1).unwrap();
         for patch in &out.patch_tokens[0] {
-            for &v in patch { assert!(v.is_finite()); }
+            for &v in patch {
+                assert!(v.is_finite());
+            }
         }
     }
 }

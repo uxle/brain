@@ -15,7 +15,11 @@ pub struct CycleConfig {
 
 impl Default for CycleConfig {
     fn default() -> Self {
-        Self { cycle_lambda: 10.0, identity_lambda: 5.0, latent_dim: 64 }
+        Self {
+            cycle_lambda: 10.0,
+            identity_lambda: 5.0,
+            latent_dim: 64,
+        }
     }
 }
 
@@ -24,8 +28,15 @@ pub fn cycle_consistency_loss(reconstructed: &Tensor, original: &Tensor) -> f64 
     let rv = reconstructed.to_vec();
     let ov = original.to_vec();
     let n = rv.len().min(ov.len());
-    if n == 0 { return 0.0; }
-    rv.iter().zip(ov.iter()).take(n).map(|(r, o)| (r - o).abs()).sum::<f64>() / n as f64
+    if n == 0 {
+        return 0.0;
+    }
+    rv.iter()
+        .zip(ov.iter())
+        .take(n)
+        .map(|(r, o)| (r - o).abs())
+        .sum::<f64>()
+        / n as f64
 }
 
 /// Identity loss: ||G_A(y) - y||_1.
@@ -34,12 +45,7 @@ pub fn identity_loss(identity_output: &Tensor, real: &Tensor) -> f64 {
 }
 
 /// Total CycleGAN loss for one domain direction.
-pub fn cycle_total_loss(
-    adv_loss: f64,
-    cycle_loss: f64,
-    id_loss: f64,
-    config: &CycleConfig,
-) -> f64 {
+pub fn cycle_total_loss(adv_loss: f64, cycle_loss: f64, id_loss: f64, config: &CycleConfig) -> f64 {
     adv_loss + config.cycle_lambda * cycle_loss + config.identity_lambda * id_loss
 }
 
@@ -53,7 +59,11 @@ pub struct CycleGanLite {
 impl CycleGanLite {
     pub fn new(config: CycleConfig) -> Self {
         let w = vec![Tensor::zeros(vec![config.latent_dim])];
-        Self { config, g_a2b_weights: w.clone(), g_b2a_weights: w }
+        Self {
+            config,
+            g_a2b_weights: w.clone(),
+            g_b2a_weights: w,
+        }
     }
 
     /// Simulated G_A(x): maps domain A sample forward.
@@ -78,7 +88,13 @@ impl CycleGanLite {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

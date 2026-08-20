@@ -1,13 +1,11 @@
 //! # Closed-Form Optimizer Multi-Step Reference Trajectories & Invariants
 
 use brain_core::Tensor;
-use brain_optim::*;
-use brain_optim::schedulers::{
-    LrScheduler, StepLR, CosineAnnealingLR, LinearWarmup,
-};
 use brain_optim::clipping::{clip_grad_norm_, NormType};
+use brain_optim::schedulers::{CosineAnnealingLR, LinearWarmup, LrScheduler, StepLR};
 use brain_optim::state::StateDict;
 use brain_optim::ParamGroup;
+use brain_optim::*;
 
 // =============================================================================
 // 1. Exact 5-Step Trajectories: SGD, Momentum, Nesterov
@@ -19,22 +17,25 @@ fn test_sgd_standard_momentum_5_step_trajectory() {
     // Parameters: theta_0 = 1.0, lr = 0.1, momentum = 0.9, wd = 0.0
     let mut params = vec![Tensor::from_slice(&[1.0], vec![1])];
     let group = ParamGroup::new(vec![0], 0.1);
-    let mut opt = Sgd::new(vec![group], SgdConfig {
-        lr: 0.1,
-        momentum: 0.9,
-        dampening: 0.0,
-        weight_decay: 0.0,
-        nesterov: false,
-        decoupled_weight_decay: false,
-    });
+    let mut opt = Sgd::new(
+        vec![group],
+        SgdConfig {
+            lr: 0.1,
+            momentum: 0.9,
+            dampening: 0.0,
+            weight_decay: 0.0,
+            nesterov: false,
+            decoupled_weight_decay: false,
+        },
+    );
 
     // Hand-calculated exact 5-step trajectory:
     let expected_thetas = [
-        0.8,         // Step 1: g=2.0, v=2.0, theta = 1.0 - 0.2 = 0.8
-        0.46,        // Step 2: g=1.6, v=0.9(2.0)+1.6=3.4, theta = 0.8 - 0.34 = 0.46
-        0.062,       // Step 3: g=0.92, v=0.9(3.4)+0.92=3.98, theta = 0.46 - 0.398 = 0.062
-        -0.3086,     // Step 4: g=0.124, v=0.9(3.98)+0.124=3.706, theta = 0.062 - 0.3706 = -0.3086
-        -0.58042,    // Step 5: g=-0.6172, v=0.9(3.706)-0.6172=2.7182, theta = -0.3086 - 0.27182 = -0.58042
+        0.8,      // Step 1: g=2.0, v=2.0, theta = 1.0 - 0.2 = 0.8
+        0.46,     // Step 2: g=1.6, v=0.9(2.0)+1.6=3.4, theta = 0.8 - 0.34 = 0.46
+        0.062,    // Step 3: g=0.92, v=0.9(3.4)+0.92=3.98, theta = 0.46 - 0.398 = 0.062
+        -0.3086,  // Step 4: g=0.124, v=0.9(3.98)+0.124=3.706, theta = 0.062 - 0.3706 = -0.3086
+        -0.58042, // Step 5: g=-0.6172, v=0.9(3.706)-0.6172=2.7182, theta = -0.3086 - 0.27182 = -0.58042
     ];
 
     for (step, &expected) in expected_thetas.iter().enumerate() {
@@ -45,7 +46,9 @@ fn test_sgd_standard_momentum_5_step_trajectory() {
         assert!(
             (updated_theta - expected).abs() < 1e-10,
             "Step {} SGD momentum mismatch: expected={:.8}, got={:.8}",
-            step + 1, expected, updated_theta
+            step + 1,
+            expected,
+            updated_theta
         );
     }
 }
@@ -54,21 +57,24 @@ fn test_sgd_standard_momentum_5_step_trajectory() {
 fn test_sgd_nesterov_momentum_5_step_trajectory() {
     let mut params = vec![Tensor::from_slice(&[1.0], vec![1])];
     let group = ParamGroup::new(vec![0], 0.1);
-    let mut opt = Sgd::new(vec![group], SgdConfig {
-        lr: 0.1,
-        momentum: 0.9,
-        dampening: 0.0,
-        weight_decay: 0.0,
-        nesterov: true,
-        decoupled_weight_decay: false,
-    });
+    let mut opt = Sgd::new(
+        vec![group],
+        SgdConfig {
+            lr: 0.1,
+            momentum: 0.9,
+            dampening: 0.0,
+            weight_decay: 0.0,
+            nesterov: true,
+            decoupled_weight_decay: false,
+        },
+    );
 
     let expected_thetas = [
-        0.62,            // Step 1
-        0.2224,          // Step 2
-        -0.108352,       // Step 3
-        -0.32482304,     // Step 4
-        -0.4157175808,   // Step 5
+        0.62,          // Step 1
+        0.2224,        // Step 2
+        -0.108352,     // Step 3
+        -0.32482304,   // Step 4
+        -0.4157175808, // Step 5
     ];
 
     for (step, &expected) in expected_thetas.iter().enumerate() {
@@ -79,7 +85,9 @@ fn test_sgd_nesterov_momentum_5_step_trajectory() {
         assert!(
             (updated_theta - expected).abs() < 1e-10,
             "Step {} SGD Nesterov mismatch: expected={:.8}, got={:.8}",
-            step + 1, expected, updated_theta
+            step + 1,
+            expected,
+            updated_theta
         );
     }
 }
@@ -92,15 +100,18 @@ fn test_sgd_nesterov_momentum_5_step_trajectory() {
 fn test_adam_multi_step_trajectory() {
     let mut params = vec![Tensor::from_slice(&[1.0], vec![1])];
     let group = ParamGroup::new(vec![0], 0.1);
-    let mut opt = Adam::new(vec![group], AdamConfig {
-        lr: 0.1,
-        beta1: 0.9,
-        beta2: 0.999,
-        eps: 1e-8,
-        weight_decay: 0.0,
-        amsgrad: false,
-        decoupled_weight_decay: false,
-    });
+    let mut opt = Adam::new(
+        vec![group],
+        AdamConfig {
+            lr: 0.1,
+            beta1: 0.9,
+            beta2: 0.999,
+            eps: 1e-8,
+            weight_decay: 0.0,
+            amsgrad: false,
+            decoupled_weight_decay: false,
+        },
+    );
 
     // Step 1: theta_0 = 1.0, g_1 = 2.0 -> theta_1 = 0.9 exactly
     let g1 = Tensor::from_slice(&[2.0 * params[0].get(0)], vec![1]);
@@ -136,14 +147,17 @@ fn test_adamw_decoupled_weight_decay_exact() {
 fn test_rmsprop_step_trajectory() {
     let mut params = vec![Tensor::from_slice(&[1.0], vec![1])];
     let group = ParamGroup::new(vec![0], 0.1);
-    let mut opt = Rmsprop::new(vec![group], RmspropConfig {
-        lr: 0.1,
-        alpha: 0.9,
-        eps: 1e-8,
-        weight_decay: 0.0,
-        momentum: 0.0,
-        centered: false,
-    });
+    let mut opt = Rmsprop::new(
+        vec![group],
+        RmspropConfig {
+            lr: 0.1,
+            alpha: 0.9,
+            eps: 1e-8,
+            weight_decay: 0.0,
+            momentum: 0.0,
+            centered: false,
+        },
+    );
 
     // Step 1: theta_0 = 1.0, g_1 = 2.0
     // v_1 = (1 - alpha) * g_1^2 = 0.1 * 4.0 = 0.4
@@ -157,13 +171,16 @@ fn test_rmsprop_step_trajectory() {
 fn test_adagrad_step_trajectory() {
     let mut params = vec![Tensor::from_slice(&[1.0], vec![1])];
     let group = ParamGroup::new(vec![0], 0.1);
-    let mut opt = Adagrad::new(vec![group], AdagradConfig {
-        lr: 0.1,
-        lr_decay: 0.0,
-        weight_decay: 0.0,
-        initial_accumulator_value: 0.0,
-        eps: 1e-10,
-    });
+    let mut opt = Adagrad::new(
+        vec![group],
+        AdagradConfig {
+            lr: 0.1,
+            lr_decay: 0.0,
+            weight_decay: 0.0,
+            initial_accumulator_value: 0.0,
+            eps: 1e-10,
+        },
+    );
 
     // Step 1: theta_0 = 1.0, g_1 = 2.0
     // v_1 = 4.0
@@ -193,10 +210,13 @@ fn test_multi_param_group_independent_stepping() {
     let group1 = ParamGroup::new(vec![0], 0.1);
     let group2 = ParamGroup::new(vec![1], 0.01);
 
-    let mut opt = Sgd::new(vec![group1, group2], SgdConfig {
-        lr: 0.1,
-        ..Default::default()
-    });
+    let mut opt = Sgd::new(
+        vec![group1, group2],
+        SgdConfig {
+            lr: 0.1,
+            ..Default::default()
+        },
+    );
 
     let grads = vec![
         Tensor::from_slice(&[2.0], vec![1]),
@@ -223,7 +243,11 @@ fn test_zero_gradient_numerical_stability() {
     let mut opt = Adam::new(vec![group], AdamConfig::default());
 
     opt.step(&mut params, &grads).unwrap();
-    assert_eq!(params[0].get(0), 5.0, "Zero gradient should leave parameter unchanged without NaN");
+    assert_eq!(
+        params[0].get(0),
+        5.0,
+        "Zero gradient should leave parameter unchanged without NaN"
+    );
     assert!(!params[0].get(0).is_nan());
 }
 
@@ -253,7 +277,10 @@ fn test_scheduler_exact_boundary_conditions() {
     for _ in 0..10 {
         cosine.step(&mut opt).unwrap();
     }
-    assert!((opt.get_lr() - 0.001).abs() < 1e-6, "Cosine must reach eta_min at step T_max");
+    assert!(
+        (opt.get_lr() - 0.001).abs() < 1e-6,
+        "Cosine must reach eta_min at step T_max"
+    );
 
     // LinearWarmup
     let mut warmup = LinearWarmup::new(vec![0.1], vec![0.0], 5);
@@ -271,9 +298,9 @@ fn test_scheduler_exact_boundary_conditions() {
 
 #[test]
 fn test_clip_grad_norm_multi_tensor_global() {
-    let g1 = Tensor::from_slice(&[3.0, 4.0], vec![2]);      // norm = 5.0
-    let g2 = Tensor::from_slice(&[0.0, 12.0], vec![1, 2]);   // norm = 12.0
-    // Total global Euclidean norm = sqrt(5^2 + 12^2) = sqrt(25 + 144) = sqrt(169) = 13.0
+    let g1 = Tensor::from_slice(&[3.0, 4.0], vec![2]); // norm = 5.0
+    let g2 = Tensor::from_slice(&[0.0, 12.0], vec![1, 2]); // norm = 12.0
+                                                           // Total global Euclidean norm = sqrt(5^2 + 12^2) = sqrt(25 + 144) = sqrt(169) = 13.0
 
     let mut grads = vec![g1, g2];
     let total_norm = clip_grad_norm_(&mut grads, 6.5, NormType::L2);
@@ -323,12 +350,15 @@ fn test_lion_optimizer_step_trajectory() {
 
     let mut params = vec![Tensor::from_slice(&[1.0, -1.0], vec![2])];
     let group = ParamGroup::new(vec![0], 0.1);
-    let mut opt = Lion::new(vec![group], LionConfig {
-        lr: 0.1,
-        beta1: 0.9,
-        beta2: 0.99,
-        weight_decay: 0.0,
-    });
+    let mut opt = Lion::new(
+        vec![group],
+        LionConfig {
+            lr: 0.1,
+            beta1: 0.9,
+            beta2: 0.99,
+            weight_decay: 0.0,
+        },
+    );
 
     let grad = Tensor::from_slice(&[0.5, -0.5], vec![2]);
     let info = opt.step(&mut params, &[grad]).unwrap();
@@ -344,18 +374,21 @@ fn test_lion_optimizer_step_trajectory() {
 
 #[test]
 fn test_onecycle_lr_schedule() {
-    use brain_optim::schedulers::onecycle::{OneCycleLR, OneCycleConfig, AnnealStrategy};
+    use brain_optim::schedulers::onecycle::{AnnealStrategy, OneCycleConfig, OneCycleLR};
 
     let mut opt = Sgd::new(vec![ParamGroup::new(vec![0], 0.01)], SgdConfig::default());
-    let mut sched = OneCycleLR::new(vec![0.1], OneCycleConfig {
-        max_lr: 0.1,
-        total_steps: 10,
-        pct_start: 0.3,
-        anneal_strategy: AnnealStrategy::Cosine,
-        div_factor: 10.0,
-        final_div_factor: 100.0,
-        three_phase: false,
-    });
+    let mut sched = OneCycleLR::new(
+        vec![0.1],
+        OneCycleConfig {
+            max_lr: 0.1,
+            total_steps: 10,
+            pct_start: 0.3,
+            anneal_strategy: AnnealStrategy::Cosine,
+            div_factor: 10.0,
+            final_div_factor: 100.0,
+            three_phase: false,
+        },
+    );
 
     let initial_lr = sched.get_last_lr()[0];
     assert!((initial_lr - 0.01).abs() < 1e-6);

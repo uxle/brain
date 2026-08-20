@@ -88,5 +88,9 @@ fn test_constant_folding_pass() {
 
     let modified = fold_constants(&mut graph).expect("Const fold pass");
     assert!(modified);
-    assert_eq!(graph.nodes[0].op, OpKind::Constant, "Constant node must be folded");
+    assert_eq!(
+        graph.nodes[0].op,
+        OpKind::Constant,
+        "Constant node must be folded"
+    );
 }

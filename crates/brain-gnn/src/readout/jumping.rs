@@ -21,7 +21,11 @@ pub struct JkConfig {
 }
 
 impl Default for JkConfig {
-    fn default() -> Self { Self { mode: JkMode::Concat } }
+    fn default() -> Self {
+        Self {
+            mode: JkMode::Concat,
+        }
+    }
 }
 
 /// Jumping Knowledge layer aggregator.
@@ -31,19 +35,24 @@ pub struct JumpingKnowledge {
 
 impl JumpingKnowledge {
     pub fn new(mode: JkMode) -> Self {
-        Self { config: JkConfig { mode } }
+        Self {
+            config: JkConfig { mode },
+        }
     }
 
     pub fn aggregate(&self, layer_outputs: &[Tensor]) -> Tensor {
-        if layer_outputs.is_empty() { return Tensor::zeros(vec![1]); }
+        if layer_outputs.is_empty() {
+            return Tensor::zeros(vec![1]);
+        }
         match self.config.mode {
             JkMode::Last => layer_outputs.last().unwrap().clone(),
             JkMode::Concat => {
                 let mut concat_data = Vec::new();
                 let num_nodes = layer_outputs[0].shape()[0];
-                let feat_dims: Vec<usize> = layer_outputs.iter().map(|t| {
-                    if t.shape().len() > 1 { t.shape()[1] } else { 1 }
-                }).collect();
+                let feat_dims: Vec<usize> = layer_outputs
+                    .iter()
+                    .map(|t| if t.shape().len() > 1 { t.shape()[1] } else { 1 })
+                    .collect();
 
                 let total_feat_dim: usize = feat_dims.iter().sum();
 
@@ -61,7 +70,11 @@ impl JumpingKnowledge {
             }
             JkMode::Max => {
                 let num_nodes = layer_outputs[0].shape()[0];
-                let dim = if layer_outputs[0].shape().len() > 1 { layer_outputs[0].shape()[1] } else { 1 };
+                let dim = if layer_outputs[0].shape().len() > 1 {
+                    layer_outputs[0].shape()[1]
+                } else {
+                    1
+                };
                 let mut max_data = vec![f64::NEG_INFINITY; num_nodes * dim];
 
                 for t in layer_outputs {
@@ -81,7 +94,13 @@ impl JumpingKnowledge {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

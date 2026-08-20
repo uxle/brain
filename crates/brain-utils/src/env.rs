@@ -18,12 +18,16 @@ pub fn env_get_or(key: &str, default: &str) -> String {
 
 /// Retrieves and parses an integer environment variable.
 pub fn env_i64(key: &str, default: i64) -> i64 {
-    env_get(key).and_then(|v| v.parse::<i64>().ok()).unwrap_or(default)
+    env_get(key)
+        .and_then(|v| v.parse::<i64>().ok())
+        .unwrap_or(default)
 }
 
 /// Retrieves and parses a float environment variable.
 pub fn env_f64(key: &str, default: f64) -> f64 {
-    env_get(key).and_then(|v| v.parse::<f64>().ok()).unwrap_or(default)
+    env_get(key)
+        .and_then(|v| v.parse::<f64>().ok())
+        .unwrap_or(default)
 }
 
 /// Retrieves and parses a boolean environment variable.
@@ -38,7 +42,12 @@ pub fn env_bool(key: &str, default: bool) -> bool {
 /// Retrieves a comma-separated environment variable as a list of strings.
 pub fn env_list(key: &str) -> Vec<String> {
     env_get(key)
-        .map(|s| s.split(',').map(|item| item.trim().to_string()).filter(|item| !item.is_empty()).collect())
+        .map(|s| {
+            s.split(',')
+                .map(|item| item.trim().to_string())
+                .filter(|item| !item.is_empty())
+                .collect()
+        })
         .unwrap_or_default()
 }
 
@@ -79,7 +88,9 @@ impl EnvConfig {
 
     /// Gets integer value.
     pub fn get_i64(&self, key: &str, default: i64) -> i64 {
-        self.get(key).and_then(|v| v.parse::<i64>().ok()).unwrap_or(default)
+        self.get(key)
+            .and_then(|v| v.parse::<i64>().ok())
+            .unwrap_or(default)
     }
 
     /// Gets boolean value.
@@ -104,10 +115,10 @@ mod tests {
         assert_eq!(env_i64(&dummy_key, 42), 42);
         assert_eq!(env_f64(&dummy_key, 3.14), 3.14);
         assert!(!env_bool(&dummy_key, false));
-        
+
         let list = env_list(&dummy_key);
         assert!(list.is_empty());
-        
+
         let env_cfg = EnvConfig::from_prefix("BRAIN_");
         assert_eq!(env_cfg.prefix, "BRAIN_");
     }

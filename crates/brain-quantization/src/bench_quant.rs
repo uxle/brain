@@ -1,10 +1,17 @@
 //! # Quantization Performance & Footprint Benchmarks
 //!
 //! Profiling utilities for measuring memory compression ratios and compute throughput improvements.
-#![allow(missing_docs, clippy::needless_range_loop, clippy::too_many_arguments, clippy::manual_is_multiple_of, clippy::manual_div_ceil, clippy::doc_markdown)]
+#![allow(
+    missing_docs,
+    clippy::needless_range_loop,
+    clippy::too_many_arguments,
+    clippy::manual_is_multiple_of,
+    clippy::manual_div_ceil,
+    clippy::doc_markdown
+)]
 
-use brain_core::Tensor;
 use super::core::QuantTensor;
+use brain_core::Tensor;
 
 /// Quantization compression benchmarking report.
 #[derive(Debug, Clone, PartialEq)]
@@ -21,7 +28,10 @@ pub struct QuantBench;
 
 impl QuantBench {
     /// Computes memory footprint compression metrics between full precision and quantized tensor.
-    pub fn compute_compression_report(original: &Tensor, qtensor: &QuantTensor) -> QuantBenchReport {
+    pub fn compute_compression_report(
+        original: &Tensor,
+        qtensor: &QuantTensor,
+    ) -> QuantBenchReport {
         let orig_bytes = original.numel() * std::mem::size_of::<f64>();
         let bits = qtensor.params.dtype.bit_width();
         let quant_bytes = (qtensor.numel() * bits + 7) / 8 + qtensor.params.scales.len() * 8;
@@ -40,31 +50,40 @@ impl QuantBench {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant, clippy::needless_range_loop, clippy::manual_div_ceil, clippy::manual_is_multiple_of)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant,
+        clippy::needless_range_loop,
+        clippy::manual_div_ceil,
+        clippy::manual_is_multiple_of
+    )]
     use super::*;
-    use crate::core::*;
-    use crate::config::*;
-    use crate::calibration::*;
-    use crate::quantizer::*;
-    use crate::prune::*;
-    use crate::sparse::*;
+    use crate::act_quant::*;
+    use crate::bench_quant::*;
+    use crate::block_quant::*;
     use crate::builder::*;
-    use crate::ops::*;
-    use crate::utils::*;
+    use crate::calibration::*;
+    use crate::config::*;
+    use crate::core::*;
     use crate::dtype_map::*;
     use crate::error_analysis::*;
-    use crate::bench_quant::*;
-    use crate::runtime::*;
-    use crate::helper::*;
-    use crate::r#impl::*;
-    use crate::act_quant::*;
-    use crate::block_quant::*;
-    use crate::mixed::*;
-    use crate::graph_quant::*;
     use crate::fake_quant::*;
-    use crate::qlinear::*;
+    use crate::graph_quant::*;
+    use crate::helper::*;
+    use crate::mixed::*;
+    use crate::ops::*;
+    use crate::prune::*;
     use crate::qconv::*;
+    use crate::qlinear::*;
     use crate::qmatmul::*;
+    use crate::quantizer::*;
+    use crate::r#impl::*;
+    use crate::runtime::*;
+    use crate::sparse::*;
+    use crate::utils::*;
     use crate::VERSION;
     use brain_core::Tensor;
 }

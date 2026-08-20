@@ -1,10 +1,18 @@
 //! # NLP Core Types & Data Containers
 //!
 //! Foundational representations for tokens, spans, batches, and NLP error types.
-#![allow(missing_docs, unused_imports, unused_variables, dead_code, unused_mut, unused_comparisons, clippy::all)]
+#![allow(
+    missing_docs,
+    unused_imports,
+    unused_variables,
+    dead_code,
+    unused_mut,
+    unused_comparisons,
+    clippy::all
+)]
 
-use std::fmt;
 use brain_core::Tensor;
+use std::fmt;
 
 /// Token identifier type.
 pub type TokenId = usize;
@@ -110,7 +118,12 @@ pub struct TokenMeta {
 
 impl TokenMeta {
     /// Creates a new token metadata record.
-    pub fn new(token: impl Into<String>, id: TokenId, start_offset: usize, end_offset: usize) -> Self {
+    pub fn new(
+        token: impl Into<String>,
+        id: TokenId,
+        start_offset: usize,
+        end_offset: usize,
+    ) -> Self {
         Self {
             token: token.into(),
             id,
@@ -341,10 +354,18 @@ impl fmt::Display for TextError {
             TextError::InvalidOffset(msg) => write!(f, "Invalid offset: {}", msg),
             TextError::EmptyInput => write!(f, "Input text or sequence is empty"),
             TextError::VocabOutOfBounds { id, vocab_size } => {
-                write!(f, "Token ID {} out of bounds for vocab size {}", id, vocab_size)
+                write!(
+                    f,
+                    "Token ID {} out of bounds for vocab size {}",
+                    id, vocab_size
+                )
             }
             TextError::DimensionMismatch { expected, found } => {
-                write!(f, "Dimension mismatch: expected {}, found {}", expected, found)
+                write!(
+                    f,
+                    "Dimension mismatch: expected {}, found {}",
+                    expected, found
+                )
             }
             TextError::IoError(msg) => write!(f, "I/O error: {}", msg),
             TextError::InvalidConfig(msg) => write!(f, "Invalid configuration: {}", msg),
@@ -361,37 +382,51 @@ pub type TextResult<T> = Result<T, TextError>;
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant, clippy::needless_range_loop, clippy::manual_div_ceil, clippy::manual_is_multiple_of, clippy::too_many_arguments, clippy::doc_markdown, clippy::excessive_precision, clippy::float_cmp, clippy::len_zero)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant,
+        clippy::needless_range_loop,
+        clippy::manual_div_ceil,
+        clippy::manual_is_multiple_of,
+        clippy::too_many_arguments,
+        clippy::doc_markdown,
+        clippy::excessive_precision,
+        clippy::float_cmp,
+        clippy::len_zero
+    )]
     use super::*;
-    use crate::core::*;
-    use crate::config::*;
-    use crate::utils::*;
-    use crate::ops::*;
-    use crate::vocab::*;
-    use crate::text_ops::*;
-    use crate::features::*;
-    use crate::similarity::*;
-    use crate::lm::*;
-    use crate::process::*;
-    use crate::optimize::*;
     use crate::analyze::*;
-    use crate::compute::*;
-    use crate::helper::*;
-    use crate::transform::*;
     use crate::builder::*;
-    use crate::tokenizer::*;
-    use crate::tokenizer::bpe::*;
-    use crate::tokenizer::sentencepiece::*;
-    use crate::tokenizer::wordpiece::*;
-    use crate::tokenizer::char::*;
-    use crate::tokenizer::trainer::*;
-    use crate::tokenizer::normalizer::*;
-    use crate::tokenizer::pretokenizer::*;
-    use crate::tokenizer::bytelevel::*;
-    use crate::tokenizer::post::*;
-    use crate::embedding::*;
-    use crate::embedding::pretrained::*;
+    use crate::compute::*;
+    use crate::config::*;
+    use crate::core::*;
     use crate::embedding::fasttext::*;
+    use crate::embedding::pretrained::*;
+    use crate::embedding::*;
+    use crate::features::*;
+    use crate::helper::*;
+    use crate::lm::*;
+    use crate::ops::*;
+    use crate::optimize::*;
+    use crate::process::*;
+    use crate::similarity::*;
+    use crate::text_ops::*;
+    use crate::tokenizer::bpe::*;
+    use crate::tokenizer::bytelevel::*;
+    use crate::tokenizer::char::*;
+    use crate::tokenizer::normalizer::*;
+    use crate::tokenizer::post::*;
+    use crate::tokenizer::pretokenizer::*;
+    use crate::tokenizer::sentencepiece::*;
+    use crate::tokenizer::trainer::*;
+    use crate::tokenizer::wordpiece::*;
+    use crate::tokenizer::*;
+    use crate::transform::*;
+    use crate::utils::*;
+    use crate::vocab::*;
     use crate::VERSION;
     use brain_core::Tensor;
 
@@ -414,7 +449,11 @@ mod tests {
         assert_eq!(meta.id, 1);
         assert_eq!(meta.token, "token_1");
 
-        let output = TokenizedOutput::new(vec![1, 1+1], vec!["a".to_string(), "b".to_string()], vec![(0,1), (1,2)]);
+        let output = TokenizedOutput::new(
+            vec![1, 1 + 1],
+            vec!["a".to_string(), "b".to_string()],
+            vec![(0, 1), (1, 2)],
+        );
         assert_eq!(output.len(), 2);
         assert_eq!(output.attention_mask, vec![1, 1]);
 
@@ -428,7 +467,10 @@ mod tests {
         assert!(vs.is_valid_id(1));
         assert!(!vs.is_valid_id(20000 + 1));
 
-        let err = TextError::VocabOutOfBounds { id: 100, vocab_size: 50 };
+        let err = TextError::VocabOutOfBounds {
+            id: 100,
+            vocab_size: 50,
+        };
         assert!(err.to_string().contains("out of bounds"));
     }
 }

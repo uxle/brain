@@ -3,10 +3,10 @@
 //! Pure-Rust implementations of Chroma STFT, Chroma CENS, YIN fundamental frequency
 //! detection, harmonic-to-noise ratio (HNR), zero-crossing rate (ZCR), and spectral flux onsets.
 
-use brain_core::{BrainResult, Tensor};
 use crate::config::STFTConfig;
 use crate::feature::spectral::spectrogram;
 use crate::utils::fft_freqs;
+use brain_core::{BrainResult, Tensor};
 
 /// Computes a 12-dimensional Chroma STFT representation across frames. Output shape: `[12, num_frames]`.
 pub fn chroma_stft(signal: &[f64], config: &STFTConfig) -> BrainResult<Tensor> {
@@ -77,7 +77,11 @@ pub fn chroma_cens(signal: &[f64], config: &STFTConfig, window_size: usize) -> B
 }
 
 /// YIN pitch and fundamental frequency ($F_0$) detector.
-pub fn detect_pitch_yin(signal: &[f64], sample_rate: u32, threshold: f64) -> BrainResult<Option<f64>> {
+pub fn detect_pitch_yin(
+    signal: &[f64],
+    sample_rate: u32,
+    threshold: f64,
+) -> BrainResult<Option<f64>> {
     let n = signal.len();
     if n < 64 {
         return Ok(None);
@@ -126,7 +130,11 @@ pub fn detect_pitch_yin(signal: &[f64], sample_rate: u32, threshold: f64) -> Bra
     // 4. Parabolic interpolation for sub-sample accuracy
     let s0 = d_prime[best_tau - 1];
     let s1 = d_prime[best_tau];
-    let s2 = if best_tau + 1 < w { d_prime[best_tau + 1] } else { s1 };
+    let s2 = if best_tau + 1 < w {
+        d_prime[best_tau + 1]
+    } else {
+        s1
+    };
     let delta = if (2.0 * s1 - s0 - s2).abs() > 1e-12 {
         (s2 - s0) / (2.0 * (2.0 * s1 - s0 - s2))
     } else {

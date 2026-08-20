@@ -6,8 +6,8 @@
 pub mod quantize;
 pub mod sparsify;
 
-pub use quantize::{QuantConfig, quantize_tensor, dequantize_tensor};
-pub use sparsify::{SparseConfig, top_k_sparsify};
+pub use quantize::{dequantize_tensor, quantize_tensor, QuantConfig};
+pub use sparsify::{top_k_sparsify, SparseConfig};
 
 #[cfg(test)]
 mod tests {

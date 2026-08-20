@@ -3,11 +3,11 @@
 //! Per-epoch training loop: D updates k times, G update, logging, checkpointing.
 #![allow(missing_docs)]
 
-use brain_core::Tensor;
-use crate::core::{GanState, EpochSummary};
-use crate::config::GanTrainConfig;
-use crate::utils::log_gan;
 use super::GanTrainer;
+use crate::config::GanTrainConfig;
+use crate::core::{EpochSummary, GanState};
+use crate::utils::log_gan;
+use brain_core::Tensor;
 
 /// Full training loop for a GAN.
 pub struct TrainLoop {
@@ -17,7 +17,10 @@ pub struct TrainLoop {
 
 impl TrainLoop {
     pub fn new(config: GanTrainConfig) -> Self {
-        Self { trainer: GanTrainer::new(config), log_interval: 100 }
+        Self {
+            trainer: GanTrainer::new(config),
+            log_interval: 100,
+        }
     }
 
     pub fn with_log_interval(mut self, interval: usize) -> Self {
@@ -53,13 +56,21 @@ impl TrainLoop {
         latent_dim: usize,
         num_epochs: usize,
     ) -> Vec<EpochSummary> {
-        (0..num_epochs).map(|_| self.epoch(state, dataset, latent_dim)).collect()
+        (0..num_epochs)
+            .map(|_| self.epoch(state, dataset, latent_dim))
+            .collect()
     }
 }
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

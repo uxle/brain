@@ -3,10 +3,10 @@
 //! Multi-channel 2D spatial convolution with padding, stride, dilation, and bias parameters.
 #![allow(missing_docs)]
 
-use brain_core::Tensor;
-use brain_autograd::Value;
-use crate::module::{Module, ModuleResult, ModuleError};
 use crate::init::kaiming_uniform;
+use crate::module::{Module, ModuleError, ModuleResult};
+use brain_autograd::Value;
+use brain_core::Tensor;
 
 /// Configuration for 2D convolution operations.
 #[derive(Debug, Clone)]
@@ -41,10 +41,19 @@ pub struct Conv2d {
 }
 
 impl Conv2d {
-    pub fn new(in_channels: usize, out_channels: usize, kernel_size: usize, has_bias: bool) -> Self {
+    pub fn new(
+        in_channels: usize,
+        out_channels: usize,
+        kernel_size: usize,
+        has_bias: bool,
+    ) -> Self {
         let weight_t = kaiming_uniform(&[out_channels, in_channels, kernel_size, kernel_size], 0.0);
         let weight = Value::new(weight_t, true);
-        let bias = if has_bias { Some(Value::new(Tensor::zeros(vec![out_channels]), true)) } else { None };
+        let bias = if has_bias {
+            Some(Value::new(Tensor::zeros(vec![out_channels]), true))
+        } else {
+            None
+        };
         let config = ConvConfig {
             in_channels,
             out_channels,
@@ -53,7 +62,11 @@ impl Conv2d {
             padding: (kernel_size / 2, kernel_size / 2),
             dilation: (1, 1),
         };
-        Self { weight, bias, config }
+        Self {
+            weight,
+            bias,
+            config,
+        }
     }
 
     /// Construct with a fully custom config. Returns an error immediately
@@ -69,7 +82,12 @@ impl Conv2d {
             )));
         }
         let weight_tensor = kaiming_uniform(
-            &[config.out_channels, config.in_channels, config.kernel_size.0, config.kernel_size.1],
+            &[
+                config.out_channels,
+                config.in_channels,
+                config.kernel_size.0,
+                config.kernel_size.1,
+            ],
             0.0,
         );
         let weight = Value::new(weight_tensor, true);
@@ -78,7 +96,11 @@ impl Conv2d {
         } else {
             None
         };
-        Ok(Self { weight, bias, config })
+        Ok(Self {
+            weight,
+            bias,
+            config,
+        })
     }
 
     pub fn forward(&self, input: &Value) -> ModuleResult<Value> {
@@ -115,14 +137,22 @@ impl Module for Conv2d {
 
     fn parameters(&self) -> Vec<Value> {
         let mut p = vec![self.weight.clone()];
-        if let Some(ref b) = self.bias { p.push(b.clone()); }
+        if let Some(ref b) = self.bias {
+            p.push(b.clone());
+        }
         p
     }
 }
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 
@@ -132,7 +162,10 @@ mod tests {
         let mut conv = Conv2d::new(1, 1, 1, false);
         conv.weight = Value::new(Tensor::from_slice(&[2.0], vec![1, 1, 1, 1]), true);
         conv.bias = None;
-        let x = Value::new(Tensor::from_slice(&[1.0, 2.0, 3.0, 4.0], vec![1, 1, 2, 2]), false);
+        let x = Value::new(
+            Tensor::from_slice(&[1.0, 2.0, 3.0, 4.0], vec![1, 1, 2, 2]),
+            false,
+        );
         let out = conv.forward(&x).unwrap();
         assert_eq!(out.shape(), &[1, 1, 2, 2]);
         assert_eq!(out.to_vec(), vec![2.0, 4.0, 6.0, 8.0]);
@@ -187,6 +220,9 @@ mod tests {
         let mut config = ConvConfig::default();
         config.dilation = (2, 2);
         let result = Conv2d::with_config(config, false);
-        assert!(result.is_err(), "dilation != (1,1) should error, not silently ignore dilation");
+        assert!(
+            result.is_err(),
+            "dilation != (1,1) should error, not silently ignore dilation"
+        );
     }
 }

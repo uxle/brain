@@ -21,30 +21,14 @@ pub fn run_cli(args: &[String], sink: &OutputSink) -> ExitCode {
             print_help(sink);
             ExitCode::SUCCESS
         }
-        "agent" => {
-            crate::commands::agent_cmd::run_agent_command(&args[1..], sink)
-        }
-        "tensor" => {
-            crate::commands::tensor_cmd::run_tensor_command(&args[1..], sink)
-        }
-        "bench" => {
-            crate::commands::bench_cmd::run_bench_command(&args[1..], sink)
-        }
-        "model" => {
-            crate::commands::model_cmd::run_model_command(&args[1..], sink)
-        }
-        "train" => {
-            crate::commands::train_cmd::run_train_command(&args[1..], sink)
-        }
-        "make" => {
-            crate::commands::make_cmd::run_make_command(&args[1..], sink)
-        }
-        "run" => {
-            crate::commands::run_cmd::run_run_command(&args[1..], sink)
-        }
-        "space" => {
-            crate::commands::space_cmd::run_space_command(&args[1..], sink)
-        }
+        "agent" => crate::commands::agent_cmd::run_agent_command(&args[1..], sink),
+        "tensor" => crate::commands::tensor_cmd::run_tensor_command(&args[1..], sink),
+        "bench" => crate::commands::bench_cmd::run_bench_command(&args[1..], sink),
+        "model" => crate::commands::model_cmd::run_model_command(&args[1..], sink),
+        "train" => crate::commands::train_cmd::run_train_command(&args[1..], sink),
+        "make" => crate::commands::make_cmd::run_make_command(&args[1..], sink),
+        "run" => crate::commands::run_cmd::run_run_command(&args[1..], sink),
+        "space" => crate::commands::space_cmd::run_space_command(&args[1..], sink),
         "chatbot" | "chat" => {
             let mut space_args = vec!["chatbot".to_string()];
             space_args.extend_from_slice(&args[1..]);
@@ -55,9 +39,7 @@ pub fn run_cli(args: &[String], sink: &OutputSink) -> ExitCode {
             space_args.extend_from_slice(&args[1..]);
             crate::commands::space_cmd::run_space_command(&space_args, sink)
         }
-        "check" => {
-            crate::commands::check_cmd::run_check_command(&args[1..], sink)
-        }
+        "check" => crate::commands::check_cmd::run_check_command(&args[1..], sink),
         "script" => {
             if args.len() < 2 {
                 sink.println("Usage: brain script <file.brain>");
@@ -73,24 +55,19 @@ pub fn run_cli(args: &[String], sink: &OutputSink) -> ExitCode {
                 }
             }
         }
-        "dataset" => {
-            crate::commands::dataset_cmd::run_dataset_command(&args[1..], sink)
-        }
-        "convert" => {
-            crate::commands::convert_cmd::run_convert_command(&args[1..], sink)
-        }
-        "doctor" => {
-            crate::diagnostics::run_doctor_command(sink)
-        }
-        "repl" => {
-            crate::repl::run_repl_command(sink)
-        }
+        "dataset" => crate::commands::dataset_cmd::run_dataset_command(&args[1..], sink),
+        "convert" => crate::commands::convert_cmd::run_convert_command(&args[1..], sink),
+        "doctor" => crate::diagnostics::run_doctor_command(sink),
+        "repl" => crate::repl::run_repl_command(sink),
         "init" => {
             let name = args.get(1).map(|s| s.as_str()).unwrap_or("brain_project");
             crate::init::scaffold_project(name, sink)
         }
         unknown => {
-            sink.println(&format!("Unknown command: '{}'. Run 'brain --help' for usage.", unknown));
+            sink.println(&format!(
+                "Unknown command: '{}'. Run 'brain --help' for usage.",
+                unknown
+            ));
             ExitCode::INVALID_USAGE
         }
     }

@@ -4,8 +4,8 @@
 //! momentum, and regularizers.
 #![allow(missing_docs)]
 
-use std::collections::HashMap;
 use brain_core::Tensor;
+use std::collections::HashMap;
 
 pub type ParamId = usize;
 
@@ -155,7 +155,13 @@ impl ParamGroup {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

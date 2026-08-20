@@ -3,9 +3,9 @@
 //! Multi-layer Long Short-Term Memory (LSTM) and Gated Recurrent Unit (GRU) sequence layers.
 #![allow(missing_docs)]
 
+use super::rnn_cells::{GRUCell, LSTMCell};
+use crate::module::{Module, ModuleError, ModuleResult};
 use brain_core::Tensor;
-use crate::module::{Module, ModuleResult, ModuleError};
-use super::rnn_cells::{LSTMCell, GRUCell};
 
 /// Multi-layer Long Short-Term Memory network.
 #[derive(Debug, Clone)]
@@ -74,7 +74,11 @@ impl Module for LSTM {
     }
 
     fn parameters(&self) -> Vec<Value> {
-        self.cell.parameters().into_iter().map(|t| Value::new(t, true)).collect()
+        self.cell
+            .parameters()
+            .into_iter()
+            .map(|t| Value::new(t, true))
+            .collect()
     }
 }
 
@@ -136,7 +140,11 @@ impl Module for GRU {
     }
 
     fn parameters(&self) -> Vec<Value> {
-        self.cell.parameters().into_iter().map(|t| Value::new(t, true)).collect()
+        self.cell
+            .parameters()
+            .into_iter()
+            .map(|t| Value::new(t, true))
+            .collect()
     }
 }
 

@@ -3,8 +3,8 @@
 //! `EdgeClassifier` and `EdgeRegressor` using concatenated node embeddings.
 #![allow(missing_docs)]
 
-use brain_core::Tensor;
 use crate::graph::Graph;
+use brain_core::Tensor;
 
 /// Predicts discrete class labels for edges in a graph.
 pub struct EdgeClassifier {
@@ -19,7 +19,11 @@ impl EdgeClassifier {
 
     pub fn predict_logits(&self, graph: &Graph, node_embeddings: &Tensor) -> Tensor {
         let num_edges = graph.src_nodes.len();
-        let dim = if node_embeddings.shape().len() > 1 { node_embeddings.shape()[1] } else { 1 };
+        let dim = if node_embeddings.shape().len() > 1 {
+            node_embeddings.shape()[1]
+        } else {
+            1
+        };
         let node_data = node_embeddings.to_vec();
 
         let mut edge_feats = vec![0.0f64; num_edges * dim * 2];
@@ -69,14 +73,22 @@ impl EdgeRegressor {
     }
 
     pub fn predict(&self, graph: &Graph, node_embeddings: &Tensor) -> Tensor {
-        let classifier = EdgeClassifier { weight: self.weight.clone() };
+        let classifier = EdgeClassifier {
+            weight: self.weight.clone(),
+        };
         classifier.predict_logits(graph, node_embeddings)
     }
 }
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

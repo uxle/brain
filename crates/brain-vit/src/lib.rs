@@ -46,8 +46,8 @@
 //! ```
 
 // ── core infrastructure ──────────────────────────────────────────────────────
-pub mod core;
 pub mod config;
+pub mod core;
 pub mod ops;
 pub mod utils;
 
@@ -64,23 +64,23 @@ pub mod vit;
 pub mod backbones;
 
 // ── downstream tasks ─────────────────────────────────────────────────────────
-pub mod training;
 pub mod detection;
-pub mod segmentation;
 pub mod export;
+pub mod segmentation;
+pub mod training;
 
 // ── crate-level re-exports ────────────────────────────────────────────────────
-pub use core::{VitError, VitResult, VitState, VitOutput, Tensor2D, Tensor3D, SimpleRng};
+pub use backbones::{BackboneSize, VitBackbone};
 pub use config::VitConfig;
-pub use r#impl::VitModel;
-pub use patch::PatchEmbed;
+pub use core::{SimpleRng, Tensor2D, Tensor3D, VitError, VitOutput, VitResult, VitState};
+pub use detection::{iou, nms, Bbox, DetectionHead};
+pub use export::{JsonCheckpoint, ModelCard, OnnxStub};
 pub use patch::pos_embed::PosEmbed;
+pub use patch::PatchEmbed;
+pub use r#impl::VitModel;
+pub use segmentation::{per_class_iou, pixel_accuracy, SegDecoder};
+pub use training::{EarlyStopping, GradientClipper, LrScheduler, Optimizer, OptimizerConfig};
 pub use vit::ViT;
-pub use backbones::{VitBackbone, BackboneSize};
-pub use training::{Optimizer, OptimizerConfig, LrScheduler, EarlyStopping, GradientClipper};
-pub use detection::{Bbox, DetectionHead, iou, nms};
-pub use segmentation::{SegDecoder, per_class_iou, pixel_accuracy};
-pub use export::{JsonCheckpoint, OnnxStub, ModelCard};
 
 /// Library version string.
 pub const BRAIN_VIT_VERSION: &str = "1.0.0";
@@ -168,8 +168,12 @@ mod integration_tests {
     #[test]
     fn test_patch_embed_shape() {
         let cfg = crate::config::PatchEmbedConfig {
-            image_size: 16, patch_size: 4, in_channels: 1, embed_dim: 8,
-            bias: true, mode: crate::config::PatchMode::Conv,
+            image_size: 16,
+            patch_size: 4,
+            in_channels: 1,
+            embed_dim: 8,
+            bias: true,
+            mode: crate::config::PatchMode::Conv,
         };
         let pe = PatchEmbed::new(&cfg, 0).unwrap();
         let img = vec![0.5f64; 1 * 1 * 16 * 16];
@@ -180,9 +184,13 @@ mod integration_tests {
     #[test]
     fn test_pos_embed_add() {
         let cfg = crate::config::PosEmbedConfig {
-            seq_len: 5, embed_dim: 8,
+            seq_len: 5,
+            embed_dim: 8,
             embed_type: crate::config::PosEmbedType::Sinusoidal,
-            has_cls_token: true, grid_h: 2, grid_w: 2, dropout: 0.0,
+            has_cls_token: true,
+            grid_h: 2,
+            grid_w: 2,
+            dropout: 0.0,
         };
         let pe = PosEmbed::new(&cfg, 0).unwrap();
         let mut tokens = vec![0.0f64; 5 * 8];
@@ -211,7 +219,13 @@ mod integration_tests {
 
     #[test]
     fn test_lr_scheduler() {
-        let mut sched = LrScheduler::new(1e-3, 1e-5, 100, 10, crate::training::ScheduleType::CosineWithWarmup);
+        let mut sched = LrScheduler::new(
+            1e-3,
+            1e-5,
+            100,
+            10,
+            crate::training::ScheduleType::CosineWithWarmup,
+        );
         let lr = sched.step();
         assert!(lr >= 0.0 && lr <= 1e-3 + 1e-10);
     }

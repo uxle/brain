@@ -3,8 +3,8 @@
 //! Provides formatting and parsing for human-readable byte sizes,
 //! durations, frequencies, and percentages.
 
-use std::time::Duration;
 use crate::core::{UtilsError, UtilsResult};
+use std::time::Duration;
 
 /// Formats a byte count into binary units (B, KiB, MiB, GiB, TiB).
 pub fn format_bytes_binary(bytes: u64) -> String {
@@ -50,33 +50,62 @@ pub fn format_bytes(bytes: u64) -> String {
 pub fn parse_size(s: &str) -> UtilsResult<u64> {
     let trimmed = s.trim().to_uppercase();
     if trimmed.ends_with("TIB") {
-        let num = trimmed[..trimmed.len() - 3].trim().parse::<f64>().map_err(|e| UtilsError::ParseError(e.to_string()))?;
+        let num = trimmed[..trimmed.len() - 3]
+            .trim()
+            .parse::<f64>()
+            .map_err(|e| UtilsError::ParseError(e.to_string()))?;
         Ok((num * 1024.0 * 1024.0 * 1024.0 * 1024.0) as u64)
     } else if trimmed.ends_with("GIB") {
-        let num = trimmed[..trimmed.len() - 3].trim().parse::<f64>().map_err(|e| UtilsError::ParseError(e.to_string()))?;
+        let num = trimmed[..trimmed.len() - 3]
+            .trim()
+            .parse::<f64>()
+            .map_err(|e| UtilsError::ParseError(e.to_string()))?;
         Ok((num * 1024.0 * 1024.0 * 1024.0) as u64)
     } else if trimmed.ends_with("MIB") {
-        let num = trimmed[..trimmed.len() - 3].trim().parse::<f64>().map_err(|e| UtilsError::ParseError(e.to_string()))?;
+        let num = trimmed[..trimmed.len() - 3]
+            .trim()
+            .parse::<f64>()
+            .map_err(|e| UtilsError::ParseError(e.to_string()))?;
         Ok((num * 1024.0 * 1024.0) as u64)
     } else if trimmed.ends_with("KIB") {
-        let num = trimmed[..trimmed.len() - 3].trim().parse::<f64>().map_err(|e| UtilsError::ParseError(e.to_string()))?;
+        let num = trimmed[..trimmed.len() - 3]
+            .trim()
+            .parse::<f64>()
+            .map_err(|e| UtilsError::ParseError(e.to_string()))?;
         Ok((num * 1024.0) as u64)
     } else if trimmed.ends_with("TB") {
-        let num = trimmed[..trimmed.len() - 2].trim().parse::<f64>().map_err(|e| UtilsError::ParseError(e.to_string()))?;
+        let num = trimmed[..trimmed.len() - 2]
+            .trim()
+            .parse::<f64>()
+            .map_err(|e| UtilsError::ParseError(e.to_string()))?;
         Ok((num * 1e12) as u64)
     } else if trimmed.ends_with("GB") {
-        let num = trimmed[..trimmed.len() - 2].trim().parse::<f64>().map_err(|e| UtilsError::ParseError(e.to_string()))?;
+        let num = trimmed[..trimmed.len() - 2]
+            .trim()
+            .parse::<f64>()
+            .map_err(|e| UtilsError::ParseError(e.to_string()))?;
         Ok((num * 1e9) as u64)
     } else if trimmed.ends_with("MB") {
-        let num = trimmed[..trimmed.len() - 2].trim().parse::<f64>().map_err(|e| UtilsError::ParseError(e.to_string()))?;
+        let num = trimmed[..trimmed.len() - 2]
+            .trim()
+            .parse::<f64>()
+            .map_err(|e| UtilsError::ParseError(e.to_string()))?;
         Ok((num * 1e6) as u64)
     } else if trimmed.ends_with("KB") {
-        let num = trimmed[..trimmed.len() - 2].trim().parse::<f64>().map_err(|e| UtilsError::ParseError(e.to_string()))?;
+        let num = trimmed[..trimmed.len() - 2]
+            .trim()
+            .parse::<f64>()
+            .map_err(|e| UtilsError::ParseError(e.to_string()))?;
         Ok((num * 1e3) as u64)
     } else if trimmed.ends_with('B') {
-        trimmed[..trimmed.len() - 1].trim().parse::<u64>().map_err(|e| UtilsError::ParseError(e.to_string()))
+        trimmed[..trimmed.len() - 1]
+            .trim()
+            .parse::<u64>()
+            .map_err(|e| UtilsError::ParseError(e.to_string()))
     } else {
-        trimmed.parse::<u64>().map_err(|e| UtilsError::ParseError(e.to_string()))
+        trimmed
+            .parse::<u64>()
+            .map_err(|e| UtilsError::ParseError(e.to_string()))
     }
 }
 
@@ -116,11 +145,11 @@ mod tests {
         assert_eq!(format_bytes(1000), "1.00 KB");
         assert_eq!(format_bytes_binary(1024), "1.00 KiB");
         assert_eq!(format_bytes_binary(512), "512 B");
-    
+
         assert_eq!(parse_size("1KiB").unwrap(), 1024);
         assert_eq!(parse_size("10MB").unwrap(), 10_000_000);
         assert_eq!(parse_size("4096B").unwrap(), 4096);
-    
+
         let dur = Duration::from_millis(250);
         assert_eq!(format_duration(dur), "250.00 ms");
         assert_eq!(format_percent(0.854), "85.40%");

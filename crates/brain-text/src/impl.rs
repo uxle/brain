@@ -1,8 +1,17 @@
 //! # High-Level End-to-End NLP Execution Paths
 //!
 //! Convenient end-to-end APIs for encoding, decoding, training, embeddings, and similarity queries.
-#![allow(missing_docs, unused_imports, unused_variables, dead_code, unused_mut, unused_comparisons, clippy::all)]
+#![allow(
+    missing_docs,
+    unused_imports,
+    unused_variables,
+    dead_code,
+    unused_mut,
+    unused_comparisons,
+    clippy::all
+)]
 
+use crate::builder::TextBuilder;
 use crate::core::{TextResult, TokenId, TokenizedOutput};
 use crate::embedding::{PositionalEmbedding, WordEmbedding};
 use crate::features::{FeatureNorm, TextFeatureConfig, TfIdf};
@@ -10,7 +19,6 @@ use crate::similarity::{SimilarityMetric, TextSimilarity};
 use crate::tokenizer::bpe::BpeTokenizer;
 use crate::tokenizer::sentencepiece::SentencePieceTokenizer;
 use crate::tokenizer::Tokenizer;
-use crate::builder::TextBuilder;
 use brain_core::Tensor;
 
 /// Encodes raw text using any implementation of `Tokenizer`.
@@ -29,7 +37,10 @@ pub fn train_bpe_tokenizer(
     vocab_size: usize,
     _special_tokens: &[&str],
 ) -> TextResult<BpeTokenizer> {
-    Ok(TextBuilder::new().bpe().vocab_size(vocab_size).train(corpus))
+    Ok(TextBuilder::new()
+        .bpe()
+        .vocab_size(vocab_size)
+        .train(corpus))
 }
 
 /// Trains a SentencePiece unigram tokenizer end-to-end from raw text slices.
@@ -38,7 +49,10 @@ pub fn train_unigram_tokenizer(
     vocab_size: usize,
     _special_tokens: &[&str],
 ) -> TextResult<SentencePieceTokenizer> {
-    Ok(TextBuilder::new().sentencepiece().vocab_size(vocab_size).train(corpus))
+    Ok(TextBuilder::new()
+        .sentencepiece()
+        .vocab_size(vocab_size)
+        .train(corpus))
 }
 
 /// Builds a standard WordEmbedding lookup table.
@@ -120,37 +134,51 @@ pub fn extract_top_keywords_tfidf(
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant, clippy::needless_range_loop, clippy::manual_div_ceil, clippy::manual_is_multiple_of, clippy::too_many_arguments, clippy::doc_markdown, clippy::excessive_precision, clippy::float_cmp, clippy::len_zero)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant,
+        clippy::needless_range_loop,
+        clippy::manual_div_ceil,
+        clippy::manual_is_multiple_of,
+        clippy::too_many_arguments,
+        clippy::doc_markdown,
+        clippy::excessive_precision,
+        clippy::float_cmp,
+        clippy::len_zero
+    )]
     use super::*;
-    use crate::core::*;
-    use crate::config::*;
-    use crate::utils::*;
-    use crate::ops::*;
-    use crate::vocab::*;
-    use crate::text_ops::*;
-    use crate::features::*;
-    use crate::similarity::*;
-    use crate::lm::*;
-    use crate::process::*;
-    use crate::optimize::*;
     use crate::analyze::*;
-    use crate::compute::*;
-    use crate::helper::*;
-    use crate::transform::*;
     use crate::builder::*;
-    use crate::tokenizer::*;
-    use crate::tokenizer::bpe::*;
-    use crate::tokenizer::sentencepiece::*;
-    use crate::tokenizer::wordpiece::*;
-    use crate::tokenizer::char::*;
-    use crate::tokenizer::trainer::*;
-    use crate::tokenizer::normalizer::*;
-    use crate::tokenizer::pretokenizer::*;
-    use crate::tokenizer::bytelevel::*;
-    use crate::tokenizer::post::*;
-    use crate::embedding::*;
-    use crate::embedding::pretrained::*;
+    use crate::compute::*;
+    use crate::config::*;
+    use crate::core::*;
     use crate::embedding::fasttext::*;
+    use crate::embedding::pretrained::*;
+    use crate::embedding::*;
+    use crate::features::*;
+    use crate::helper::*;
+    use crate::lm::*;
+    use crate::ops::*;
+    use crate::optimize::*;
+    use crate::process::*;
+    use crate::similarity::*;
+    use crate::text_ops::*;
+    use crate::tokenizer::bpe::*;
+    use crate::tokenizer::bytelevel::*;
+    use crate::tokenizer::char::*;
+    use crate::tokenizer::normalizer::*;
+    use crate::tokenizer::post::*;
+    use crate::tokenizer::pretokenizer::*;
+    use crate::tokenizer::sentencepiece::*;
+    use crate::tokenizer::trainer::*;
+    use crate::tokenizer::wordpiece::*;
+    use crate::tokenizer::*;
+    use crate::transform::*;
+    use crate::utils::*;
+    use crate::vocab::*;
     use crate::VERSION;
     use brain_core::Tensor;
 

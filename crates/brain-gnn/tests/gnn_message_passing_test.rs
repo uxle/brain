@@ -1,6 +1,6 @@
 //! Tests for GNN message passing and graph structures
-use brain_gnn::*;
 use brain_core::Tensor;
+use brain_gnn::*;
 
 #[test]
 fn test_graph_creation_and_degree_ops() {
@@ -21,11 +21,10 @@ fn test_gcn_layer_forward() {
     let layer = GcnLayer::new(4, 2);
     let src = vec![0, 1, 0, 1, 2];
     let dst = vec![1, 2, 0, 1, 2];
-    let feats = Tensor::from_slice(&[
-        1.0, 0.0, 0.0, 1.0,
-        0.0, 1.0, 1.0, 0.0,
-        1.0, 1.0, 0.0, 0.0,
-    ], vec![3, 4]);
+    let feats = Tensor::from_slice(
+        &[1.0, 0.0, 0.0, 1.0, 0.0, 1.0, 1.0, 0.0, 1.0, 1.0, 0.0, 0.0],
+        vec![3, 4],
+    );
 
     let g = Graph::new(3, src, dst, feats.clone()).unwrap();
     let out = layer.forward(&g, &feats);

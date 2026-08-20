@@ -11,7 +11,10 @@ pub enum MetricValue {
     Scalar(f64),
     Vector(Vec<f64>),
     Matrix(Vec<Vec<f64>>),
-    Table { headers: Vec<String>, rows: Vec<Vec<String>> },
+    Table {
+        headers: Vec<String>,
+        rows: Vec<Vec<String>>,
+    },
 }
 
 impl MetricValue {
@@ -61,7 +64,9 @@ pub enum MetricError {
 impl std::fmt::Display for MetricError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            MetricError::LengthMismatch { expected, got } => write!(f, "Length mismatch: expected {}, got {}", expected, got),
+            MetricError::LengthMismatch { expected, got } => {
+                write!(f, "Length mismatch: expected {}, got {}", expected, got)
+            }
             MetricError::InvalidThreshold(msg) => write!(f, "Invalid threshold: {}", msg),
             MetricError::EmptyInput => write!(f, "Input evaluation set cannot be empty"),
             MetricError::UndefinedMetric(msg) => write!(f, "Undefined metric: {}", msg),
@@ -85,7 +90,13 @@ pub trait Metric: Send + Sync {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

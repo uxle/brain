@@ -9,8 +9,8 @@
 //! * 64-bit IEEE float PCM
 //! * Multi-channel audio streams
 
-use brain_core::{BrainError, BrainResult};
 use crate::core::{AudioBuffer, SampleRate};
+use brain_core::{BrainError, BrainResult};
 
 /// Parsed RIFF/WAV header metadata.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -32,7 +32,9 @@ pub struct WavHeader {
 /// Decodes an in-memory WAV byte slice into an [`AudioBuffer`].
 pub fn read_wav(bytes: &[u8]) -> BrainResult<AudioBuffer> {
     if bytes.len() < 44 {
-        return Err(BrainError::invalid_value("WAV file smaller than minimum 44-byte header"));
+        return Err(BrainError::invalid_value(
+            "WAV file smaller than minimum 44-byte header",
+        ));
     }
     if &bytes[0..4] != b"RIFF" || &bytes[8..12] != b"WAVE" {
         return Err(BrainError::invalid_value("invalid RIFF/WAVE header"));
@@ -44,7 +46,8 @@ pub fn read_wav(bytes: &[u8]) -> BrainResult<AudioBuffer> {
 
     while cursor + 8 <= bytes.len() {
         let chunk_id = &bytes[cursor..cursor + 4];
-        let chunk_size = u32::from_le_bytes(bytes[cursor + 4..cursor + 8].try_into().unwrap()) as usize;
+        let chunk_size =
+            u32::from_le_bytes(bytes[cursor + 4..cursor + 8].try_into().unwrap()) as usize;
         cursor += 8;
 
         if cursor + chunk_size > bytes.len() {
@@ -59,8 +62,10 @@ pub fn read_wav(bytes: &[u8]) -> BrainResult<AudioBuffer> {
             let channels = u16::from_le_bytes(bytes[cursor + 2..cursor + 4].try_into().unwrap());
             let sample_rate = u32::from_le_bytes(bytes[cursor + 4..cursor + 8].try_into().unwrap());
             let byte_rate = u32::from_le_bytes(bytes[cursor + 8..cursor + 12].try_into().unwrap());
-            let block_align = u16::from_le_bytes(bytes[cursor + 12..cursor + 14].try_into().unwrap());
-            let bits_per_sample = u16::from_le_bytes(bytes[cursor + 14..cursor + 16].try_into().unwrap());
+            let block_align =
+                u16::from_le_bytes(bytes[cursor + 12..cursor + 14].try_into().unwrap());
+            let bits_per_sample =
+                u16::from_le_bytes(bytes[cursor + 14..cursor + 16].try_into().unwrap());
 
             header = Some(WavHeader {
                 channels,
@@ -82,7 +87,8 @@ pub fn read_wav(bytes: &[u8]) -> BrainResult<AudioBuffer> {
     }
 
     let hdr = header.ok_or_else(|| BrainError::invalid_value("missing fmt chunk in WAV file"))?;
-    let data = data_slice.ok_or_else(|| BrainError::invalid_value("missing data chunk in WAV file"))?;
+    let data =
+        data_slice.ok_or_else(|| BrainError::invalid_value("missing data chunk in WAV file"))?;
     let ch = hdr.channels as usize;
     let sr = SampleRate::new(hdr.sample_rate)?;
 
@@ -115,7 +121,11 @@ pub fn read_wav(bytes: &[u8]) -> BrainResult<AudioBuffer> {
                     byte_idx += 3;
                     let raw = (b0 | (b1 << 8) | (b2 << 16)) as i32;
                     // Sign extend 24-bit
-                    let val = if raw & 0x800000 != 0 { raw | !0xFFFFFF } else { raw };
+                    let val = if raw & 0x800000 != 0 {
+                        raw | !0xFFFFFF
+                    } else {
+                        raw
+                    };
                     val as f64 / 8388608.0
                 }
                 (1, 32) => {
@@ -133,7 +143,12 @@ pub fn read_wav(bytes: &[u8]) -> BrainResult<AudioBuffer> {
                     byte_idx += 8;
                     val
                 }
-                _ => return Err(BrainError::invalid_value(format!("unsupported WAV format: tag={}, bits={}", hdr.format_tag, hdr.bits_per_sample))),
+                _ => {
+                    return Err(BrainError::invalid_value(format!(
+                        "unsupported WAV format: tag={}, bits={}",
+                        hdr.format_tag, hdr.bits_per_sample
+                    )))
+                }
             };
             out_buffer.set_sample(c, frame, sample_f64)?;
         }
@@ -175,7 +190,7 @@ pub fn write_wav(audio: &AudioBuffer) -> Vec<u8> {
     // fmt chunk
     out.extend_from_slice(b"fmt ");
     out.extend_from_slice(&16u32.to_le_bytes()); // subchunk1 size
-    out.extend_from_slice(&1u16.to_le_bytes());  // PCM
+    out.extend_from_slice(&1u16.to_le_bytes()); // PCM
     out.extend_from_slice(&ch.to_le_bytes());
     out.extend_from_slice(&sr.to_le_bytes());
     out.extend_from_slice(&byte_rate.to_le_bytes());

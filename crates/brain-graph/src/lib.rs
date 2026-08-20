@@ -56,7 +56,9 @@ pub use builder::GraphBuilder;
 pub use clone::clone_subgraph;
 pub use compute::{compute_costs, GraphCosts};
 pub use config::{GraphConfig, OptLevel, VerificationLevel};
-pub use core::{DType, DeviceKind, EdgeId, GraphError, GraphMetadata, GraphResult, NodeId, Shape, ValueId};
+pub use core::{
+    DType, DeviceKind, EdgeId, GraphError, GraphMetadata, GraphResult, NodeId, Shape, ValueId,
+};
 pub use diff::{diff_graphs, GraphDiff};
 pub use dot::to_dot;
 pub use helper::{build_cnn_graph, build_mlp_graph, build_transformer_graph};
@@ -69,9 +71,9 @@ pub use json::to_json;
 pub use ops::{graph_add, graph_matmul, graph_relu, op_apply};
 pub use optimize::{optimize, OptimizeReport};
 pub use passes::{
-    eliminate_cse, eliminate_dead_code, eliminate_layout_transforms, fold_constants,
-    plan_fusion, plan_inplace_operations, ConstFoldPass, CsePass, DeadCodeElimPass,
-    FusionPass, FusionPlan, GraphPass, InplacePass, InplacePlan, LayoutPass, PassManager,
+    eliminate_cse, eliminate_dead_code, eliminate_layout_transforms, fold_constants, plan_fusion,
+    plan_inplace_operations, ConstFoldPass, CsePass, DeadCodeElimPass, FusionPass, FusionPlan,
+    GraphPass, InplacePass, InplacePlan, LayoutPass, PassManager,
 };
 pub use process::process_with_verification;
 pub use profile::{profile_graph, GraphProfile};

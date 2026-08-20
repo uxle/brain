@@ -22,7 +22,12 @@ impl GroupedConv2d {
             out_channels,
             kernel_size,
             groups,
-            weight: Tensor::ones(vec![out_channels, in_channels / groups, kernel_size, kernel_size]),
+            weight: Tensor::ones(vec![
+                out_channels,
+                in_channels / groups,
+                kernel_size,
+                kernel_size,
+            ]),
         }
     }
 

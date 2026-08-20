@@ -14,12 +14,22 @@ pub struct QuantizeOnnxConfig {
 
 /// Inspects an OnnxModel to check for QuantizeLinear / DequantizeLinear operators.
 pub fn has_quantized_nodes(model: &OnnxModel) -> bool {
-    model.graph.nodes.iter().any(|n| n.op_type == "QuantizeLinear" || n.op_type == "DequantizeLinear")
+    model
+        .graph
+        .nodes
+        .iter()
+        .any(|n| n.op_type == "QuantizeLinear" || n.op_type == "DequantizeLinear")
 }
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

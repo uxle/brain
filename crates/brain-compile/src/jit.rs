@@ -19,7 +19,11 @@ impl JitCache {
     }
 
     /// Retrieves or compiles a graph.
-    pub fn get_or_compile(&mut self, graph: &IrGraph, options: &CompileOptions) -> Result<&IrGraph, CompilationError> {
+    pub fn get_or_compile(
+        &mut self,
+        graph: &IrGraph,
+        options: &CompileOptions,
+    ) -> Result<&IrGraph, CompilationError> {
         let hash = 0u64;
         if let std::collections::hash_map::Entry::Vacant(e) = self.cache.entry(hash) {
             let compiled = crate::r#impl::compile_graph(graph, options)?;

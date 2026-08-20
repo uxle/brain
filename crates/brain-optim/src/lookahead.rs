@@ -3,8 +3,8 @@
 //! Synchronizes fast weights with slow weights every k steps to improve convergence and basin stability.
 #![allow(missing_docs, clippy::manual_is_multiple_of)]
 
-use std::collections::HashMap;
 use brain_core::Tensor;
+use std::collections::HashMap;
 
 /// Configuration settings for Lookahead optimizer.
 #[derive(Debug, Clone, PartialEq)]
@@ -15,10 +15,7 @@ pub struct LookaheadConfig {
 
 impl Default for LookaheadConfig {
     fn default() -> Self {
-        Self {
-            k: 5,
-            alpha: 0.5,
-        }
+        Self { k: 5, alpha: 0.5 }
     }
 }
 
@@ -58,7 +55,10 @@ impl Lookahead {
             let alpha = self.config.alpha;
             for (idx, p) in params.iter_mut().enumerate() {
                 let p_data = p.data_mut();
-                let slow = self.slow_weights.entry(idx).or_insert_with(|| p_data.to_vec());
+                let slow = self
+                    .slow_weights
+                    .entry(idx)
+                    .or_insert_with(|| p_data.to_vec());
                 if slow.len() != p_data.len() {
                     *slow = p_data.to_vec();
                 }
@@ -75,7 +75,13 @@ impl Lookahead {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

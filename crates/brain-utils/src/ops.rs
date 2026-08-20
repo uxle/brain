@@ -3,9 +3,9 @@
 //! Provides execution measuring wrappers, exponential backoff retries,
 //! rate limiters, batching helpers, and closure adapters.
 
+use crate::core::{UtilsError, UtilsResult};
 use std::thread;
 use std::time::{Duration, Instant};
-use crate::core::{UtilsError, UtilsResult};
 
 /// Measures the execution duration of a closure and returns (result, duration).
 pub fn measure_block<F, R>(f: F) -> (R, Duration)
@@ -29,7 +29,9 @@ where
     F: FnMut(usize) -> UtilsResult<T>,
 {
     if max_attempts == 0 {
-        return Err(UtilsError::Unsupported("max_attempts must be > 0".to_string()));
+        return Err(UtilsError::Unsupported(
+            "max_attempts must be > 0".to_string(),
+        ));
     }
     let mut current_delay = initial_delay;
     for attempt in 1..=max_attempts {
@@ -111,12 +113,14 @@ mod tests {
     fn test_ops_retry_and_limiter_1() {
         let (res, dur) = measure_block(|| {
             let mut sum = 0u64;
-            for k in 0..1000 { sum += k; }
+            for k in 0..1000 {
+                sum += k;
+            }
             sum
         });
         assert_eq!(res, 499500);
         let _ = dur;
-    
+
         let mut attempts_done = 0;
         let retry_res = retry_with_backoff(
             |attempt| {
@@ -134,12 +138,12 @@ mod tests {
         );
         assert_eq!(retry_res.unwrap(), "success");
         assert_eq!(attempts_done, 3);
-    
+
         let mut limiter = TokenBucketRateLimiter::new(10.0, 5.0);
         assert!(limiter.try_acquire(5.0));
         assert!(limiter.try_acquire(5.0));
         assert!(!limiter.try_acquire(1.0));
-    
+
         let chunks = chunk_slice(&[1, 2, 3, 4, 5, 6, 7], 3);
         assert_eq!(chunks.len(), 3);
         assert_eq!(chunks[0], vec![1, 2, 3]);

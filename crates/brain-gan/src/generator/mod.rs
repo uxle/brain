@@ -3,18 +3,18 @@
 //! [`Generator`] trait, latent sampling, output range handling.
 #![allow(missing_docs)]
 
+pub mod conditional;
 pub mod dcgan;
 pub mod resnet;
-pub mod conditional;
 
+pub use conditional::ConditionalGenerator;
 pub use dcgan::DcganGenerator;
 pub use resnet::ResnetGenerator;
-pub use conditional::ConditionalGenerator;
 
-use brain_core::Tensor;
 use crate::config::{GeneratorConfig, LatentType, OutputActivation};
+use crate::ops::{sigmoid_act, tanh_act};
 use crate::utils::sample_gaussian;
-use crate::ops::{tanh_act, sigmoid_act};
+use brain_core::Tensor;
 
 /// Core trait for all GAN generators.
 pub trait Generator: Send + Sync {
@@ -35,10 +35,14 @@ pub fn sample_latent(config: &GeneratorConfig, seed: u64) -> Tensor {
         }
         LatentType::Uniform => {
             let mut rng = seed;
-            let data: Vec<f64> = (0..config.latent_dim).map(|_| {
-                rng = rng.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
-                (rng >> 11) as f64 / (1u64 << 53) as f64 * 2.0 - 1.0
-            }).collect();
+            let data: Vec<f64> = (0..config.latent_dim)
+                .map(|_| {
+                    rng = rng
+                        .wrapping_mul(6364136223846793005)
+                        .wrapping_add(1442695040888963407);
+                    (rng >> 11) as f64 / (1u64 << 53) as f64 * 2.0 - 1.0
+                })
+                .collect();
             Tensor::from_vec(data, vec![config.latent_dim])
         }
         LatentType::Spherical => {
@@ -61,7 +65,13 @@ pub fn apply_output_activation(t: &Tensor, activation: OutputActivation) -> Tens
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

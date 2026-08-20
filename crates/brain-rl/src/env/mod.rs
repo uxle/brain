@@ -1,24 +1,33 @@
 //! # Environment Abstractions & Step Definitions
 //!
 //! Standard `Env` trait, step responses, and information dictionaries.
-#![allow(missing_docs, clippy::excessive_precision, clippy::approx_constant, clippy::needless_range_loop, clippy::too_many_arguments, clippy::manual_is_multiple_of, clippy::manual_div_ceil, clippy::doc_markdown)]
+#![allow(
+    missing_docs,
+    clippy::excessive_precision,
+    clippy::approx_constant,
+    clippy::needless_range_loop,
+    clippy::too_many_arguments,
+    clippy::manual_is_multiple_of,
+    clippy::manual_div_ceil,
+    clippy::doc_markdown
+)]
 
-pub mod gym;
-pub mod gridworld;
 pub mod atari_lite;
+pub mod gridworld;
+pub mod gym;
 pub mod mujoco_lite;
-pub mod wrappers;
 pub mod vector;
+pub mod wrappers;
 
+pub use atari_lite::{BreakoutLiteEnv, PongLiteEnv};
+pub use gridworld::{CliffWalkingEnv, FrozenLakeEnv, GridWorldEnv};
 pub use gym::{CartPoleEnv, MountainCarEnv, PendulumEnv};
-pub use gridworld::{GridWorldEnv, CliffWalkingEnv, FrozenLakeEnv};
-pub use atari_lite::{PongLiteEnv, BreakoutLiteEnv};
 pub use mujoco_lite::{HalfCheetahLiteEnv, ReacherLiteEnv};
-pub use wrappers::{FrameStackWrapper, TimeLimitWrapper, RewardScaleWrapper};
-pub use vector::{VecEnv, DummyVecEnv};
+pub use vector::{DummyVecEnv, VecEnv};
+pub use wrappers::{FrameStackWrapper, RewardScaleWrapper, TimeLimitWrapper};
 
-use brain_core::Tensor;
 use super::core::{RlResult, Space};
+use brain_core::Tensor;
 
 /// Step output container returned from environment transitions.
 #[derive(Debug, Clone, PartialEq)]
@@ -65,23 +74,35 @@ pub trait Env: Send + Sync {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant, clippy::needless_range_loop, clippy::manual_div_ceil, clippy::manual_is_multiple_of, clippy::too_many_arguments, clippy::doc_markdown, clippy::excessive_precision)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant,
+        clippy::needless_range_loop,
+        clippy::manual_div_ceil,
+        clippy::manual_is_multiple_of,
+        clippy::too_many_arguments,
+        clippy::doc_markdown,
+        clippy::excessive_precision
+    )]
     use super::*;
-    use crate::core::*;
-    use crate::env::*;
-    use crate::policy::*;
-    use crate::value::*;
-    use crate::buffer::*;
-    use crate::dqn::*;
-    use crate::ppo::*;
     use crate::a2c::*;
     use crate::actor_critic::*;
-    use crate::sac::*;
     use crate::agents::*;
-    use crate::trainer::*;
-    use crate::eval::*;
+    use crate::buffer::*;
     use crate::checkpoint::*;
+    use crate::core::*;
+    use crate::dqn::*;
+    use crate::env::*;
+    use crate::eval::*;
+    use crate::policy::*;
+    use crate::ppo::*;
+    use crate::sac::*;
+    use crate::trainer::*;
     use crate::utils::*;
+    use crate::value::*;
     use crate::VERSION;
     use brain_core::Tensor;
 }

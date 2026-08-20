@@ -55,7 +55,10 @@ fn main() {
 
     let frame = video_source.capture_frame().expect("Video capture ok");
     let frame_tensor = frame.to_tensor();
-    println!("    [✓] Captured screen frame tensor with shape: {:?}", frame_tensor.shape());
+    println!(
+        "    [✓] Captured screen frame tensor with shape: {:?}",
+        frame_tensor.shape()
+    );
 
     // Compute coarse state representation from visual features
     let mut state_vec = Vec::with_capacity(state_dim);
@@ -69,23 +72,39 @@ fn main() {
 
     println!("[*] Step 2: Querying Skill Library for matching action plan...");
     if let Some(skill) = skill_library.search(&state_vec, 0.5) {
-        println!("    [✓] Found high-confidence skill: '{}' (Historical success: {})", skill.name, skill.success_count);
+        println!(
+            "    [✓] Found high-confidence skill: '{}' (Historical success: {})",
+            skill.name, skill.success_count
+        );
 
         for (idx, step) in skill.steps.iter().enumerate() {
-            println!("    [Sub-Goal {}] {}", idx + 1, step.description.as_deref().unwrap_or("Action"));
+            println!(
+                "    [Sub-Goal {}] {}",
+                idx + 1,
+                step.description.as_deref().unwrap_or("Action")
+            );
 
             let hid_action = if idx == 0 {
                 // Move mouse and click
                 let x = step.action[0] as u32;
                 let y = step.action[1] as u32;
-                HidAction::Mouse(MouseAction::Drag { from_x: 0, from_y: 0, to_x: x, to_y: y })
+                HidAction::Mouse(MouseAction::Drag {
+                    from_x: 0,
+                    from_y: 0,
+                    to_x: x,
+                    to_y: y,
+                })
             } else {
                 // Type greeting text
-                HidAction::Key(KeyAction::TypeStr("Hello, Brain Autonomous Agent World!".into()))
+                HidAction::Key(KeyAction::TypeStr(
+                    "Hello, Brain Autonomous Agent World!".into(),
+                ))
             };
 
             // Verify safety guardrails
-            safety_guard.verify_action(&hid_action).expect("Action verified safe");
+            safety_guard
+                .verify_action(&hid_action)
+                .expect("Action verified safe");
 
             // Execute on HID device
             hid_device.execute(&hid_action).expect("HID execution ok");
@@ -104,13 +123,21 @@ fn main() {
     let next_frame_tensor = next_frame.to_tensor();
     let next_state_tensor = Tensor::from_vec(vec![0.52; state_dim], vec![state_dim]);
 
-    let pred = world_model.predict(&state_tensor, &dummy_action).expect("Prediction ok");
+    let pred = world_model
+        .predict(&state_tensor, &dummy_action)
+        .expect("Prediction ok");
     let intrinsic_r = curiosity
         .compute_intrinsic_reward(&state_tensor, &dummy_action, &next_state_tensor)
         .unwrap_or(0.0);
 
-    println!("    [✓] World Model predicted next state error: {:.6}", (pred.next_state.data()[0] - 0.52).abs());
-    println!("    [✓] Intrinsic Curiosity Exploration Reward: {:.4}", intrinsic_r);
+    println!(
+        "    [✓] World Model predicted next state error: {:.6}",
+        (pred.next_state.data()[0] - 0.52).abs()
+    );
+    println!(
+        "    [✓] Intrinsic Curiosity Exploration Reward: {:.4}",
+        intrinsic_r
+    );
 
     println!("============================================================");
     println!("  Task Completed: Agent autonomously actuated GUI target!   ");

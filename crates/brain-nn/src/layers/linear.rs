@@ -3,10 +3,10 @@
 //! y = x * W^T + b with Kaiming uniform weight initialization and optional bias.
 #![allow(missing_docs)]
 
-use brain_core::Tensor;
-use brain_autograd::Value;
-use crate::module::{Module, ModuleResult, ModuleError};
 use crate::init::kaiming_uniform;
+use crate::module::{Module, ModuleError, ModuleResult};
+use brain_autograd::Value;
+use brain_core::Tensor;
 
 /// Linear / Dense transformation layer.
 #[derive(Debug, Clone)]
@@ -64,7 +64,13 @@ impl Module for Linear {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 
@@ -95,8 +101,18 @@ mod tests {
         }
         let analytic_db = [2.0, 2.0];
 
-        let w_grad = linear.weight.grad().expect("weight grad should be populated").to_vec();
-        let b_grad = linear.bias.as_ref().unwrap().grad().expect("bias grad should be populated").to_vec();
+        let w_grad = linear
+            .weight
+            .grad()
+            .expect("weight grad should be populated")
+            .to_vec();
+        let b_grad = linear
+            .bias
+            .as_ref()
+            .unwrap()
+            .grad()
+            .expect("bias grad should be populated")
+            .to_vec();
 
         for i in 0..6 {
             assert!(

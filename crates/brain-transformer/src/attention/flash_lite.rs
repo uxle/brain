@@ -1,7 +1,15 @@
 //! # FlashAttention-Lite: Block-Tiled Memory-Efficient Attention
 //!
 //! Tiling query and key blocks with online softmax rescaling, achieving $O(1)$ memory without allocating the full $N \times N$ attention matrix.
-#![allow(missing_docs, unused_imports, unused_variables, dead_code, unused_mut, unused_comparisons, clippy::all)]
+#![allow(
+    missing_docs,
+    unused_imports,
+    unused_variables,
+    dead_code,
+    unused_mut,
+    unused_comparisons,
+    clippy::all
+)]
 
 use crate::core::{TransformerError, TransformerResult};
 use brain_core::Tensor;
@@ -92,7 +100,10 @@ impl FlashAttentionLite {
                     }
 
                     // Online Softmax step
-                    let tile_max = tile_scores.iter().copied().fold(f64::NEG_INFINITY, f64::max);
+                    let tile_max = tile_scores
+                        .iter()
+                        .copied()
+                        .fold(f64::NEG_INFINITY, f64::max);
                     if tile_max > f64::NEG_INFINITY {
                         let prev_max = row_max[global_i];
                         let new_max = prev_max.max(tile_max);
@@ -197,65 +208,81 @@ impl FlashAttentionLite {
                 let v_head = &v_data[v_offset..v_offset + seq_k * v_head_dim];
 
                 let head_out = Self::forward_head_tiled(
-                    q_head,
-                    k_head,
-                    v_head,
-                    seq_q,
-                    seq_k,
-                    head_dim,
-                    v_head_dim,
-                    config,
+                    q_head, k_head, v_head, seq_q, seq_k, head_dim, v_head_dim, config,
                 );
 
                 out_data[out_offset..out_offset + seq_q * v_head_dim].copy_from_slice(&head_out);
             }
         }
 
-        Ok(Tensor::from_vec(out_data, vec![batch_size, num_heads, seq_q, v_head_dim]))
+        Ok(Tensor::from_vec(
+            out_data,
+            vec![batch_size, num_heads, seq_q, v_head_dim],
+        ))
     }
 }
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant, clippy::needless_range_loop, clippy::manual_div_ceil, clippy::manual_is_multiple_of, clippy::too_many_arguments, clippy::doc_markdown, clippy::excessive_precision, clippy::float_cmp, clippy::len_zero, clippy::all)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant,
+        clippy::needless_range_loop,
+        clippy::manual_div_ceil,
+        clippy::manual_is_multiple_of,
+        clippy::too_many_arguments,
+        clippy::doc_markdown,
+        clippy::excessive_precision,
+        clippy::float_cmp,
+        clippy::len_zero,
+        clippy::all
+    )]
     use super::*;
-    use crate::core::*;
-    use crate::config::*;
-    use crate::utils::*;
-    use crate::ops::*;
-    use crate::attention::*;
-    use crate::attention::scaled::*;
-    use crate::attention::multi_head::*;
-    use crate::attention::relative::*;
     use crate::attention::flash_lite::*;
+    use crate::attention::multi_head::*;
     use crate::attention::multi_query::*;
+    use crate::attention::relative::*;
+    use crate::attention::scaled::*;
     use crate::attention::xformers_lite::*;
-    use crate::position::*;
-    use crate::position::rope::*;
-    use crate::position::alibi::*;
-    use crate::position::learned::*;
+    use crate::attention::*;
+    use crate::builder::*;
+    use crate::config::*;
+    use crate::core::*;
+    use crate::decoder::cross::*;
+    use crate::decoder::layer::*;
+    use crate::decoder::*;
     use crate::embedding_layers::*;
-    use crate::ffn::*;
-    use crate::encoder::*;
     use crate::encoder::block::*;
     use crate::encoder::layer::*;
-    use crate::decoder::*;
-    use crate::decoder::layer::*;
-    use crate::decoder::cross::*;
+    use crate::encoder::*;
+    use crate::ffn::*;
+    use crate::generate::*;
     use crate::head::*;
     use crate::kv_cache::*;
-    use crate::generate::*;
-    use crate::models::*;
     use crate::models::bert_lite::*;
     use crate::models::gpt_lite::*;
-    use crate::models::t5_lite::*;
     use crate::models::llama_lite::*;
-    use crate::builder::*;
+    use crate::models::t5_lite::*;
+    use crate::models::*;
+    use crate::ops::*;
+    use crate::position::alibi::*;
+    use crate::position::learned::*;
+    use crate::position::rope::*;
+    use crate::position::*;
+    use crate::utils::*;
     use brain_core::Tensor;
 
     #[test]
     fn test_flash_attention_lite_1() {
-        let cfg = FlashLiteConfig { block_m: 2, block_n: 2, is_causal: false, scale: None };
+        let cfg = FlashLiteConfig {
+            block_m: 2,
+            block_n: 2,
+            is_causal: false,
+            scale: None,
+        };
         let q = Tensor::from_vec(vec![1.0; 1 * 1 * 4 * 8], vec![1, 1, 4, 8]);
         let k_t = Tensor::from_vec(vec![1.0; 1 * 1 * 4 * 8], vec![1, 1, 4, 8]);
         let v = Tensor::from_vec(vec![2.0; 1 * 1 * 4 * 8], vec![1, 1, 4, 8]);
@@ -265,9 +292,19 @@ mod tests {
 
         // Check equivalence with standard reference SDPA
         let (ref_out, _) = crate::attention::scaled::scaled_dot_product_attention(
-            &q, &k_t, &v, &crate::core::AttentionMask::None, None
-        ).unwrap();
+            &q,
+            &k_t,
+            &v,
+            &crate::core::AttentionMask::None,
+            None,
+        )
+        .unwrap();
 
-        assert!(crate::utils::all_close(flash_out.data(), ref_out.data(), 1e-4, 1e-4));
+        assert!(crate::utils::all_close(
+            flash_out.data(),
+            ref_out.data(),
+            1e-4,
+            1e-4
+        ));
     }
 }

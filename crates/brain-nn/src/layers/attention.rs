@@ -3,7 +3,7 @@
 //! Attention(Q, K, V) = softmax(Q * K^T / sqrt(d_k)) * V with optional causal and padding masks.
 #![allow(missing_docs)]
 
-pub use super::multihead::{MultiheadAttention, MhaConfig};
+pub use super::multihead::{MhaConfig, MultiheadAttention};
 
 use brain_core::Tensor;
 
@@ -47,7 +47,8 @@ pub fn scaled_dot_product_attention(
             for sk in 0..seq_k {
                 let mut dot = 0.0f64;
                 for d in 0..d_k {
-                    dot += q_data[b * seq_q * d_k + sq * d_k + d] * k_data[b * seq_k * d_k + sk * d_k + d];
+                    dot += q_data[b * seq_q * d_k + sq * d_k + d]
+                        * k_data[b * seq_k * d_k + sk * d_k + d];
                 }
                 let mut s = dot * scale;
                 if let Some(ref m) = mask_data {
@@ -73,14 +74,26 @@ pub fn scaled_dot_product_attention(
 
             // Softmax over seq_k
             let max_s = scores.iter().copied().fold(f64::NEG_INFINITY, f64::max);
-            let exp_sum: f64 = scores.iter().map(|&s| if s.is_finite() { (s - max_s).exp() } else { 0.0 }).sum();
-            let attn_weights: Vec<f64> = scores.iter().map(|&s| {
-                if s.is_finite() && exp_sum > 0.0 {
-                    (s - max_s).exp() / exp_sum
-                } else {
-                    0.0
-                }
-            }).collect();
+            let exp_sum: f64 = scores
+                .iter()
+                .map(|&s| {
+                    if s.is_finite() {
+                        (s - max_s).exp()
+                    } else {
+                        0.0
+                    }
+                })
+                .sum();
+            let attn_weights: Vec<f64> = scores
+                .iter()
+                .map(|&s| {
+                    if s.is_finite() && exp_sum > 0.0 {
+                        (s - max_s).exp() / exp_sum
+                    } else {
+                        0.0
+                    }
+                })
+                .collect();
 
             for dv in 0..d_v {
                 let mut weighted_val = 0.0f64;
@@ -97,7 +110,13 @@ pub fn scaled_dot_product_attention(
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

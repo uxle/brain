@@ -25,7 +25,11 @@ impl MetricTracker {
     pub fn mean(&self, name: &str) -> Option<f64> {
         let sum = self.sums.get(name)?;
         let count = self.counts.get(name)?;
-        if *count > 0 { Some(sum / *count as f64) } else { None }
+        if *count > 0 {
+            Some(sum / *count as f64)
+        } else {
+            None
+        }
     }
 
     pub fn summary(&self) -> HashMap<String, f64> {
@@ -48,7 +52,13 @@ impl MetricTracker {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

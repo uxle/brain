@@ -3,11 +3,11 @@
 //! Maximally powerful GNN layer: h_v = MLP( (1 + eps) * h_v + sum_u h_u ).
 #![allow(missing_docs)]
 
-use brain_core::Tensor;
 use super::GnnLayer;
 use crate::graph::Graph;
-use crate::ops::aggregate_sum;
 use crate::impl_::transform_node_features;
+use crate::ops::aggregate_sum;
+use brain_core::Tensor;
 
 /// GIN Layer struct.
 #[derive(Debug, Clone)]
@@ -23,7 +23,13 @@ impl GinLayer {
     pub fn new(in_dim: usize, out_dim: usize) -> Self {
         let mlp_w1 = Tensor::zeros(vec![out_dim, in_dim]);
         let mlp_w2 = Tensor::zeros(vec![out_dim, out_dim]);
-        Self { in_dim, out_dim, eps: 0.0, mlp_w1, mlp_w2 }
+        Self {
+            in_dim,
+            out_dim,
+            eps: 0.0,
+            mlp_w1,
+            mlp_w2,
+        }
     }
 }
 
@@ -41,13 +47,23 @@ impl GnnLayer for GinLayer {
         transform_node_features(&h1_relu, &self.mlp_w2, None)
     }
 
-    fn in_dim(&self) -> usize { self.in_dim }
-    fn out_dim(&self) -> usize { self.out_dim }
+    fn in_dim(&self) -> usize {
+        self.in_dim
+    }
+    fn out_dim(&self) -> usize {
+        self.out_dim
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

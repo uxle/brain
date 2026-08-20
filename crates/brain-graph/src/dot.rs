@@ -15,7 +15,10 @@ pub fn to_dot(graph: &GraphIr) -> String {
     // Add inputs
     for &inp in &graph.inputs {
         let v = &graph.values[inp];
-        dot.push_str(&format!("    val_{} [shape=ellipse, fillcolor=\"#cce5ff\", label=\"{} {:?}\"];\n", inp, v.name, v.shape.dims));
+        dot.push_str(&format!(
+            "    val_{} [shape=ellipse, fillcolor=\"#cce5ff\", label=\"{} {:?}\"];\n",
+            inp, v.name, v.shape.dims
+        ));
     }
 
     // Add nodes
@@ -35,7 +38,10 @@ pub fn to_dot(graph: &GraphIr) -> String {
         }
         for &out in &node.outputs {
             let v = &graph.values[out];
-            dot.push_str(&format!("    val_{} [shape=ellipse, label=\"{} {:?}\"];\n", out, v.name, v.shape.dims));
+            dot.push_str(&format!(
+                "    val_{} [shape=ellipse, label=\"{} {:?}\"];\n",
+                out, v.name, v.shape.dims
+            ));
             dot.push_str(&format!("    node_{} -> val_{};\n", node.id, out));
         }
     }
@@ -46,7 +52,13 @@ pub fn to_dot(graph: &GraphIr) -> String {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

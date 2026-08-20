@@ -30,11 +30,10 @@ pub mod pruning;
 
 // ── Convenience re-exports ──────────────────────────────────────────────────
 pub use activations::{
-    celu, elu, fast_gelu, gelu, glu, hard_sigmoid, hard_swish, leaky_relu, log_softmax, mish,
-    relu, selu, sigmoid, silu, softmax, softplus, softsign, swiglu, swish, tanh, Activation,
-    ActivationKind, FastGELU, GELU, HardSigmoid, HardSwish, HardTanh, LeakyReLU, LogSoftmax,
-    Mish, ReLU, SELU, Sigmoid, SiLU, Softmax, SoftmaxConfig, Softplus, Softsign, Swish, Tanh,
-    CELU, ELU,
+    celu, elu, fast_gelu, gelu, glu, hard_sigmoid, hard_swish, leaky_relu, log_softmax, mish, relu,
+    selu, sigmoid, silu, softmax, softplus, softsign, swiglu, swish, tanh, Activation,
+    ActivationKind, FastGELU, HardSigmoid, HardSwish, HardTanh, LeakyReLU, LogSoftmax, Mish, ReLU,
+    SiLU, Sigmoid, Softmax, SoftmaxConfig, Softplus, Softsign, Swish, Tanh, CELU, ELU, GELU, SELU,
 };
 pub use containers::{NamedModule, Sequential, SequentialNamed};
 pub use dropout::{AlphaDropout, Dropout, Dropout2d, FusedDropout};
@@ -44,17 +43,17 @@ pub use init::{
     scaled_residual_init, uniform_init, xavier_normal, xavier_uniform, zero_init_last_layer,
     InitConfig, InitPolicy, InitScheme,
 };
-pub use layers::{
-    scaled_dot_product_attention, AttentionConfig, AvgPool2d, Bilinear, Conv1d, Conv2d,
-    ConvTranspose2d, Embedding, Identity, LayerNorm, Linear, MaxPool2d,
-    MultiheadAttention, GRU, LSTM,
-};
 pub use layers::conv2d::ConvConfig;
 pub use layers::multihead::MhaConfig;
-pub use module::{Buffer, Module, ModuleDict, ModuleError, ModuleList, ModuleResult, NamedParameter, Parameter};
-pub use normalization::{
-    BatchNorm2d, GroupNorm, NormalizationLayer, RMSNorm, RMSNormConfig,
+pub use layers::{
+    scaled_dot_product_attention, AttentionConfig, AvgPool2d, Bilinear, Conv1d, Conv2d,
+    ConvTranspose2d, Embedding, Identity, LayerNorm, Linear, MaxPool2d, MultiheadAttention, GRU,
+    LSTM,
 };
+pub use module::{
+    Buffer, Module, ModuleDict, ModuleError, ModuleList, ModuleResult, NamedParameter, Parameter,
+};
+pub use normalization::{BatchNorm2d, GroupNorm, NormalizationLayer, RMSNorm, RMSNormConfig};
 pub use pruning::PruningMask;
 
 /// Framework version string.

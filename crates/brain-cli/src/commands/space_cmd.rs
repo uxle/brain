@@ -9,8 +9,8 @@
 use std::io::{self, BufRead, Write};
 use std::path::Path;
 
-use brain_core::brain_mind::BrainMind;
 use crate::core::{ExitCode, OutputSink};
+use brain_core::brain_mind::BrainMind;
 
 /// Executes the `brain space` / `brain chatbot` / `brain new` subcommand dispatcher.
 pub fn run_space_command(args: &[String], sink: &OutputSink) -> ExitCode {
@@ -47,7 +47,10 @@ pub fn run_space_command(args: &[String], sink: &OutputSink) -> ExitCode {
     let remaining_args = &args[1..];
 
     // Check if user requested chat flag
-    if remaining_args.iter().any(|a| a == "--chat" || a == "chat" || a == "chatbot") {
+    if remaining_args
+        .iter()
+        .any(|a| a == "--chat" || a == "chat" || a == "chatbot")
+    {
         return run_interactive_chatbot(bn_path, sink);
     }
 
@@ -109,19 +112,33 @@ fn create_and_teach_brain(bn_path: &str, args: &[String], sink: &OutputSink) -> 
     let mut mind = if Path::new(bn_path).exists() {
         match BrainMind::load_bn(bn_path) {
             Ok(m) => {
-                sink.println(&format!("[*] Loaded existing Brain '{}' (age: {} turns, {} neurons, {} words)",
-                    m.name, m.age_steps, m.total_neurons(), m.vocab.len()));
+                sink.println(&format!(
+                    "[*] Loaded existing Brain '{}' (age: {} turns, {} neurons, {} words)",
+                    m.name,
+                    m.age_steps,
+                    m.total_neurons(),
+                    m.vocab.len()
+                ));
                 m
             }
             Err(e) => {
-                sink.println(&format!("warning: could not load existing '{}': {}. Creating new brain.", bn_path, e));
+                sink.println(&format!(
+                    "warning: could not load existing '{}': {}. Creating new brain.",
+                    bn_path, e
+                ));
                 BrainMind::new("growing_brain", cube_dim)
             }
         }
     } else {
         sink.println("============================================================");
-        sink.println(&format!(" Initializing Newborn 3D Cubic Brain Space: {} x {} x {}", cube_dim, cube_dim, cube_dim));
-        sink.println(&format!(" Total Interconnected Neural Cells: {}", cube_dim * cube_dim * cube_dim));
+        sink.println(&format!(
+            " Initializing Newborn 3D Cubic Brain Space: {} x {} x {}",
+            cube_dim, cube_dim, cube_dim
+        ));
+        sink.println(&format!(
+            " Total Interconnected Neural Cells: {}",
+            cube_dim * cube_dim * cube_dim
+        ));
         sink.println("============================================================");
         BrainMind::new("growing_brain", cube_dim)
     };
@@ -168,7 +185,10 @@ fn create_and_teach_brain(bn_path: &str, args: &[String], sink: &OutputSink) -> 
             }
         }
         Err(err) => {
-            sink.println(&format!("error: failed to write .bn file '{}': {}", bn_path, err));
+            sink.println(&format!(
+                "error: failed to write .bn file '{}': {}",
+                bn_path, err
+            ));
             ExitCode::IO_ERROR
         }
     }
@@ -180,19 +200,33 @@ fn run_interactive_chatbot(bn_path: &str, sink: &OutputSink) -> ExitCode {
         match BrainMind::load_bn(bn_path) {
             Ok(m) => m,
             Err(e) => {
-                sink.println(&format!("warning: could not load '{}': {}. Creating newborn brain.", bn_path, e));
+                sink.println(&format!(
+                    "warning: could not load '{}': {}. Creating newborn brain.",
+                    bn_path, e
+                ));
                 BrainMind::new("newborn_brain", 10)
             }
         }
     } else {
-        sink.println(&format!("[*] '{}' does not exist yet. Creating a newborn brain (10x10x10 = 1,000 cells)...", bn_path));
+        sink.println(&format!(
+            "[*] '{}' does not exist yet. Creating a newborn brain (10x10x10 = 1,000 cells)...",
+            bn_path
+        ));
         BrainMind::new("newborn_brain", 10)
     };
 
     sink.println("============================================================");
-    sink.println(&format!(" Interactive Brain Chatbot Session: '{}'", mind.name));
-    sink.println(&format!(" Age: {} turns | Neurons: {} | Learned Words: {} | Synapses: {}",
-        mind.age_steps, mind.total_neurons(), mind.vocab.len(), mind.total_synapses()));
+    sink.println(&format!(
+        " Interactive Brain Chatbot Session: '{}'",
+        mind.name
+    ));
+    sink.println(&format!(
+        " Age: {} turns | Neurons: {} | Learned Words: {} | Synapses: {}",
+        mind.age_steps,
+        mind.total_neurons(),
+        mind.vocab.len(),
+        mind.total_synapses()
+    ));
     sink.println(" Commands: /stats (inspect brain) | /prune (clean memory) | /teach <file> | /quit (save & exit)");
     sink.println("============================================================");
     sink.println("");
@@ -223,7 +257,13 @@ fn run_interactive_chatbot(bn_path: &str, sink: &OutputSink) -> ExitCode {
             sink.println("--- Brain Statistics ---");
             sink.println(&format!("  Name: {}", mind.name));
             sink.println(&format!("  Biological Age: {} turns", mind.age_steps));
-            sink.println(&format!("  3D Lattice: {}x{}x{} ({} cells)", mind.cube_dim, mind.cube_dim, mind.cube_dim, mind.total_neurons()));
+            sink.println(&format!(
+                "  3D Lattice: {}x{}x{} ({} cells)",
+                mind.cube_dim,
+                mind.cube_dim,
+                mind.cube_dim,
+                mind.total_neurons()
+            ));
             sink.println(&format!("  Active Synapses: {}", mind.total_synapses()));
             sink.println(&format!("  Vocabulary: {} words", mind.vocab.len()));
             sink.println(&format!("  Known Facts: {}", mind.facts.len()));
@@ -235,7 +275,10 @@ fn run_interactive_chatbot(bn_path: &str, sink: &OutputSink) -> ExitCode {
 
         if input == "/prune" {
             let pruned = mind.prune_memory(2.0);
-            sink.println(&format!("[✓] Pruned {} stale/weak synaptic traces. Brain memory consolidated.", pruned));
+            sink.println(&format!(
+                "[✓] Pruned {} stale/weak synaptic traces. Brain memory consolidated.",
+                pruned
+            ));
             continue;
         }
 
@@ -244,8 +287,10 @@ fn run_interactive_chatbot(bn_path: &str, sink: &OutputSink) -> ExitCode {
             sink.println(&format!("[*] Teaching brain from '{}'...", file_to_teach));
             match mind.teach_file(file_to_teach) {
                 Ok(stats) => {
-                    sink.println(&format!("    [✓] Processed {} lines | Learned {} words | Indexed {} facts",
-                        stats.lines_processed, stats.words_learned, stats.facts_indexed));
+                    sink.println(&format!(
+                        "    [✓] Processed {} lines | Learned {} words | Indexed {} facts",
+                        stats.lines_processed, stats.words_learned, stats.facts_indexed
+                    ));
                     let _ = mind.save_bn(bn_path);
                 }
                 Err(e) => {
@@ -270,13 +315,19 @@ fn print_usage(sink: &OutputSink) {
     sink.println("Usage: brain <new|chat> <brain.bn> [options]");
     sink.println("");
     sink.println("Commands:");
-    sink.println("  brain chat <brain.bn>              Start interactive growing conversation session");
+    sink.println(
+        "  brain chat <brain.bn>              Start interactive growing conversation session",
+    );
     sink.println("  brain new <brain.bn> [--neurons N] Create newborn 3D cubic neural mind");
-    sink.println("  brain new <brain.bn> --teach <file.txt> Teach neural mind from text knowledge base");
+    sink.println(
+        "  brain new <brain.bn> --teach <file.txt> Teach neural mind from text knowledge base",
+    );
     sink.println("");
     sink.println("Options:");
     sink.println("  --neurons <N>    Total neurons (e.g. 1000 for 10x10x10 cube)");
     sink.println("  --cube <DIM>     Explicit cube dimension");
-    sink.println("  --teach <FILE>   Path to text corpus to ingest (e.g. data.txt, mathematics.txt)");
+    sink.println(
+        "  --teach <FILE>   Path to text corpus to ingest (e.g. data.txt, mathematics.txt)",
+    );
     sink.println("  --chat           Enter interactive chat immediately after creation/teaching");
 }

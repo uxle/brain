@@ -28,7 +28,9 @@ pub fn mean_average_precision(
     gt_boxes: &[[f64; 4]],
     config: &MapConfig,
 ) -> f64 {
-    if pred_boxes.is_empty() || gt_boxes.is_empty() { return 0.0; }
+    if pred_boxes.is_empty() || gt_boxes.is_empty() {
+        return 0.0;
+    }
 
     let mut ap_per_thresh = Vec::with_capacity(config.iou_thresholds.len());
 
@@ -71,7 +73,13 @@ pub fn mean_average_precision(
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

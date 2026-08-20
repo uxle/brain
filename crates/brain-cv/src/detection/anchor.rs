@@ -23,7 +23,10 @@ impl Default for AnchorGenerator {
 impl AnchorGenerator {
     /// Creates a new `AnchorGenerator`.
     pub fn new(scales: Vec<f64>, aspect_ratios: Vec<f64>) -> Self {
-        Self { scales, aspect_ratios }
+        Self {
+            scales,
+            aspect_ratios,
+        }
     }
 
     /// Generates grid anchors for a given feature map shape.

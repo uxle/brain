@@ -3,9 +3,9 @@
 //! Fractionally-strided spatial upsampling layer with output padding.
 #![allow(missing_docs)]
 
-use brain_core::Tensor;
+use crate::module::{Module, ModuleError, ModuleResult};
 use brain_autograd::Value;
-use crate::module::{Module, ModuleResult, ModuleError};
+use brain_core::Tensor;
 
 /// Configuration for transposed 2D convolutions.
 #[derive(Debug, Clone, Default)]
@@ -27,7 +27,10 @@ pub struct ConvTranspose2d {
 
 impl ConvTranspose2d {
     pub fn new(in_channels: usize, out_channels: usize, kernel_size: usize) -> Self {
-        let weight = Value::new(Tensor::zeros(vec![in_channels, out_channels, kernel_size, kernel_size]), true);
+        let weight = Value::new(
+            Tensor::zeros(vec![in_channels, out_channels, kernel_size, kernel_size]),
+            true,
+        );
         let config = ConvTransposeConfig {
             in_channels,
             out_channels,
@@ -35,7 +38,11 @@ impl ConvTranspose2d {
             stride: (1, 1),
             padding: (0, 0),
         };
-        Self { weight, bias: None, config }
+        Self {
+            weight,
+            bias: None,
+            config,
+        }
     }
 }
 
@@ -48,7 +55,12 @@ impl Module for ConvTranspose2d {
                 got: shape.to_vec(),
             });
         }
-        Ok(input.conv_transpose2d(&self.weight, self.bias.as_ref(), self.config.stride, self.config.padding))
+        Ok(input.conv_transpose2d(
+            &self.weight,
+            self.bias.as_ref(),
+            self.config.stride,
+            self.config.padding,
+        ))
     }
 
     fn parameters(&self) -> Vec<Value> {
@@ -62,7 +74,13 @@ impl Module for ConvTranspose2d {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 
@@ -74,7 +92,10 @@ mod tests {
         let mut ct = ConvTranspose2d::new(1, 1, 2);
         ct.weight = Value::new(Tensor::ones(vec![1, 1, 2, 2]), true);
         ct.bias = None;
-        let x = Value::new(Tensor::from_slice(&[1.0, 2.0, 3.0, 4.0], vec![1, 1, 2, 2]), false);
+        let x = Value::new(
+            Tensor::from_slice(&[1.0, 2.0, 3.0, 4.0], vec![1, 1, 2, 2]),
+            false,
+        );
         let out = ct.forward(&x).unwrap();
         assert_eq!(out.shape(), &[1, 1, 3, 3]);
         let expected = &[1.0, 3.0, 2.0, 4.0, 10.0, 6.0, 3.0, 7.0, 4.0];

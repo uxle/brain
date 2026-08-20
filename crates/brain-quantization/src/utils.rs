@@ -14,8 +14,12 @@ pub fn minmax(data: &[f64]) -> QuantResult<(f64, f64)> {
     let mut max_val = f64::NEG_INFINITY;
     for &v in data {
         if !v.is_nan() && !v.is_infinite() {
-            if v < min_val { min_val = v; }
-            if v > max_val { max_val = v; }
+            if v < min_val {
+                min_val = v;
+            }
+            if v > max_val {
+                max_val = v;
+            }
         }
     }
     if min_val.is_infinite() || max_val.is_infinite() {
@@ -26,7 +30,12 @@ pub fn minmax(data: &[f64]) -> QuantResult<(f64, f64)> {
 }
 
 /// Derives affine scale factor and zero-point from observed min/max bounds.
-pub fn compute_scale_zero_point(min_val: f64, max_val: f64, dtype: QuantDType, symmetric: bool) -> QuantResult<(f64, i32)> {
+pub fn compute_scale_zero_point(
+    min_val: f64,
+    max_val: f64,
+    dtype: QuantDType,
+    symmetric: bool,
+) -> QuantResult<(f64, i32)> {
     let qmin = dtype.qmin() as f64;
     let qmax = dtype.qmax() as f64;
 
@@ -49,7 +58,11 @@ pub fn percentile_slice(data: &[f64], p: f64) -> QuantResult<f64> {
     if data.is_empty() {
         return Err(QuantError::EmptyTensor);
     }
-    let mut valid_data: Vec<f64> = data.iter().copied().filter(|v| !v.is_nan() && !v.is_infinite()).collect();
+    let mut valid_data: Vec<f64> = data
+        .iter()
+        .copied()
+        .filter(|v| !v.is_nan() && !v.is_infinite())
+        .collect();
     if valid_data.is_empty() {
         return Ok(0.0);
     }
@@ -71,7 +84,13 @@ pub fn dequantize_val(q: i32, scale: f64, zero_point: i32) -> f64 {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

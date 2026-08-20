@@ -96,8 +96,16 @@ impl Statistics {
 
         // Skewness and Kurtosis
         let (skewness, kurtosis) = if n > 2 && std_dev > 1e-12 {
-            let m3 = sorted.iter().map(|&x| ((x - mean) / std_dev).powi(3)).sum::<f64>() / n as f64;
-            let m4 = sorted.iter().map(|&x| ((x - mean) / std_dev).powi(4)).sum::<f64>() / n as f64;
+            let m3 = sorted
+                .iter()
+                .map(|&x| ((x - mean) / std_dev).powi(3))
+                .sum::<f64>()
+                / n as f64;
+            let m4 = sorted
+                .iter()
+                .map(|&x| ((x - mean) / std_dev).powi(4))
+                .sum::<f64>()
+                / n as f64;
             (m3, m4 - 3.0)
         } else {
             (0.0, 0.0)
@@ -109,7 +117,11 @@ impl Statistics {
         let mad = percentile_sorted(&abs_devs, 50.0) * 1.4826;
 
         // 95% Confidence Interval via standard error approximation
-        let std_err = if n > 1 { std_dev / (n as f64).sqrt() } else { 0.0 };
+        let std_err = if n > 1 {
+            std_dev / (n as f64).sqrt()
+        } else {
+            0.0
+        };
         let t_val = student_t_critical_95(n);
         let ci_95_lower = mean - t_val * std_err;
         let ci_95_upper = mean + t_val * std_err;

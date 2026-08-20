@@ -3,8 +3,8 @@
 //! Tests Linear, Conv2d, ConvTranspose2d, BatchNorm2d, LayerNorm, RMSNorm,
 //! Embedding, 20+ Activations, MultiheadAttention, LSTM, GRU, and Sequential containers.
 
-use brain_core::Tensor;
 use brain_autograd::Value;
+use brain_core::Tensor;
 use brain_nn::*;
 
 fn approx(a: f64, b: f64, eps: f64) -> bool {
@@ -45,12 +45,18 @@ fn test_conv2d_and_conv_transpose2d() {
 #[test]
 fn test_normalization_layers() {
     let bn = BatchNorm2d::new(4);
-    let x_4d = Value::new(Tensor::from_slice(&[1.0; 2 * 4 * 4 * 4], vec![2, 4, 4, 4]), false);
+    let x_4d = Value::new(
+        Tensor::from_slice(&[1.0; 2 * 4 * 4 * 4], vec![2, 4, 4, 4]),
+        false,
+    );
     let bn_out = bn.forward(&x_4d).unwrap();
     assert_eq!(bn_out.shape(), &[2, 4, 4, 4]);
 
     let ln = LayerNorm::new(vec![8], 1e-5);
-    let x_2d = Value::new(Tensor::from_slice(&[1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0], vec![1, 8]), false);
+    let x_2d = Value::new(
+        Tensor::from_slice(&[1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0], vec![1, 8]),
+        false,
+    );
     let ln_out = Module::forward(&ln, &x_2d).unwrap();
     assert_eq!(ln_out.shape(), &[1, 8]);
 

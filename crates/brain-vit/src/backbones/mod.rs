@@ -3,8 +3,8 @@
 //! Backbone configurations (Tiny/Small/Base/Large) exposing features
 //! without a task-specific head, suitable for transfer learning.
 
-use crate::core::{VitResult, Tensor3D};
 use crate::config::VitConfig;
+use crate::core::{Tensor3D, VitResult};
 use crate::vit::ViT;
 
 /// Named backbone size presets.
@@ -94,13 +94,23 @@ impl VitBackbone {
     /// ```
     pub fn from_size(size: BackboneSize, seed: u64) -> VitResult<Self> {
         let vit_cfg = size.config();
-        Self::new(vit_cfg, BackboneConfig { size, ..Default::default() }, seed)
+        Self::new(
+            vit_cfg,
+            BackboneConfig {
+                size,
+                ..Default::default()
+            },
+            seed,
+        )
     }
 
     /// Create backbone from a full ViT config.
     pub fn new(vit_cfg: VitConfig, backbone_config: BackboneConfig, seed: u64) -> VitResult<Self> {
         let vit = ViT::new(vit_cfg, seed)?;
-        Ok(Self { vit, backbone_config })
+        Ok(Self {
+            vit,
+            backbone_config,
+        })
     }
 
     /// Extract features from pixels.
@@ -114,9 +124,13 @@ impl VitBackbone {
     pub fn extract_cls(&self, pixels: &[f64], batch: usize) -> VitResult<Vec<f64>> {
         let feats = self.extract_features(pixels, batch)?;
         let embed_dim = feats.dim;
-        Ok((0..batch).flat_map(|b|
-            feats.data[b * feats.seq * embed_dim..b * feats.seq * embed_dim + embed_dim].iter().copied()
-        ).collect())
+        Ok((0..batch)
+            .flat_map(|b| {
+                feats.data[b * feats.seq * embed_dim..b * feats.seq * embed_dim + embed_dim]
+                    .iter()
+                    .copied()
+            })
+            .collect())
     }
 
     /// Extract patch tokens only → `[B, N, D]` flat.
@@ -129,17 +143,20 @@ impl VitBackbone {
         for b in 0..batch {
             let src = b * feats.seq * d + start * d;
             let dst = b * n_patches * d;
-            out[dst..dst + n_patches * d].copy_from_slice(
-                &feats.data[src..src + n_patches * d]);
+            out[dst..dst + n_patches * d].copy_from_slice(&feats.data[src..src + n_patches * d]);
         }
         Ok(out)
     }
 
     /// Embedding dimension of this backbone.
-    pub fn embed_dim(&self) -> usize { self.vit.config.embed_dim() }
+    pub fn embed_dim(&self) -> usize {
+        self.vit.config.embed_dim()
+    }
 
     /// Total parameter count.
-    pub fn total_params(&self) -> usize { self.vit.total_params() }
+    pub fn total_params(&self) -> usize {
+        self.vit.total_params()
+    }
 }
 
 /// Create a micro backbone for testing purposes (tiny config, small image).

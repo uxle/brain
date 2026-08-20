@@ -4,15 +4,15 @@
 #![allow(missing_docs)]
 
 pub mod ops;
-pub mod verify;
 pub mod shape_infer;
+pub mod verify;
 
 pub use ops::{OpKind, OpRegistry};
-pub use verify::verify_graph;
 pub use shape_infer::infer_graph_shapes;
+pub use verify::verify_graph;
 
+use crate::core::{DType, EdgeId, NodeId, Shape, ValueId};
 use std::collections::HashMap;
-use crate::core::{NodeId, ValueId, EdgeId, Shape, DType};
 
 /// Node representing an operation in the dataflow computation graph.
 #[derive(Debug, Clone)]
@@ -123,6 +123,12 @@ impl GraphIr {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
 }

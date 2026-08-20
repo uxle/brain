@@ -3,10 +3,10 @@
 //! Stride-conv stack with Leaky ReLU blocks outputting a real/fake score.
 #![allow(missing_docs)]
 
-use brain_core::Tensor;
-use crate::config::DiscriminatorConfig;
-use crate::ops::{leaky_relu, batch_norm};
 use super::Discriminator;
+use crate::config::DiscriminatorConfig;
+use crate::ops::{batch_norm, leaky_relu};
+use brain_core::Tensor;
 
 /// DCGAN-style discriminator.
 #[derive(Debug, Clone)]
@@ -26,7 +26,10 @@ impl DcganDiscriminator {
             out_ch = (out_ch * 2).min(512);
         }
         weights.push(Tensor::zeros(vec![1, ch])); // final linear -> scalar
-        Self { config, layer_weights: weights }
+        Self {
+            config,
+            layer_weights: weights,
+        }
     }
 
     fn downsample_block(&self, _x: &Tensor, layer_idx: usize) -> Tensor {
@@ -55,15 +58,27 @@ impl Discriminator for DcganDiscriminator {
     }
 
     fn input_shape(&self) -> Vec<usize> {
-        vec![self.config.input_channels, self.config.image_size, self.config.image_size]
+        vec![
+            self.config.input_channels,
+            self.config.image_size,
+            self.config.image_size,
+        ]
     }
 
-    fn output_shape(&self) -> Vec<usize> { vec![1] }
+    fn output_shape(&self) -> Vec<usize> {
+        vec![1]
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

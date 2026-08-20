@@ -116,10 +116,7 @@ pub fn db_to_amplitude(db: &[f64]) -> Vec<f64> {
 
 /// Converts power to decibels: `10 * log10(max(power, amin)) - top_db`.
 pub fn power_to_db(power: &[f64], amin: f64, top_db: Option<f64>) -> Vec<f64> {
-    let mut out: Vec<f64> = power
-        .iter()
-        .map(|&x| 10.0 * x.max(amin).log10())
-        .collect();
+    let mut out: Vec<f64> = power.iter().map(|&x| 10.0 * x.max(amin).log10()).collect();
     if let Some(top) = top_db {
         let max_db = out.iter().fold(f64::NEG_INFINITY, |a, &b| a.max(b));
         let floor_db = max_db - top;
@@ -143,7 +140,11 @@ pub fn hann_window(size: usize, periodic: bool) -> Vec<f64> {
     if size == 1 {
         return vec![1.0];
     }
-    let denom = if periodic { size as f64 } else { (size - 1) as f64 };
+    let denom = if periodic {
+        size as f64
+    } else {
+        (size - 1) as f64
+    };
     (0..size)
         .map(|i| 0.5 * (1.0 - (2.0 * PI * i as f64 / denom).cos()))
         .collect()
@@ -157,7 +158,11 @@ pub fn hamming_window(size: usize, periodic: bool) -> Vec<f64> {
     if size == 1 {
         return vec![1.0];
     }
-    let denom = if periodic { size as f64 } else { (size - 1) as f64 };
+    let denom = if periodic {
+        size as f64
+    } else {
+        (size - 1) as f64
+    };
     const ALPHA: f64 = 0.54;
     const BETA: f64 = 0.46;
     (0..size)
@@ -173,7 +178,11 @@ pub fn blackman_window(size: usize, periodic: bool) -> Vec<f64> {
     if size == 1 {
         return vec![1.0];
     }
-    let denom = if periodic { size as f64 } else { (size - 1) as f64 };
+    let denom = if periodic {
+        size as f64
+    } else {
+        (size - 1) as f64
+    };
     const A0: f64 = 0.42;
     const A1: f64 = 0.5;
     const A2: f64 = 0.08;

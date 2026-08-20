@@ -1,12 +1,19 @@
 //! # Neural Network Pruning Engine
 //!
 //! Magnitude-based unstructured pruning, structured filter/channel pruning, and mask computation.
-#![allow(missing_docs, clippy::needless_range_loop, clippy::too_many_arguments, clippy::manual_is_multiple_of, clippy::manual_div_ceil, clippy::doc_markdown)]
+#![allow(
+    missing_docs,
+    clippy::needless_range_loop,
+    clippy::too_many_arguments,
+    clippy::manual_is_multiple_of,
+    clippy::manual_div_ceil,
+    clippy::doc_markdown
+)]
 
 pub mod schedule;
 
-use brain_core::Tensor;
 use super::core::{QuantError, QuantResult};
+use brain_core::Tensor;
 
 /// Result summary of a pruning operation.
 #[derive(Debug, Clone, PartialEq)]
@@ -70,7 +77,11 @@ impl Pruner for MagnitudePruner {
         abs_vals.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
 
         let cutoff_idx = ((n as f64) * self.target_sparsity).floor() as usize;
-        let threshold = if cutoff_idx < n { abs_vals[cutoff_idx] } else { f64::INFINITY };
+        let threshold = if cutoff_idx < n {
+            abs_vals[cutoff_idx]
+        } else {
+            f64::INFINITY
+        };
 
         let mut mask_data = vec![1.0; n];
         for i in 0..n {
@@ -130,7 +141,11 @@ impl Pruner for StructuredPruner {
         sorted_norms.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
 
         let cutoff_idx = ((num_channels as f64) * self.target_sparsity).floor() as usize;
-        let threshold = if cutoff_idx < num_channels { sorted_norms[cutoff_idx] } else { f64::INFINITY };
+        let threshold = if cutoff_idx < num_channels {
+            sorted_norms[cutoff_idx]
+        } else {
+            f64::INFINITY
+        };
 
         let mut mask_data = vec![1.0; total_elements];
         for ch in 0..num_channels {
@@ -149,7 +164,13 @@ impl Pruner for StructuredPruner {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

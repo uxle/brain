@@ -3,15 +3,15 @@
 //! Production-grade logging framework featuring log levels, record metadata,
 //! thread-safe sinks, structured formatters, and global level filtering.
 
-pub mod sinks;
 pub mod formatters;
 pub mod macros;
+pub mod sinks;
 
+use self::formatters::{LogFormatter, PlainFormatter};
+use self::sinks::{ConsoleSink, LogSink};
 use std::fmt;
 use std::sync::RwLock;
 use std::time::{SystemTime, UNIX_EPOCH};
-use self::sinks::{ConsoleSink, LogSink};
-use self::formatters::{LogFormatter, PlainFormatter};
 
 /// Logging verbosity levels.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -189,17 +189,17 @@ mod tests {
         assert_eq!(LogLevel::from_str("INFO"), LogLevel::Info);
         assert!(LogLevel::Error > LogLevel::Warn);
         assert!(LogLevel::Warn > LogLevel::Info);
-    
+
         let rec = LogRecord::new(LogLevel::Warn, "engine", "test message")
             .with_location("main.rs", 1)
             .with_field("batch", "1");
-    
+
         assert_eq!(rec.level, LogLevel::Warn);
         assert_eq!(rec.target, "engine");
         assert_eq!(rec.message, "test message");
         assert_eq!(rec.line, Some(1));
         assert_eq!(rec.fields.len(), 1);
-    
+
         let logger = StandardLogger::default_console();
         assert_eq!(logger.level(), LogLevel::Info);
         logger.set_level(LogLevel::Debug);

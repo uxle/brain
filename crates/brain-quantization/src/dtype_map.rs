@@ -46,7 +46,11 @@ impl DTypeMap {
             if frac != 0 {
                 return f64::NAN;
             }
-            return if sign == 1 { f64::NEG_INFINITY } else { f64::INFINITY };
+            return if sign == 1 {
+                f64::NEG_INFINITY
+            } else {
+                f64::INFINITY
+            };
         }
         if exp == 0 {
             if frac == 0 {
@@ -58,7 +62,11 @@ impl DTypeMap {
         }
 
         let val = (1.0 + (frac as f64) / 1024.0) * 2.0f64.powi((exp as i32) - 15);
-        if sign == 1 { -val } else { val }
+        if sign == 1 {
+            -val
+        } else {
+            val
+        }
     }
 
     /// Converts 64-bit float to Brain BFloat16 (top 16 bits of single precision float).
@@ -86,10 +94,14 @@ impl DTypeMap {
     /// Unpacks a single byte into two signed 4-bit integers.
     pub fn unpack_int4(byte: u8) -> (i8, i8) {
         let mut low = (byte & 0x0F) as i8;
-        if low >= 8 { low -= 16; }
+        if low >= 8 {
+            low -= 16;
+        }
 
         let mut high = ((byte >> 4) & 0x0F) as i8;
-        if high >= 8 { high -= 16; }
+        if high >= 8 {
+            high -= 16;
+        }
 
         (low, high)
     }
@@ -97,7 +109,13 @@ impl DTypeMap {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

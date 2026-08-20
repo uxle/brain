@@ -27,7 +27,12 @@ pub trait TrainingCallback: Send + Sync {
     fn on_epoch_start(&mut self, _epoch: usize) {}
 
     /// Called at the end of an epoch. Returns `CallbackAction::Stop` to halt training.
-    fn on_epoch_end(&mut self, _epoch: usize, _train_loss: f64, _val_loss: Option<f64>) -> CallbackAction {
+    fn on_epoch_end(
+        &mut self,
+        _epoch: usize,
+        _train_loss: f64,
+        _val_loss: Option<f64>,
+    ) -> CallbackAction {
         CallbackAction::Continue
     }
 
@@ -67,7 +72,12 @@ impl EarlyStopping {
 }
 
 impl TrainingCallback for EarlyStopping {
-    fn on_epoch_end(&mut self, _epoch: usize, _train_loss: f64, val_loss: Option<f64>) -> CallbackAction {
+    fn on_epoch_end(
+        &mut self,
+        _epoch: usize,
+        _train_loss: f64,
+        val_loss: Option<f64>,
+    ) -> CallbackAction {
         let monitored = val_loss.unwrap_or(_train_loss);
         if monitored < self.best_loss - self.min_delta {
             self.best_loss = monitored;
@@ -108,7 +118,12 @@ impl TrainingCallback for MetricHistoryLogger {
         self.batch_losses.push(loss);
     }
 
-    fn on_epoch_end(&mut self, _epoch: usize, train_loss: f64, val_loss: Option<f64>) -> CallbackAction {
+    fn on_epoch_end(
+        &mut self,
+        _epoch: usize,
+        train_loss: f64,
+        val_loss: Option<f64>,
+    ) -> CallbackAction {
         self.train_losses.push(train_loss);
         self.val_losses.push(val_loss);
         CallbackAction::Continue

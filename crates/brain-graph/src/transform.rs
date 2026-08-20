@@ -3,8 +3,8 @@
 //! Mathematical simplifications: `x * 1 -> x`, `x + 0 -> x`, `x - x -> 0`.
 #![allow(missing_docs)]
 
-use crate::ir::GraphIr;
 use crate::ir::ops::OpKind;
+use crate::ir::GraphIr;
 
 /// Applies algebraic rewrite rules to simplify operations in `GraphIr`.
 pub fn rewrite_algebraic(graph: &mut GraphIr) -> bool {
@@ -38,7 +38,13 @@ pub fn rewrite_algebraic(graph: &mut GraphIr) -> bool {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

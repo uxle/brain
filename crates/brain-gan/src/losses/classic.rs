@@ -74,32 +74,40 @@ pub fn ragan_loss_g(d_real: f64, d_fake: f64) -> f64 {
 pub struct ClassicLoss;
 
 impl ClassicLoss {
-    pub fn new() -> Self { Self }
+    pub fn new() -> Self {
+        Self
+    }
 
     pub fn d_loss(&self, d_real: f64, d_fake: f64, variant: &str, smooth: f64) -> f64 {
         match variant {
             "hinge" => hinge_loss_d(d_real, d_fake),
-            "wgan"  => wgan_loss_d(d_real, d_fake),
+            "wgan" => wgan_loss_d(d_real, d_fake),
             "lsgan" => lsgan_loss_d(d_real, d_fake),
             "ragan" => ragan_loss_d(d_real, d_fake),
-            _       => bce_loss_d(d_real, d_fake, smooth),
+            _ => bce_loss_d(d_real, d_fake, smooth),
         }
     }
 
     pub fn g_loss(&self, d_fake: f64, d_real: f64, variant: &str) -> f64 {
         match variant {
             "hinge" => hinge_loss_g(d_fake),
-            "wgan"  => wgan_loss_g(d_fake),
+            "wgan" => wgan_loss_g(d_fake),
             "lsgan" => lsgan_loss_g(d_fake),
             "ragan" => ragan_loss_g(d_real, d_fake),
-            _       => bce_loss_g(d_fake),
+            _ => bce_loss_g(d_fake),
         }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

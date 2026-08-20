@@ -1,7 +1,14 @@
 //! # Pruning Schedules
 //!
 //! Iterative magnitude pruning, lottery ticket hypothesis rewind schedules, and polynomial decay curves.
-#![allow(missing_docs, clippy::needless_range_loop, clippy::too_many_arguments, clippy::manual_is_multiple_of, clippy::manual_div_ceil, clippy::doc_markdown)]
+#![allow(
+    missing_docs,
+    clippy::needless_range_loop,
+    clippy::too_many_arguments,
+    clippy::manual_is_multiple_of,
+    clippy::manual_div_ceil,
+    clippy::doc_markdown
+)]
 
 /// Iterative magnitude pruning schedule gradually increasing target sparsity across epochs.
 #[derive(Debug, Clone, PartialEq)]
@@ -26,7 +33,13 @@ impl Default for IterativePruneSchedule {
 }
 
 impl IterativePruneSchedule {
-    pub fn new(initial_sparsity: f64, final_sparsity: f64, begin_step: usize, end_step: usize, frequency: usize) -> Self {
+    pub fn new(
+        initial_sparsity: f64,
+        final_sparsity: f64,
+        begin_step: usize,
+        end_step: usize,
+        frequency: usize,
+    ) -> Self {
         Self {
             initial_sparsity,
             final_sparsity,
@@ -53,7 +66,9 @@ impl IterativePruneSchedule {
 
     /// Checks if a pruning step should execute at step t.
     pub fn should_prune(&self, step: usize) -> bool {
-        step >= self.begin_step && step <= self.end_step && (step - self.begin_step) % self.frequency == 0
+        step >= self.begin_step
+            && step <= self.end_step
+            && (step - self.begin_step) % self.frequency == 0
     }
 }
 
@@ -94,7 +109,13 @@ impl LotteryTicketSchedule {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

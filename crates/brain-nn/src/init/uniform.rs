@@ -119,7 +119,13 @@ mod tests {
         for r in 0..32 {
             for c in 0..32 {
                 let diff = (prod.get_2d(r, c) - eye.get_2d(r, c)).abs();
-                assert!(diff < 1e-5, "Orthogonality failed at ({}, {}): diff={}", r, c, diff);
+                assert!(
+                    diff < 1e-5,
+                    "Orthogonality failed at ({}, {}): diff={}",
+                    r,
+                    c,
+                    diff
+                );
             }
         }
     }

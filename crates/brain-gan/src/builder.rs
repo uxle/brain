@@ -3,7 +3,7 @@
 //! Ergonomic builder for assembling a complete GAN: generator + discriminator + loss.
 #![allow(missing_docs)]
 
-use crate::config::{GanConfig, LossVariant, ArchVariant};
+use crate::config::{ArchVariant, GanConfig, LossVariant};
 
 /// Builder for constructing a GAN configuration.
 #[derive(Debug, Default)]
@@ -12,14 +12,18 @@ pub struct GanBuilder {
 }
 
 impl GanBuilder {
-    pub fn new() -> Self { Self::default() }
+    pub fn new() -> Self {
+        Self::default()
+    }
 
     pub fn generator(mut self, arch: ArchVariant) -> Self {
         self.config.arch = arch;
         self
     }
 
-    pub fn discriminator(self, _arch: ArchVariant) -> Self { self }
+    pub fn discriminator(self, _arch: ArchVariant) -> Self {
+        self
+    }
 
     pub fn loss(mut self, loss: LossVariant) -> Self {
         self.config.loss = loss;
@@ -78,7 +82,13 @@ impl GanBuilder {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

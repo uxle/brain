@@ -1,10 +1,10 @@
 //! Error conversion for Python exceptions.
 
+use brain_core::BrainError;
 #[cfg(feature = "extension-module")]
 use pyo3::exceptions::{PyRuntimeError, PyValueError};
 #[cfg(feature = "extension-module")]
 use pyo3::PyErr;
-use brain_core::BrainError;
 
 #[cfg(feature = "extension-module")]
 pub fn to_py_err(err: BrainError) -> PyErr {

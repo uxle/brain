@@ -3,10 +3,10 @@
 //! Alias-safe in-place execution analysis to reuse input buffers in outputs.
 #![allow(missing_docs)]
 
-use std::collections::HashMap;
+use super::GraphPass;
 use crate::core::GraphResult;
 use crate::ir::GraphIr;
-use super::GraphPass;
+use std::collections::HashMap;
 
 /// Inplace operation plan.
 #[derive(Debug, Clone, Default)]
@@ -19,7 +19,9 @@ pub struct InplacePlan {
 pub struct InplacePass;
 
 impl GraphPass for InplacePass {
-    fn name(&self) -> &'static str { "InplacePlanning" }
+    fn name(&self) -> &'static str {
+        "InplacePlanning"
+    }
 
     fn run(&mut self, graph: &mut GraphIr) -> GraphResult<bool> {
         let plan = plan_inplace_operations(graph)?;
@@ -51,7 +53,13 @@ pub fn plan_inplace_operations(graph: &GraphIr) -> GraphResult<InplacePlan> {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

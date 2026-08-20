@@ -38,7 +38,9 @@ impl ConfigFile {
             if let Some(pos) = trimmed.find('=') {
                 let key = trimmed[..pos].trim().to_string();
                 let mut val = trimmed[pos + 1..].trim();
-                if (val.starts_with('"') && val.ends_with('"')) || (val.starts_with('\'') && val.ends_with('\'')) {
+                if (val.starts_with('"') && val.ends_with('"'))
+                    || (val.starts_with('\'') && val.ends_with('\''))
+                {
                     val = &val[1..val.len() - 1];
                 }
 

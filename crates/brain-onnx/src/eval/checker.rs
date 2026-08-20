@@ -33,7 +33,10 @@ pub fn check_model(model: &OnnxModel) -> OnnxResult<CheckerReport> {
     for node in &model.graph.nodes {
         for inp in &node.inputs {
             if !inp.is_empty() && !produced_values.contains(inp) {
-                errors.push(format!("Node '{}' uses input '{}' before production", node.name, inp));
+                errors.push(format!(
+                    "Node '{}' uses input '{}' before production",
+                    node.name, inp
+                ));
             }
         }
         for out in &node.outputs {
@@ -47,7 +50,13 @@ pub fn check_model(model: &OnnxModel) -> OnnxResult<CheckerReport> {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

@@ -3,9 +3,9 @@
 //! Kahn's algorithm and DFS-based topological sorts, critical path calculation.
 #![allow(missing_docs)]
 
-use std::collections::{HashMap, VecDeque};
-use crate::core::{NodeId, GraphResult, GraphError};
+use crate::core::{GraphError, GraphResult, NodeId};
 use crate::ir::GraphIr;
+use std::collections::{HashMap, VecDeque};
 
 /// Topological sort and critical path analysis result.
 #[derive(Debug, Clone, Default)]
@@ -75,7 +75,9 @@ pub fn compute_topological_order(graph: &GraphIr) -> GraphResult<TopoOrder> {
     }
 
     if order.len() < graph.nodes.len() {
-        return Err(GraphError::CyclicDependency("Cycle detected in graph".into()));
+        return Err(GraphError::CyclicDependency(
+            "Cycle detected in graph".into(),
+        ));
     }
 
     let max_rank = ranks.values().copied().max().unwrap_or(0);
@@ -89,7 +91,13 @@ pub fn compute_topological_order(graph: &GraphIr) -> GraphResult<TopoOrder> {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

@@ -3,10 +3,10 @@
 //! cGAN projection discriminator and ACGAN auxiliary classifier.
 #![allow(missing_docs)]
 
-use brain_core::Tensor;
-use crate::config::DiscriminatorConfig;
-use crate::ops::{leaky_relu, batch_norm};
 use super::Discriminator;
+use crate::config::DiscriminatorConfig;
+use crate::ops::{batch_norm, leaky_relu};
+use brain_core::Tensor;
 
 /// Conditional discriminator (cGAN projection variant).
 #[derive(Debug, Clone)]
@@ -30,7 +30,11 @@ impl ConditionalDiscriminator {
             out_ch = (out_ch * 2).min(512);
         }
         weights.push(Tensor::zeros(vec![1, in_ch]));
-        Self { config, weights, class_embed }
+        Self {
+            config,
+            weights,
+            class_embed,
+        }
     }
 
     pub fn class_projection(&self, features: &Tensor, class_id: usize) -> f64 {
@@ -59,15 +63,27 @@ impl Discriminator for ConditionalDiscriminator {
     }
 
     fn input_shape(&self) -> Vec<usize> {
-        vec![self.config.input_channels, self.config.image_size, self.config.image_size]
+        vec![
+            self.config.input_channels,
+            self.config.image_size,
+            self.config.image_size,
+        ]
     }
 
-    fn output_shape(&self) -> Vec<usize> { vec![1] }
+    fn output_shape(&self) -> Vec<usize> {
+        vec![1]
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

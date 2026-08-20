@@ -99,7 +99,12 @@ pub fn phonetic_one_hot(indices: &[usize], vocab_size: usize) -> BrainResult<Ten
 
     for (t, &idx) in indices.iter().enumerate() {
         if idx >= vocab_size {
-            return Err(BrainError::index_out_of_bounds(idx as isize, vocab_size, Some(0), "phonetic_one_hot"));
+            return Err(BrainError::index_out_of_bounds(
+                idx as isize,
+                vocab_size,
+                Some(0),
+                "phonetic_one_hot",
+            ));
         }
         data[idx * seq_len + t] = 1.0;
     }

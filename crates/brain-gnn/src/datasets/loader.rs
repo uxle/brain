@@ -3,9 +3,9 @@
 //! Collation and batch loading for GNN graph-level training.
 #![allow(missing_docs)]
 
-use crate::graph::Graph;
-use crate::graph::sampler::collate_graphs;
 use crate::core::BatchGraph;
+use crate::graph::sampler::collate_graphs;
+use crate::graph::Graph;
 
 /// Graph mini-batch representation.
 #[derive(Debug, Clone)]
@@ -24,7 +24,12 @@ pub struct GraphLoader {
 
 impl GraphLoader {
     pub fn new(graphs: Vec<Graph>, labels: Vec<usize>, batch_size: usize) -> Self {
-        Self { graphs, labels, batch_size, shuffle: false }
+        Self {
+            graphs,
+            labels,
+            batch_size,
+            shuffle: false,
+        }
     }
 
     pub fn num_batches(&self) -> usize {
@@ -47,13 +52,22 @@ impl GraphLoader {
         let sub_labels = self.labels[start..end].to_vec();
 
         let batch_graph = collate_graphs(sub_graphs);
-        Some(GraphBatch { batch_graph, labels: sub_labels })
+        Some(GraphBatch {
+            batch_graph,
+            labels: sub_labels,
+        })
     }
 }
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

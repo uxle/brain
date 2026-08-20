@@ -22,24 +22,33 @@ fn main() {
     model.graph.inputs = vec!["X".into()];
     model.graph.outputs = vec!["Y".into()];
 
-    model.graph.values.insert("X".into(), OnnxValue {
-        name: "X".into(),
-        shape: vec![1, 2],
-        is_initializer: false,
-        tensor_data: None,
-    });
-    model.graph.values.insert("W".into(), OnnxValue {
-        name: "W".into(),
-        shape: vec![2, 2],
-        is_initializer: true,
-        tensor_data: Some(Tensor::from_vec(vec![1.0, 2.0, 3.0, 4.0], vec![2, 2])),
-    });
-    model.graph.values.insert("Y".into(), OnnxValue {
-        name: "Y".into(),
-        shape: vec![1, 2],
-        is_initializer: false,
-        tensor_data: None,
-    });
+    model.graph.values.insert(
+        "X".into(),
+        OnnxValue {
+            name: "X".into(),
+            shape: vec![1, 2],
+            is_initializer: false,
+            tensor_data: None,
+        },
+    );
+    model.graph.values.insert(
+        "W".into(),
+        OnnxValue {
+            name: "W".into(),
+            shape: vec![2, 2],
+            is_initializer: true,
+            tensor_data: Some(Tensor::from_vec(vec![1.0, 2.0, 3.0, 4.0], vec![2, 2])),
+        },
+    );
+    model.graph.values.insert(
+        "Y".into(),
+        OnnxValue {
+            name: "Y".into(),
+            shape: vec![1, 2],
+            is_initializer: false,
+            tensor_data: None,
+        },
+    );
 
     model.graph.nodes.push(OnnxNode {
         name: "matmul_op".into(),

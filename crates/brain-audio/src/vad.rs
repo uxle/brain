@@ -6,8 +6,8 @@
 //! * Adaptive dual-threshold hysteresis VAD
 //! * Automated silence trimming (`trim_silence`)
 
-use brain_core::BrainResult;
 use crate::core::AudioBuffer;
+use brain_core::BrainResult;
 
 /// Voice Activity Detection configuration parameters.
 #[derive(Debug, Clone, PartialEq)]
@@ -79,7 +79,12 @@ pub fn compute_vad(signal: &[f64], config: &VADConfig) -> Vec<bool> {
 }
 
 /// Trims leading and trailing silence from an [`AudioBuffer`] based on energy threshold.
-pub fn trim_silence(audio: &AudioBuffer, threshold_db: f64, frame_size: usize, hop_size: usize) -> BrainResult<AudioBuffer> {
+pub fn trim_silence(
+    audio: &AudioBuffer,
+    threshold_db: f64,
+    frame_size: usize,
+    hop_size: usize,
+) -> BrainResult<AudioBuffer> {
     let mono = audio.to_mono();
     let signal = mono.as_slice();
     if signal.len() < frame_size {

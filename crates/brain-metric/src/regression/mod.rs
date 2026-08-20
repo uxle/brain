@@ -4,11 +4,11 @@
 #![allow(missing_docs)]
 
 pub mod robust;
-pub use robust::{median_absolute_error, huber_metric, RobustMetricConfig};
+pub use robust::{huber_metric, median_absolute_error, RobustMetricConfig};
 
-use brain_core::Tensor;
-use crate::core::{MetricResult, MetricError};
+use crate::core::{MetricError, MetricResult};
 use crate::utils::stable_divide;
+use brain_core::Tensor;
 
 /// Mean Squared Error (MSE).
 pub fn mse_score(preds: &Tensor, targets: &Tensor) -> MetricResult<f64> {
@@ -21,9 +21,15 @@ pub fn mse_score(preds: &Tensor, targets: &Tensor) -> MetricResult<f64> {
     let p = preds.to_vec();
     let t = targets.to_vec();
     let n = p.len();
-    if n == 0 { return Ok(0.0); }
+    if n == 0 {
+        return Ok(0.0);
+    }
 
-    let sum_sq: f64 = p.iter().zip(t.iter()).map(|(&a, &b)| (a - b) * (a - b)).sum();
+    let sum_sq: f64 = p
+        .iter()
+        .zip(t.iter())
+        .map(|(&a, &b)| (a - b) * (a - b))
+        .sum();
     Ok(sum_sq / n as f64)
 }
 
@@ -43,7 +49,9 @@ pub fn mae_score(preds: &Tensor, targets: &Tensor) -> MetricResult<f64> {
     let p = preds.to_vec();
     let t = targets.to_vec();
     let n = p.len();
-    if n == 0 { return Ok(0.0); }
+    if n == 0 {
+        return Ok(0.0);
+    }
 
     let sum_abs: f64 = p.iter().zip(t.iter()).map(|(&a, &b)| (a - b).abs()).sum();
     Ok(sum_abs / n as f64)
@@ -60,7 +68,9 @@ pub fn r2_score(preds: &Tensor, targets: &Tensor) -> MetricResult<f64> {
     let p = preds.to_vec();
     let t = targets.to_vec();
     let n = p.len();
-    if n == 0 { return Ok(1.0); }
+    if n == 0 {
+        return Ok(1.0);
+    }
 
     let mean_t: f64 = t.iter().sum::<f64>() / n as f64;
     let ss_res: f64 = p.iter().zip(t.iter()).map(|(&a, &b)| (b - a).powi(2)).sum();
@@ -74,18 +84,34 @@ pub fn mape_score(preds: &Tensor, targets: &Tensor) -> MetricResult<f64> {
     let p = preds.to_vec();
     let t = targets.to_vec();
     let n = p.len().min(t.len());
-    if n == 0 { return Ok(0.0); }
+    if n == 0 {
+        return Ok(0.0);
+    }
 
-    let sum_pe: f64 = p.iter().zip(t.iter()).map(|(&a, &b)| {
-        if b.abs() > 1e-12 { (a - b).abs() / b.abs() } else { 0.0 }
-    }).sum();
+    let sum_pe: f64 = p
+        .iter()
+        .zip(t.iter())
+        .map(|(&a, &b)| {
+            if b.abs() > 1e-12 {
+                (a - b).abs() / b.abs()
+            } else {
+                0.0
+            }
+        })
+        .sum();
 
     Ok(sum_pe / n as f64)
 }
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

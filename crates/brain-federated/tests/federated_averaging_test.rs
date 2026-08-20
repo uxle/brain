@@ -1,6 +1,6 @@
 //! Tests for Federated Learning and FedAvg
-use brain_federated::*;
 use brain_core::Tensor;
+use brain_federated::*;
 
 #[test]
 fn test_fedavg_aggregation() {

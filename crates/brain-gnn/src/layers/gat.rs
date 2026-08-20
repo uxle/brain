@@ -3,11 +3,11 @@
 //! GAT layer with multi-head self-attention and LeakyReLU scoring over neighborhoods.
 #![allow(missing_docs)]
 
-use brain_core::Tensor;
 use super::GnnLayer;
 use crate::graph::Graph;
-use crate::ops::sparse_softmax;
 use crate::impl_::transform_node_features;
+use crate::ops::sparse_softmax;
+use brain_core::Tensor;
 
 /// GAT Layer struct.
 #[derive(Debug, Clone)]
@@ -23,7 +23,13 @@ impl GatLayer {
     pub fn new(in_dim: usize, out_dim: usize, num_heads: usize) -> Self {
         let weight = Tensor::zeros(vec![out_dim * num_heads, in_dim]);
         let attn_weight = Tensor::zeros(vec![num_heads, out_dim * 2]);
-        Self { in_dim, out_dim, num_heads, weight, attn_weight }
+        Self {
+            in_dim,
+            out_dim,
+            num_heads,
+            weight,
+            attn_weight,
+        }
     }
 }
 
@@ -53,7 +59,8 @@ impl GnnLayer for GatLayer {
             let prob = attn_probs[e];
             if d < num_nodes {
                 for dim in 0..self.out_dim {
-                    out[d * self.out_dim + dim] += prob * feat_data[e.min(num_nodes - 1) * self.out_dim + dim];
+                    out[d * self.out_dim + dim] +=
+                        prob * feat_data[e.min(num_nodes - 1) * self.out_dim + dim];
                 }
             }
         }
@@ -61,13 +68,23 @@ impl GnnLayer for GatLayer {
         Tensor::from_vec(out, vec![num_nodes, self.out_dim])
     }
 
-    fn in_dim(&self) -> usize { self.in_dim }
-    fn out_dim(&self) -> usize { self.out_dim }
+    fn in_dim(&self) -> usize {
+        self.in_dim
+    }
+    fn out_dim(&self) -> usize {
+        self.out_dim
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

@@ -6,8 +6,8 @@
 pub mod trainer;
 pub use trainer::LocalTrainer;
 
-use brain_core::Tensor;
 use crate::core::{ClientId, ModelDelta};
+use brain_core::Tensor;
 
 /// Configuration for a federated client's local training.
 #[derive(Debug, Clone)]
@@ -20,7 +20,12 @@ pub struct ClientConfig {
 
 impl ClientConfig {
     pub fn new(client_id: ClientId) -> Self {
-        Self { client_id, local_epochs: 5, learning_rate: 0.01, batch_size: 32 }
+        Self {
+            client_id,
+            local_epochs: 5,
+            learning_rate: 0.01,
+            batch_size: 32,
+        }
     }
 }
 

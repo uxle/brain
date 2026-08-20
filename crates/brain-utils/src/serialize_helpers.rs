@@ -19,19 +19,26 @@ pub fn bytes_to_hex(bytes: &[u8]) -> String {
 pub fn hex_to_bytes(hex: &str) -> UtilsResult<Vec<u8>> {
     let clean = hex.trim();
     if clean.len() % 2 != 0 {
-        return Err(UtilsError::ParseError("Hex string must have even length".to_string()));
+        return Err(UtilsError::ParseError(
+            "Hex string must have even length".to_string(),
+        ));
     }
     let mut bytes = Vec::with_capacity(clean.len() / 2);
     let chars: Vec<char> = clean.chars().collect();
     for i in (0..chars.len()).step_by(2) {
-        let hi = chars[i].to_digit(16).ok_or_else(|| UtilsError::ParseError(format!("Invalid hex char: {}", chars[i])))?;
-        let lo = chars[i + 1].to_digit(16).ok_or_else(|| UtilsError::ParseError(format!("Invalid hex char: {}", chars[i + 1])))?;
+        let hi = chars[i]
+            .to_digit(16)
+            .ok_or_else(|| UtilsError::ParseError(format!("Invalid hex char: {}", chars[i])))?;
+        let lo = chars[i + 1]
+            .to_digit(16)
+            .ok_or_else(|| UtilsError::ParseError(format!("Invalid hex char: {}", chars[i + 1])))?;
         bytes.push(((hi << 4) | lo) as u8);
     }
     Ok(bytes)
 }
 
-const BASE64_ALPHABET: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+const BASE64_ALPHABET: &[u8; 64] =
+    b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
 /// Encodes byte slice into standard Base64 string with padding.
 pub fn base64_encode(bytes: &[u8]) -> String {
@@ -66,7 +73,9 @@ pub fn base64_encode(bytes: &[u8]) -> String {
 pub fn base64_decode(s: &str) -> UtilsResult<Vec<u8>> {
     let clean: Vec<u8> = s.bytes().filter(|&b| !b.is_ascii_whitespace()).collect();
     if clean.len() % 4 != 0 {
-        return Err(UtilsError::ParseError("Base64 string length must be multiple of 4".to_string()));
+        return Err(UtilsError::ParseError(
+            "Base64 string length must be multiple of 4".to_string(),
+        ));
     }
     let mut out = Vec::new();
     for chunk in clean.chunks_exact(4) {
@@ -80,10 +89,16 @@ pub fn base64_decode(s: &str) -> UtilsResult<Vec<u8>> {
             } else if let Some(idx) = BASE64_ALPHABET.iter().position(|&x| x == b) {
                 buf[i] = idx as u8;
             } else {
-                return Err(UtilsError::ParseError(format!("Invalid Base64 byte: {}", b)));
+                return Err(UtilsError::ParseError(format!(
+                    "Invalid Base64 byte: {}",
+                    b
+                )));
             }
         }
-        let n = ((buf[0] as u32) << 18) | ((buf[1] as u32) << 12) | ((buf[2] as u32) << 6) | (buf[3] as u32);
+        let n = ((buf[0] as u32) << 18)
+            | ((buf[1] as u32) << 12)
+            | ((buf[2] as u32) << 6)
+            | (buf[3] as u32);
         out.push(((n >> 16) & 0xFF) as u8);
         if pad_count < 2 {
             out.push(((n >> 8) & 0xFF) as u8);
@@ -105,10 +120,10 @@ mod tests {
         let data = b"brain deep learning";
         let hex = bytes_to_hex(data);
         assert_eq!(hex_to_bytes(&hex).unwrap(), data);
-    
+
         let b64 = base64_encode(data);
         assert_eq!(base64_decode(&b64).unwrap(), data);
-    
+
         assert_eq!(base64_encode(b"hello world"), "aGVsbG8gd29ybGQ=");
         assert_eq!(base64_decode("aGVsbG8gd29ybGQ=").unwrap(), b"hello world");
     }

@@ -7,26 +7,26 @@
 //! * [`tonal`] - Chroma representations, pitch detection (YIN/Autocorrelation), and harmonicity
 //! * [`wavelet`] - Discrete Wavelet Transform (DWT), wavelet packets, and multi-scale denoising
 
-pub mod stft;
-pub mod spectral;
 pub mod mfcc;
+pub mod spectral;
+pub mod stft;
 pub mod tonal;
 pub mod wavelet;
 
-pub use stft::{stft, istft, STFTProcessor, PhaseVocoder};
-pub use spectral::{spectrogram, mel_spectrogram, compute_deltas, SpectralDescriptors};
-pub use mfcc::{mfcc, compute_mfcc, MFCCProcessor};
-pub use tonal::{chroma_stft, chroma_cens, detect_pitch_yin, zero_crossing_rate, spectral_flux};
-pub use wavelet::{dwt, idwt, WaveletType, WaveletDenoise};
+pub use mfcc::{compute_mfcc, mfcc, MFCCProcessor};
+pub use spectral::{compute_deltas, mel_spectrogram, spectrogram, SpectralDescriptors};
+pub use stft::{istft, stft, PhaseVocoder, STFTProcessor};
+pub use tonal::{chroma_cens, chroma_stft, detect_pitch_yin, spectral_flux, zero_crossing_rate};
+pub use wavelet::{dwt, idwt, WaveletDenoise, WaveletType};
 
-use brain_core::{BrainResult, Tensor};
 use crate::core::AudioBuffer;
+use brain_core::{BrainResult, Tensor};
 
 /// Common trait implemented by all audio feature extractors.
 pub trait AudioFeature {
     /// Extracts features from an input audio buffer, returning a `Tensor`.
     fn extract(&self, audio: &AudioBuffer) -> BrainResult<Tensor>;
-    
+
     /// Returns the feature representation name.
     fn name(&self) -> &'static str;
 }

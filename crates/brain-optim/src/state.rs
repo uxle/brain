@@ -3,8 +3,8 @@
 //! State dictionary management, buffer persistence, metadata tracking, and checkpoint serialization.
 #![allow(missing_docs)]
 
-use std::collections::HashMap;
 use brain_core::Tensor;
+use std::collections::HashMap;
 
 /// Metadata stored alongside optimizer state.
 #[derive(Debug, Clone, PartialEq)]
@@ -95,8 +95,18 @@ impl StateDict {
             out.push_str(&format!("scalar|{}|{}\n", k, v));
         }
         for (k, t) in &self.tensors {
-            let shape_str = t.shape().iter().map(usize::to_string).collect::<Vec<_>>().join("x");
-            let data_str = t.data().iter().map(f64::to_string).collect::<Vec<_>>().join(",");
+            let shape_str = t
+                .shape()
+                .iter()
+                .map(usize::to_string)
+                .collect::<Vec<_>>()
+                .join("x");
+            let data_str = t
+                .data()
+                .iter()
+                .map(f64::to_string)
+                .collect::<Vec<_>>()
+                .join(",");
             out.push_str(&format!("tensor|{}|{}|{}\n", k, shape_str, data_str));
         }
         out.into_bytes()
@@ -139,12 +149,16 @@ impl StateDict {
                     let shape: Vec<usize> = if s.is_empty() {
                         Vec::new()
                     } else {
-                        s.split('x').map(|p| p.parse::<usize>().map_err(|e| e.to_string())).collect::<Result<Vec<_>, _>>()?
+                        s.split('x')
+                            .map(|p| p.parse::<usize>().map_err(|e| e.to_string()))
+                            .collect::<Result<Vec<_>, _>>()?
                     };
                     let data: Vec<f64> = if d.is_empty() {
                         Vec::new()
                     } else {
-                        d.split(',').map(|p| p.parse::<f64>().map_err(|e| e.to_string())).collect::<Result<Vec<_>, _>>()?
+                        d.split(',')
+                            .map(|p| p.parse::<f64>().map_err(|e| e.to_string()))
+                            .collect::<Result<Vec<_>, _>>()?
                     };
                     sd.insert_tensor(*k, Tensor::from_vec(data, shape));
                 }
@@ -173,7 +187,13 @@ impl OptimizerCheckpoint {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

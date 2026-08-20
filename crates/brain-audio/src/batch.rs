@@ -5,8 +5,8 @@
 //! * Batch tensor creation and collation
 //! * Length vector and attention mask generation
 
-use brain_core::{BrainError, BrainResult, Tensor};
 use crate::core::AudioBuffer;
+use brain_core::{BrainError, BrainResult, Tensor};
 
 /// Collation padding policies.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -18,9 +18,14 @@ pub enum PadMode {
 }
 
 /// Collates a batch of variable-length 1D audio buffers into a batched 2D `Tensor` `[batch_size, max_len]`.
-pub fn collate_audio_batch(buffers: &[AudioBuffer], pad_mode: PadMode) -> BrainResult<(Tensor, Vec<usize>)> {
+pub fn collate_audio_batch(
+    buffers: &[AudioBuffer],
+    pad_mode: PadMode,
+) -> BrainResult<(Tensor, Vec<usize>)> {
     if buffers.is_empty() {
-        return Err(BrainError::invalid_value("buffers cannot be empty for batch collation"));
+        return Err(BrainError::invalid_value(
+            "buffers cannot be empty for batch collation",
+        ));
     }
     let batch_size = buffers.len();
     let max_len = buffers.iter().map(|b| b.num_samples()).max().unwrap();

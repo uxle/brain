@@ -2,11 +2,11 @@
 //!
 //! Direct binary interop to load and save weights conforming to the Hugging Face `safetensors` standard.
 
+use brain_core::Tensor;
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::{Read, Write};
 use std::path::Path;
-use brain_core::Tensor;
 
 /// Metadata information for a single tensor inside a safetensors archive.
 #[derive(Debug, Clone)]
@@ -62,7 +62,10 @@ impl SafetensorsArchive {
         }
 
         let header_json = std::str::from_utf8(&bytes[8..8 + header_len]).map_err(|e| {
-            std::io::Error::new(std::io::ErrorKind::InvalidData, format!("Invalid UTF-8 header: {}", e))
+            std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                format!("Invalid UTF-8 header: {}", e),
+            )
         })?;
 
         let buffer_start = 8 + header_len;
@@ -79,7 +82,10 @@ impl SafetensorsArchive {
             if end > data_buffer.len() || start > end {
                 return Err(std::io::Error::new(
                     std::io::ErrorKind::InvalidData,
-                    format!("Invalid data offsets for tensor '{}': {:?}", name, info.data_offsets),
+                    format!(
+                        "Invalid data offsets for tensor '{}': {:?}",
+                        name, info.data_offsets
+                    ),
                 ));
             }
             let raw_tensor_bytes = &data_buffer[start..end];
@@ -246,11 +252,14 @@ fn parse_safetensors_header_json(json: &str) -> std::io::Result<HashMap<String, 
             }
         }
 
-        map.insert(key.to_string(), SafetensorInfo {
-            dtype,
-            shape,
-            data_offsets: offsets,
-        });
+        map.insert(
+            key.to_string(),
+            SafetensorInfo {
+                dtype,
+                shape,
+                data_offsets: offsets,
+            },
+        );
     }
 
     Ok(map)

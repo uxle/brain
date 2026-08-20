@@ -14,7 +14,12 @@ pub fn stable_divide(numerator: f64, denominator: f64, fallback: f64) -> f64 {
 
 /// Sorts pairs (values, indices) descending by value.
 pub fn sort_descending_by_value(values: &[f64]) -> Vec<(f64, usize)> {
-    let mut indexed: Vec<(f64, usize)> = values.iter().copied().enumerate().map(|(i, v)| (v, i)).collect();
+    let mut indexed: Vec<(f64, usize)> = values
+        .iter()
+        .copied()
+        .enumerate()
+        .map(|(i, v)| (v, i))
+        .collect();
     indexed.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
     indexed
 }
@@ -38,7 +43,13 @@ pub fn topk_indices(scores: &[f64], k: usize) -> Vec<usize> {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

@@ -4,8 +4,8 @@
 //! upsampling operator used in super-resolution generators.
 #![allow(missing_docs)]
 
+use crate::module::{Module, ModuleError, ModuleResult};
 use brain_core::Tensor;
-use crate::module::{Module, ModuleResult, ModuleError};
 
 /// PixelShuffle layer.
 #[derive(Debug, Clone, Copy)]
@@ -15,7 +15,10 @@ pub struct PixelShuffle {
 
 impl PixelShuffle {
     pub fn new(upscale_factor: usize) -> Self {
-        assert!(upscale_factor > 0, "PixelShuffle upscale factor must be positive");
+        assert!(
+            upscale_factor > 0,
+            "PixelShuffle upscale factor must be positive"
+        );
         Self { upscale_factor }
     }
 }
@@ -53,7 +56,8 @@ impl Module for PixelShuffle {
                                 let in_idx = ((bi * c + c_in) * h + hi) * w + wi;
                                 let h_out = hi * r + ri;
                                 let w_out = wi * r + rj;
-                                let out_idx = ((bi * c_out + co) * (h * r) + h_out) * (w * r) + w_out;
+                                let out_idx =
+                                    ((bi * c_out + co) * (h * r) + h_out) * (w * r) + w_out;
                                 out[out_idx] = in_data[in_idx];
                             }
                         }
@@ -75,15 +79,16 @@ mod tests {
     fn test_pixel_shuffle_small() {
         let ps = PixelShuffle::new(2);
         // 1 channel, r=2 -> 4 input channels
-        let t = Value::new(Tensor::from_slice(
-            &[
-                1.0, 2.0, 3.0, 4.0,
-                5.0, 6.0, 7.0, 8.0,
-                9.0, 10.0, 11.0, 12.0,
-                13.0, 14.0, 15.0, 16.0,
-            ],
-            vec![1, 4, 1, 4],
-        ), false);
+        let t = Value::new(
+            Tensor::from_slice(
+                &[
+                    1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0, 13.0, 14.0,
+                    15.0, 16.0,
+                ],
+                vec![1, 4, 1, 4],
+            ),
+            false,
+        );
         let out = ps.forward(&t).unwrap();
         assert_eq!(out.shape(), &[1, 1, 2, 8]);
         // ch0 (r=0,j=0) fills even rows/cols, ch1 (r=0,j=1) fills odd cols, ch2 (r=1,j=0) fills odd rows
@@ -98,7 +103,10 @@ mod tests {
     #[test]
     fn test_pixel_shuffle_roundtrip_permutation() {
         let ps = PixelShuffle::new(3);
-        let t = Value::new(Tensor::arange(0.0, 81.0, 1.0).reshape(vec![1, 9, 3, 3]), false);
+        let t = Value::new(
+            Tensor::arange(0.0, 81.0, 1.0).reshape(vec![1, 9, 3, 3]),
+            false,
+        );
         let out = ps.forward(&t).unwrap();
         assert_eq!(out.shape(), &[1, 1, 9, 9]);
         // (0,0,0,0) -> (0,0,0,0)

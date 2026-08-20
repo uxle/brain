@@ -3,10 +3,10 @@
 //! Provides spectral centroid, spectral bandwidth, spectral rolloff, spectral flatness,
 //! spectral contrast, Mel filter banks (Slaney and HTK), log-Mel spectrograms, and delta features.
 
-use brain_core::{BrainResult, Tensor};
-use crate::config::{MelConfig, MelScale, MelNorm};
+use crate::config::{MelConfig, MelNorm, MelScale};
 use crate::feature::stft::STFTProcessor;
-use crate::utils::{hz_to_mel_slaney, mel_to_hz_slaney, hz_to_mel_htk, mel_to_hz_htk, fft_freqs};
+use crate::utils::{fft_freqs, hz_to_mel_htk, hz_to_mel_slaney, mel_to_hz_htk, mel_to_hz_slaney};
+use brain_core::{BrainResult, Tensor};
 
 /// Generates a triangular Mel filter bank matrix of shape `[n_mels, n_fft / 2 + 1]`.
 pub fn create_mel_filterbank(config: &MelConfig) -> BrainResult<Vec<f64>> {
@@ -46,9 +46,17 @@ pub fn create_mel_filterbank(config: &MelConfig) -> BrainResult<Vec<f64>> {
 
         for (k, &f) in fft_bins.iter().enumerate() {
             let weight = if f >= left_hz && f <= center_hz {
-                if center_hz > left_hz { (f - left_hz) / (center_hz - left_hz) } else { 0.0 }
+                if center_hz > left_hz {
+                    (f - left_hz) / (center_hz - left_hz)
+                } else {
+                    0.0
+                }
             } else if f > center_hz && f <= right_hz {
-                if right_hz > center_hz { (right_hz - f) / (right_hz - center_hz) } else { 0.0 }
+                if right_hz > center_hz {
+                    (right_hz - f) / (right_hz - center_hz)
+                } else {
+                    0.0
+                }
             } else {
                 0.0
             };
@@ -130,7 +138,9 @@ pub fn mel_spectrogram(signal: &[f64], config: &MelConfig) -> BrainResult<Tensor
 /// Computes first and second order delta (velocity and acceleration) coefficients across time frames.
 pub fn compute_deltas(features: &Tensor, order: usize, width: usize) -> BrainResult<Tensor> {
     if features.ndim() != 2 {
-        return Err(brain_core::BrainError::invalid_value("compute_deltas requires 2D [channels, frames] tensor"));
+        return Err(brain_core::BrainError::invalid_value(
+            "compute_deltas requires 2D [channels, frames] tensor",
+        ));
     }
     let n_features = features.shape()[0];
     let n_frames = features.shape()[1];
@@ -146,7 +156,8 @@ pub fn compute_deltas(features: &Tensor, order: usize, width: usize) -> BrainRes
             for d in 1..=half_w {
                 let left_t = (t as isize - d).max(0) as usize;
                 let right_t = (t as isize + d).min(n_frames as isize - 1) as usize;
-                num += d as f64 * (data[feat * n_frames + right_t] - data[feat * n_frames + left_t]);
+                num +=
+                    d as f64 * (data[feat * n_frames + right_t] - data[feat * n_frames + left_t]);
             }
             delta_data[feat * n_frames + t] = num / denom;
         }

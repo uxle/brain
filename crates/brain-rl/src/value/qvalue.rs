@@ -1,10 +1,19 @@
 //! # Action-Value Q(s, a) Functions
 //!
 //! Tabular state-action tables and parameterized linear Q-networks.
-#![allow(missing_docs, clippy::excessive_precision, clippy::approx_constant, clippy::needless_range_loop, clippy::too_many_arguments, clippy::manual_is_multiple_of, clippy::manual_div_ceil, clippy::doc_markdown)]
+#![allow(
+    missing_docs,
+    clippy::excessive_precision,
+    clippy::approx_constant,
+    clippy::needless_range_loop,
+    clippy::too_many_arguments,
+    clippy::manual_is_multiple_of,
+    clippy::manual_div_ceil,
+    clippy::doc_markdown
+)]
 
-use std::collections::HashMap;
 use brain_core::Tensor;
+use std::collections::HashMap;
 
 /// Tabular State-Action Value Table Q(s, a).
 #[derive(Debug, Clone, Default)]
@@ -30,13 +39,28 @@ impl QTable {
         let mut best = f64::NEG_INFINITY;
         for a in 0..num_actions {
             let q = self.get(state, a);
-            if q > best { best = q; }
+            if q > best {
+                best = q;
+            }
         }
-        if best.is_infinite() { 0.0 } else { best }
+        if best.is_infinite() {
+            0.0
+        } else {
+            best
+        }
     }
 
     /// Updates Q-value via standard Q-learning TD error.
-    pub fn update_q(&mut self, s: usize, a: usize, r: f64, next_s: usize, num_actions: usize, gamma: f64, alpha: f64) {
+    pub fn update_q(
+        &mut self,
+        s: usize,
+        a: usize,
+        r: f64,
+        next_s: usize,
+        num_actions: usize,
+        gamma: f64,
+        alpha: f64,
+    ) {
         let target = r + gamma * self.max_q(next_s, num_actions);
         let current = self.get(s, a);
         self.set(s, a, current + alpha * (target - current));
@@ -77,23 +101,35 @@ impl QNet {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant, clippy::needless_range_loop, clippy::manual_div_ceil, clippy::manual_is_multiple_of, clippy::too_many_arguments, clippy::doc_markdown, clippy::excessive_precision)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant,
+        clippy::needless_range_loop,
+        clippy::manual_div_ceil,
+        clippy::manual_is_multiple_of,
+        clippy::too_many_arguments,
+        clippy::doc_markdown,
+        clippy::excessive_precision
+    )]
     use super::*;
-    use crate::core::*;
-    use crate::env::*;
-    use crate::policy::*;
-    use crate::value::*;
-    use crate::buffer::*;
-    use crate::dqn::*;
-    use crate::ppo::*;
     use crate::a2c::*;
     use crate::actor_critic::*;
-    use crate::sac::*;
     use crate::agents::*;
-    use crate::trainer::*;
-    use crate::eval::*;
+    use crate::buffer::*;
     use crate::checkpoint::*;
+    use crate::core::*;
+    use crate::dqn::*;
+    use crate::env::*;
+    use crate::eval::*;
+    use crate::policy::*;
+    use crate::ppo::*;
+    use crate::sac::*;
+    use crate::trainer::*;
     use crate::utils::*;
+    use crate::value::*;
     use crate::VERSION;
     use brain_core::Tensor;
 }

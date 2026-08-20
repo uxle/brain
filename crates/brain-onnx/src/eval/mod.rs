@@ -6,8 +6,8 @@
 pub mod checker;
 pub use checker::{check_model, CheckerReport};
 
-use crate::core::{OnnxResult, OnnxError};
 use crate::config::EvalConfig;
+use crate::core::{OnnxError, OnnxResult};
 use crate::ir::OnnxModel;
 use brain_core::Tensor;
 use std::collections::HashMap;
@@ -77,7 +77,10 @@ pub fn evaluate_onnx_model(
                 let v1 = t1.to_vec();
                 let v2 = t2.to_vec();
                 let out: Vec<f64> = v1.iter().zip(v2.iter()).map(|(&a, &b)| a / b).collect();
-                env.insert(node.outputs[0].clone(), Tensor::from_vec(out, t1.shape().to_vec()));
+                env.insert(
+                    node.outputs[0].clone(),
+                    Tensor::from_vec(out, t1.shape().to_vec()),
+                );
             }
             "MatMul" => {
                 let t1 = env.get(&node.inputs[0]).ok_or_else(|| {
@@ -116,13 +119,37 @@ pub fn evaluate_onnx_model(
                 })?;
                 let c_opt = node.inputs.get(2).and_then(|name| env.get(name));
 
-                let alpha: f64 = node.attributes.get("alpha").and_then(|s| s.parse().ok()).unwrap_or(1.0);
-                let beta: f64 = node.attributes.get("beta").and_then(|s| s.parse().ok()).unwrap_or(1.0);
-                let trans_a = node.attributes.get("transA").map(|s| s == "1" || s == "true").unwrap_or(false);
-                let trans_b = node.attributes.get("transB").map(|s| s == "1" || s == "true").unwrap_or(false);
+                let alpha: f64 = node
+                    .attributes
+                    .get("alpha")
+                    .and_then(|s| s.parse().ok())
+                    .unwrap_or(1.0);
+                let beta: f64 = node
+                    .attributes
+                    .get("beta")
+                    .and_then(|s| s.parse().ok())
+                    .unwrap_or(1.0);
+                let trans_a = node
+                    .attributes
+                    .get("transA")
+                    .map(|s| s == "1" || s == "true")
+                    .unwrap_or(false);
+                let trans_b = node
+                    .attributes
+                    .get("transB")
+                    .map(|s| s == "1" || s == "true")
+                    .unwrap_or(false);
 
-                let a_mat = if trans_a { a.transpose(0, 1) } else { a.clone() };
-                let b_mat = if trans_b { b.transpose(0, 1) } else { b.clone() };
+                let a_mat = if trans_a {
+                    a.transpose(0, 1)
+                } else {
+                    a.clone()
+                };
+                let b_mat = if trans_b {
+                    b.transpose(0, 1)
+                } else {
+                    b.clone()
+                };
 
                 if a_mat.ndim() != 2 || b_mat.ndim() != 2 || a_mat.shape()[1] != b_mat.shape()[0] {
                     return Err(OnnxError::InvalidTensorShape(format!(
@@ -164,15 +191,25 @@ pub fn evaluate_onnx_model(
                 let in_t = env.get(&node.inputs[0]).ok_or_else(|| {
                     OnnxError::GraphLoweringError(format!("Missing tensor {}", node.inputs[0]))
                 })?;
-                let out_vec: Vec<f64> = in_t.to_vec().iter().map(|&x| 1.0 / (1.0 + (-x).exp())).collect();
-                env.insert(node.outputs[0].clone(), Tensor::from_vec(out_vec, in_t.shape().to_vec()));
+                let out_vec: Vec<f64> = in_t
+                    .to_vec()
+                    .iter()
+                    .map(|&x| 1.0 / (1.0 + (-x).exp()))
+                    .collect();
+                env.insert(
+                    node.outputs[0].clone(),
+                    Tensor::from_vec(out_vec, in_t.shape().to_vec()),
+                );
             }
             "Tanh" => {
                 let in_t = env.get(&node.inputs[0]).ok_or_else(|| {
                     OnnxError::GraphLoweringError(format!("Missing tensor {}", node.inputs[0]))
                 })?;
                 let out_vec: Vec<f64> = in_t.to_vec().iter().map(|&x| x.tanh()).collect();
-                env.insert(node.outputs[0].clone(), Tensor::from_vec(out_vec, in_t.shape().to_vec()));
+                env.insert(
+                    node.outputs[0].clone(),
+                    Tensor::from_vec(out_vec, in_t.shape().to_vec()),
+                );
             }
             "Identity" => {
                 let in_t = env.get(&node.inputs[0]).ok_or_else(|| {
@@ -184,19 +221,45 @@ pub fn evaluate_onnx_model(
                 let in_t = env.get(&node.inputs[0]).ok_or_else(|| {
                     OnnxError::GraphLoweringError(format!("Missing tensor {}", node.inputs[0]))
                 })?;
-                let scale = env.get(&node.inputs[1]).map(|t| t.to_vec().first().copied().unwrap_or(1.0)).unwrap_or(1.0);
-                let zp = node.inputs.get(2).and_then(|name| env.get(name)).map(|t| t.to_vec().first().copied().unwrap_or(0.0)).unwrap_or(0.0);
-                let out_vec: Vec<f64> = in_t.to_vec().iter().map(|&x| ((x / scale).round() + zp).clamp(-128.0, 127.0)).collect();
-                env.insert(node.outputs[0].clone(), Tensor::from_vec(out_vec, in_t.shape().to_vec()));
+                let scale = env
+                    .get(&node.inputs[1])
+                    .map(|t| t.to_vec().first().copied().unwrap_or(1.0))
+                    .unwrap_or(1.0);
+                let zp = node
+                    .inputs
+                    .get(2)
+                    .and_then(|name| env.get(name))
+                    .map(|t| t.to_vec().first().copied().unwrap_or(0.0))
+                    .unwrap_or(0.0);
+                let out_vec: Vec<f64> = in_t
+                    .to_vec()
+                    .iter()
+                    .map(|&x| ((x / scale).round() + zp).clamp(-128.0, 127.0))
+                    .collect();
+                env.insert(
+                    node.outputs[0].clone(),
+                    Tensor::from_vec(out_vec, in_t.shape().to_vec()),
+                );
             }
             "DequantizeLinear" => {
                 let in_t = env.get(&node.inputs[0]).ok_or_else(|| {
                     OnnxError::GraphLoweringError(format!("Missing tensor {}", node.inputs[0]))
                 })?;
-                let scale = env.get(&node.inputs[1]).map(|t| t.to_vec().first().copied().unwrap_or(1.0)).unwrap_or(1.0);
-                let zp = node.inputs.get(2).and_then(|name| env.get(name)).map(|t| t.to_vec().first().copied().unwrap_or(0.0)).unwrap_or(0.0);
+                let scale = env
+                    .get(&node.inputs[1])
+                    .map(|t| t.to_vec().first().copied().unwrap_or(1.0))
+                    .unwrap_or(1.0);
+                let zp = node
+                    .inputs
+                    .get(2)
+                    .and_then(|name| env.get(name))
+                    .map(|t| t.to_vec().first().copied().unwrap_or(0.0))
+                    .unwrap_or(0.0);
                 let out_vec: Vec<f64> = in_t.to_vec().iter().map(|&x| (x - zp) * scale).collect();
-                env.insert(node.outputs[0].clone(), Tensor::from_vec(out_vec, in_t.shape().to_vec()));
+                env.insert(
+                    node.outputs[0].clone(),
+                    Tensor::from_vec(out_vec, in_t.shape().to_vec()),
+                );
             }
             _ => {
                 return Err(OnnxError::UnsupportedOp {
@@ -219,7 +282,13 @@ pub fn evaluate_onnx_model(
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

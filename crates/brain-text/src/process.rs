@@ -1,7 +1,15 @@
 //! # Batch Sequence Processing, Text Cleaning, and Segmentation
 //!
 //! Text normalization sanitization, sentence/paragraph segmentation, batch collators, and chunk filters.
-#![allow(missing_docs, unused_imports, unused_variables, dead_code, unused_mut, unused_comparisons, clippy::all)]
+#![allow(
+    missing_docs,
+    unused_imports,
+    unused_variables,
+    dead_code,
+    unused_mut,
+    unused_comparisons,
+    clippy::all
+)]
 
 use crate::config::ProcessConfig;
 use crate::core::{TextBatch, TokenId, TokenizedOutput};
@@ -168,44 +176,66 @@ pub fn batch_iterator(items: Vec<String>, batch_size: usize) -> Vec<Vec<String>>
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant, clippy::needless_range_loop, clippy::manual_div_ceil, clippy::manual_is_multiple_of, clippy::too_many_arguments, clippy::doc_markdown, clippy::excessive_precision, clippy::float_cmp, clippy::len_zero)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant,
+        clippy::needless_range_loop,
+        clippy::manual_div_ceil,
+        clippy::manual_is_multiple_of,
+        clippy::too_many_arguments,
+        clippy::doc_markdown,
+        clippy::excessive_precision,
+        clippy::float_cmp,
+        clippy::len_zero
+    )]
     use super::*;
-    use crate::core::*;
-    use crate::config::*;
-    use crate::utils::*;
-    use crate::ops::*;
-    use crate::vocab::*;
-    use crate::text_ops::*;
-    use crate::features::*;
-    use crate::similarity::*;
-    use crate::lm::*;
-    use crate::process::*;
-    use crate::optimize::*;
     use crate::analyze::*;
-    use crate::compute::*;
-    use crate::helper::*;
-    use crate::transform::*;
     use crate::builder::*;
-    use crate::tokenizer::*;
-    use crate::tokenizer::bpe::*;
-    use crate::tokenizer::sentencepiece::*;
-    use crate::tokenizer::wordpiece::*;
-    use crate::tokenizer::char::*;
-    use crate::tokenizer::trainer::*;
-    use crate::tokenizer::normalizer::*;
-    use crate::tokenizer::pretokenizer::*;
-    use crate::tokenizer::bytelevel::*;
-    use crate::tokenizer::post::*;
-    use crate::embedding::*;
-    use crate::embedding::pretrained::*;
+    use crate::compute::*;
+    use crate::config::*;
+    use crate::core::*;
     use crate::embedding::fasttext::*;
+    use crate::embedding::pretrained::*;
+    use crate::embedding::*;
+    use crate::features::*;
+    use crate::helper::*;
+    use crate::lm::*;
+    use crate::ops::*;
+    use crate::optimize::*;
+    use crate::process::*;
+    use crate::similarity::*;
+    use crate::text_ops::*;
+    use crate::tokenizer::bpe::*;
+    use crate::tokenizer::bytelevel::*;
+    use crate::tokenizer::char::*;
+    use crate::tokenizer::normalizer::*;
+    use crate::tokenizer::post::*;
+    use crate::tokenizer::pretokenizer::*;
+    use crate::tokenizer::sentencepiece::*;
+    use crate::tokenizer::trainer::*;
+    use crate::tokenizer::wordpiece::*;
+    use crate::tokenizer::*;
+    use crate::transform::*;
+    use crate::utils::*;
+    use crate::vocab::*;
     use crate::VERSION;
     use brain_core::Tensor;
 
     #[test]
     fn test_process_suite_1() {
-        let out1 = TokenizedOutput::new(vec![1, 2, 1], vec!["a".to_string(), "b".to_string(), "c".to_string()], vec![(0,1),(1,2),(2,3)]);
-        let out2 = TokenizedOutput::new(vec![4, 5], vec!["d".to_string(), "e".to_string()], vec![(0,1),(1,2)]);
+        let out1 = TokenizedOutput::new(
+            vec![1, 2, 1],
+            vec!["a".to_string(), "b".to_string(), "c".to_string()],
+            vec![(0, 1), (1, 2), (2, 3)],
+        );
+        let out2 = TokenizedOutput::new(
+            vec![4, 5],
+            vec!["d".to_string(), "e".to_string()],
+            vec![(0, 1), (1, 2)],
+        );
         let mut batch = pad_and_collate(&[out1, out2], 0, Some(4));
         assert_eq!(batch.batch_size, 2);
         assert_eq!(batch.max_length, 4);
@@ -222,7 +252,7 @@ mod tests {
         let cleaned = clean_text("<p>Hello   World\x00!</p>", true, true, true);
         assert_eq!(cleaned, "Hello World!");
 
-        let filtered = filter_by_length(&[ "a".to_string(), "long_1".to_string() ], 2, 20);
+        let filtered = filter_by_length(&["a".to_string(), "long_1".to_string()], 2, 20);
         assert_eq!(filtered.len(), 1);
 
         let b = batch_iterator(vec!["1".to_string(), "2".to_string(), "3".to_string()], 2);

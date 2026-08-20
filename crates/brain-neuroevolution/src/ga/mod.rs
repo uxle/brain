@@ -7,11 +7,11 @@ pub mod termination;
 pub use termination::TerminationConfig;
 
 use crate::core::{EvoConfig, EvoResult};
-use crate::population::Population;
-use crate::fitness::{FitnessFn, FitnessStats};
-use crate::selection::tournament_select;
 use crate::crossover::single_point_crossover;
+use crate::fitness::{FitnessFn, FitnessStats};
 use crate::mutation::mutate_gaussian;
+use crate::population::Population;
+use crate::selection::tournament_select;
 use crate::utils::FastRng;
 
 pub type GaConfig = EvoConfig;
@@ -98,8 +98,22 @@ impl Ga {
                     (p1, p2)
                 };
 
-                mutate_gaussian(&mut c1, self.config.mutation_rate, 0.1, -5.0, 5.0, &mut self.rng);
-                mutate_gaussian(&mut c2, self.config.mutation_rate, 0.1, -5.0, 5.0, &mut self.rng);
+                mutate_gaussian(
+                    &mut c1,
+                    self.config.mutation_rate,
+                    0.1,
+                    -5.0,
+                    5.0,
+                    &mut self.rng,
+                );
+                mutate_gaussian(
+                    &mut c2,
+                    self.config.mutation_rate,
+                    0.1,
+                    -5.0,
+                    5.0,
+                    &mut self.rng,
+                );
 
                 next_gen.push(c1);
                 if next_gen.len() < self.config.population_size {
@@ -122,7 +136,13 @@ impl Ga {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

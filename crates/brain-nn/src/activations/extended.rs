@@ -12,8 +12,8 @@
 //! - `GLU` (Gated Linear Unit: a * sigmoid(b))
 //! - `SwiGLU` (Swish Gated Linear Unit: swish(a) * b)
 
-use brain_core::Tensor;
 use crate::activations::Activation;
+use brain_core::Tensor;
 
 /// Exponential Linear Unit: alpha * (exp(x) - 1) for x <= 0, x for x > 0.
 #[derive(Debug, Clone)]
@@ -219,7 +219,11 @@ impl Activation for HardTanh {
 /// Gated Linear Unit (GLU): splits input into two halves along `dim`, computes a * sigmoid(b).
 pub fn glu(input: &Tensor, dim: usize) -> Tensor {
     assert!(dim < input.ndim(), "glu: dim out of bounds");
-    assert_eq!(input.shape()[dim] % 2, 0, "glu: dimension size must be divisible by 2");
+    assert_eq!(
+        input.shape()[dim] % 2,
+        0,
+        "glu: dimension size must be divisible by 2"
+    );
 
     let chunks = input.chunk(2, dim);
     let a = &chunks[0];
@@ -231,7 +235,11 @@ pub fn glu(input: &Tensor, dim: usize) -> Tensor {
 /// Swish Gated Linear Unit (SwiGLU): splits input into two halves, computes Swish(a) * b.
 pub fn swiglu(input: &Tensor, dim: usize) -> Tensor {
     assert!(dim < input.ndim(), "swiglu: dim out of bounds");
-    assert_eq!(input.shape()[dim] % 2, 0, "swiglu: dimension size must be divisible by 2");
+    assert_eq!(
+        input.shape()[dim] % 2,
+        0,
+        "swiglu: dimension size must be divisible by 2"
+    );
 
     let chunks = input.chunk(2, dim);
     let a = &chunks[0];

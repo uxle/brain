@@ -12,10 +12,10 @@
 //! $$\text{where } \text{head}_i = \text{Attention}(Q W_i^Q, K W_i^K, V W_i^V)$$
 #![allow(missing_docs)]
 
-use brain_core::Tensor;
-use crate::module::{Module, ModuleResult};
-use crate::layers::linear::Linear;
 use super::attention::scaled_dot_product_attention;
+use crate::layers::linear::Linear;
+use crate::module::{Module, ModuleResult};
+use brain_core::Tensor;
 
 /// Configuration for MultiheadAttention.
 #[derive(Debug, Clone)]
@@ -27,7 +27,11 @@ pub struct MhaConfig {
 
 impl Default for MhaConfig {
     fn default() -> Self {
-        Self { embed_dim: 64, num_heads: 4, dropout: 0.0 }
+        Self {
+            embed_dim: 64,
+            num_heads: 4,
+            dropout: 0.0,
+        }
     }
 }
 
@@ -48,11 +52,21 @@ impl MultiheadAttention {
             k_proj: Linear::new(embed_dim, embed_dim, true),
             v_proj: Linear::new(embed_dim, embed_dim, true),
             out_proj: Linear::new(embed_dim, embed_dim, true),
-            config: MhaConfig { embed_dim, num_heads, dropout: 0.0 },
+            config: MhaConfig {
+                embed_dim,
+                num_heads,
+                dropout: 0.0,
+            },
         }
     }
 
-    pub fn forward_mha(&self, query: &Tensor, key: &Tensor, value: &Tensor, mask: Option<&Tensor>) -> ModuleResult<Tensor> {
+    pub fn forward_mha(
+        &self,
+        query: &Tensor,
+        key: &Tensor,
+        value: &Tensor,
+        mask: Option<&Tensor>,
+    ) -> ModuleResult<Tensor> {
         let q = self.q_proj.forward_tensor(query)?;
         let k = self.k_proj.forward_tensor(key)?;
         let v = self.v_proj.forward_tensor(value)?;
@@ -64,7 +78,11 @@ impl MultiheadAttention {
         let q_shape = q.shape();
         let batch = q_shape[0];
         let seq_q = if q_shape.len() > 1 { q_shape[1] } else { 1 };
-        let seq_k = if key.shape().len() > 1 { key.shape()[1] } else { 1 };
+        let seq_k = if key.shape().len() > 1 {
+            key.shape()[1]
+        } else {
+            1
+        };
 
         let q_vec = q.to_vec();
         let k_vec = k.to_vec();
@@ -132,7 +150,13 @@ impl Module for MultiheadAttention {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

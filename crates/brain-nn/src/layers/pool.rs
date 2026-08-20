@@ -17,9 +17,9 @@
 //! same honest-gap pattern used for Conv2d's dilation limitation.
 #![allow(missing_docs)]
 
+use crate::module::{Module, ModuleError, ModuleResult};
 use brain_autograd::Value;
 use brain_core::Tensor;
-use crate::module::{Module, ModuleResult, ModuleError};
 
 /// 2D Max Pooling layer.
 #[derive(Debug, Clone)]
@@ -30,7 +30,10 @@ pub struct MaxPool2d {
 
 impl MaxPool2d {
     pub fn new(kernel_size: usize, stride: usize) -> Self {
-        Self { kernel_size, stride }
+        Self {
+            kernel_size,
+            stride,
+        }
     }
 
     pub fn forward(&self, input: &Value) -> Value {
@@ -57,7 +60,10 @@ pub struct AvgPool2d {
 
 impl AvgPool2d {
     pub fn new(kernel_size: usize, stride: usize) -> Self {
-        Self { kernel_size, stride }
+        Self {
+            kernel_size,
+            stride,
+        }
     }
 
     pub fn forward(&self, input: &Value) -> Value {
@@ -107,7 +113,8 @@ impl Module for AdaptiveAvgPool2d {
             "AdaptiveAvgPool2d has no Value-based (differentiable) forward path yet -- \
              brain_autograd::Value has no adaptive-pooling primitive (Phase 0.2, tracked \
              and un-done). Use `forward_tensor_only()` for inference-only use, or wait for \
-             Phase 0.2.".to_string(),
+             Phase 0.2."
+                .to_string(),
         ))
     }
 }
@@ -137,7 +144,8 @@ impl Module for AdaptiveMaxPool2d {
             "AdaptiveMaxPool2d has no Value-based (differentiable) forward path yet -- \
              brain_autograd::Value has no adaptive-pooling primitive (Phase 0.2, tracked \
              and un-done). Use `forward_tensor_only()` for inference-only use, or wait for \
-             Phase 0.2.".to_string(),
+             Phase 0.2."
+                .to_string(),
         ))
     }
 }
@@ -153,10 +161,8 @@ mod tests {
         let t = Value::new(
             Tensor::from_slice(
                 &[
-                    1.0, 2.0, 3.0, 4.0,
-                    5.0, 6.0, 7.0, 8.0,
-                    9.0, 10.0, 11.0, 12.0,
-                    13.0, 14.0, 15.0, 16.0,
+                    1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0, 13.0, 14.0,
+                    15.0, 16.0,
                 ],
                 vec![1, 1, 4, 4],
             ),
@@ -173,10 +179,8 @@ mod tests {
         let t = Value::new(
             Tensor::from_slice(
                 &[
-                    1.0, 2.0, 3.0, 4.0,
-                    5.0, 6.0, 7.0, 8.0,
-                    9.0, 10.0, 11.0, 12.0,
-                    13.0, 14.0, 15.0, 16.0,
+                    1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0, 13.0, 14.0,
+                    15.0, 16.0,
                 ],
                 vec![1, 1, 4, 4],
             ),
@@ -194,10 +198,7 @@ mod tests {
     fn test_max_pool2d_gradient_routes_to_argmax_via_tape() {
         let mp = MaxPool2d::new(2, 2);
         let t = Value::new(
-            Tensor::from_slice(
-                &[1.0, 2.0, 3.0, 4.0],
-                vec![1, 1, 2, 2],
-            ),
+            Tensor::from_slice(&[1.0, 2.0, 3.0, 4.0], vec![1, 1, 2, 2]),
             true,
         );
         let out = mp.forward(&t);

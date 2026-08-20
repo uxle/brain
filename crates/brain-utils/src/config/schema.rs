@@ -3,9 +3,9 @@
 //! Provides schema definition, type checking, range validation, and constraint
 //! enforcement for configuration parameters.
 
-use std::collections::BTreeMap;
-use crate::core::{UtilsError, UtilsResult};
 use super::ConfigManager;
+use crate::core::{UtilsError, UtilsResult};
+use std::collections::BTreeMap;
 
 /// Supported schema field data types.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -195,7 +195,8 @@ impl SchemaValidator {
             }
             FieldType::Boolean => {
                 let lower = val.to_lowercase();
-                if !["true", "false", "1", "0", "yes", "no", "on", "off"].contains(&lower.as_str()) {
+                if !["true", "false", "1", "0", "yes", "no", "on", "off"].contains(&lower.as_str())
+                {
                     return Err(UtilsError::ValidationError(format!(
                         "Key '{}' expected boolean flag, found '{}'",
                         field.name, val
@@ -219,7 +220,9 @@ impl SchemaValidator {
                     if val.len() < *min_len {
                         return Err(UtilsError::ValidationError(format!(
                             "Key '{}' length {} shorter than minimum {}",
-                            field.name, val.len(), min_len
+                            field.name,
+                            val.len(),
+                            min_len
                         )));
                     }
                 }
@@ -227,7 +230,9 @@ impl SchemaValidator {
                     if val.len() > *max_len {
                         return Err(UtilsError::ValidationError(format!(
                             "Key '{}' length {} exceeds maximum {}",
-                            field.name, val.len(), max_len
+                            field.name,
+                            val.len(),
+                            max_len
                         )));
                     }
                 }
@@ -256,25 +261,26 @@ mod tests {
         schema.add_field(
             FieldDef::required("learning_rate", FieldType::Float)
                 .with_constraint(Constraint::MinFloat(0.00001))
-                .with_constraint(Constraint::MaxFloat(1.0))
+                .with_constraint(Constraint::MaxFloat(1.0)),
         );
         schema.add_field(
             FieldDef::required("batch_size", FieldType::Integer)
                 .with_constraint(Constraint::MinInt(1))
-                .with_constraint(Constraint::MaxInt(4096))
+                .with_constraint(Constraint::MaxInt(4096)),
         );
         schema.add_field(
-            FieldDef::optional("optimizer", FieldType::String, "adam")
-                .with_constraint(Constraint::OneOf(vec!["adam".into(), "sgd".into(), "adamw".into()]))
+            FieldDef::optional("optimizer", FieldType::String, "adam").with_constraint(
+                Constraint::OneOf(vec!["adam".into(), "sgd".into(), "adamw".into()]),
+            ),
         );
-    
+
         let mut cfg = ConfigManager::new();
         cfg.set("learning_rate", "0.001", ConfigSource::Defaults);
         cfg.set("batch_size", "32", ConfigSource::Defaults);
         cfg.set("optimizer", "adamw", ConfigSource::Defaults);
-    
+
         assert!(schema.validate(&cfg).is_ok());
-    
+
         cfg.set("batch_size", "0", ConfigSource::Override);
         assert!(schema.validate(&cfg).is_err());
     }

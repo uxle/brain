@@ -9,8 +9,8 @@ pub mod sampler;
 pub use ops::*;
 pub use sampler::*;
 
-use brain_core::Tensor;
 use crate::core::GnnError;
+use brain_core::Tensor;
 
 /// Configuration parameters for graph creation.
 #[derive(Debug, Clone, Default)]
@@ -44,12 +44,18 @@ impl Graph {
         }
         for &s in &src_nodes {
             if s >= num_nodes {
-                return Err(GnnError::NodeOutOfBounds { index: s, max: num_nodes });
+                return Err(GnnError::NodeOutOfBounds {
+                    index: s,
+                    max: num_nodes,
+                });
             }
         }
         for &d in &dst_nodes {
             if d >= num_nodes {
-                return Err(GnnError::NodeOutOfBounds { index: d, max: num_nodes });
+                return Err(GnnError::NodeOutOfBounds {
+                    index: d,
+                    max: num_nodes,
+                });
             }
         }
         if node_features.shape()[0] != num_nodes {
@@ -101,7 +107,13 @@ impl Graph {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

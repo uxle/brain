@@ -12,7 +12,7 @@
 //! - [`position_ids`] — generate position index tensors
 //! - [`token_interpolate`] — interpolate token sequences to new length
 
-use crate::core::{VitError, VitResult, Tensor2D, SimpleRng};
+use crate::core::{SimpleRng, Tensor2D, VitError, VitResult};
 
 /// Extract non-overlapping patches from a batch of images.
 ///
@@ -44,17 +44,27 @@ pub fn extract_patches(
     patch_h: usize,
     patch_w: usize,
 ) -> VitResult<Vec<f64>> {
-    if batch == 0 { return Err(VitError::EmptyBatch); }
+    if batch == 0 {
+        return Err(VitError::EmptyBatch);
+    }
     if !height.is_multiple_of(patch_h) {
-        return Err(VitError::InvalidPatchSize { image_dim: height, patch_size: patch_h });
+        return Err(VitError::InvalidPatchSize {
+            image_dim: height,
+            patch_size: patch_h,
+        });
     }
     if !width.is_multiple_of(patch_w) {
-        return Err(VitError::InvalidPatchSize { image_dim: width, patch_size: patch_w });
+        return Err(VitError::InvalidPatchSize {
+            image_dim: width,
+            patch_size: patch_w,
+        });
     }
     let expected = batch * channels * height * width;
     if images.len() != expected {
         return Err(VitError::Shape(format!(
-            "extract_patches: expected {} elements, got {}", expected, images.len()
+            "extract_patches: expected {} elements, got {}",
+            expected,
+            images.len()
         )));
     }
 
@@ -76,11 +86,12 @@ pub fn extract_patches(
                             // Input index: [b, c, iy, ix]
                             let in_idx = b * channels * height * width
                                 + c * height * width
-                                + iy * width + ix;
+                                + iy * width
+                                + ix;
                             // Output index: [b, patch_idx, c * patch_h * patch_w + dy * patch_w + dx]
                             let feat_idx = c * patch_h * patch_w + dy * patch_w + dx;
-                            let out_idx = b * num_patches * patch_dim
-                                + patch_idx * patch_dim + feat_idx;
+                            let out_idx =
+                                b * num_patches * patch_dim + patch_idx * patch_dim + feat_idx;
                             out[out_idx] = images[in_idx];
                         }
                     }
@@ -109,7 +120,9 @@ pub fn reconstruct_patches(
     patch_h: usize,
     patch_w: usize,
 ) -> VitResult<Vec<f64>> {
-    if batch == 0 { return Err(VitError::EmptyBatch); }
+    if batch == 0 {
+        return Err(VitError::EmptyBatch);
+    }
     let gh = height / patch_h;
     let gw = width / patch_w;
     let num_patches = gh * gw;
@@ -117,7 +130,9 @@ pub fn reconstruct_patches(
     let expected = batch * num_patches * patch_dim;
     if patches.len() != expected {
         return Err(VitError::Shape(format!(
-            "reconstruct_patches: expected {} elements, got {}", expected, patches.len()
+            "reconstruct_patches: expected {} elements, got {}",
+            expected,
+            patches.len()
         )));
     }
 
@@ -132,10 +147,12 @@ pub fn reconstruct_patches(
                             let iy = ph * patch_h + dy;
                             let ix = pw * patch_w + dx;
                             let feat_idx = c * patch_h * patch_w + dy * patch_w + dx;
-                            let in_idx = b * num_patches * patch_dim
-                                + patch_idx * patch_dim + feat_idx;
+                            let in_idx =
+                                b * num_patches * patch_dim + patch_idx * patch_dim + feat_idx;
                             let out_idx = b * channels * height * width
-                                + c * height * width + iy * width + ix;
+                                + c * height * width
+                                + iy * width
+                                + ix;
                             out[out_idx] = patches[in_idx];
                         }
                     }
@@ -158,7 +175,9 @@ pub fn patchify(
     let expected = batch * num_patches * patch_dim;
     if patches.len() != expected {
         return Err(VitError::Shape(format!(
-            "patchify: expected {} elements, got {}", expected, patches.len()
+            "patchify: expected {} elements, got {}",
+            expected,
+            patches.len()
         )));
     }
     let mut out = patches.to_vec();
@@ -168,7 +187,8 @@ pub fn patchify(
             let start = (b * num_patches + p) * patch_dim;
             let slice = &mut out[start..start + patch_dim];
             let mean: f64 = slice.iter().sum::<f64>() / patch_dim as f64;
-            let var: f64 = slice.iter().map(|&x| (x - mean).powi(2)).sum::<f64>() / patch_dim as f64;
+            let var: f64 =
+                slice.iter().map(|&x| (x - mean).powi(2)).sum::<f64>() / patch_dim as f64;
             let std = (var + 1e-6).sqrt();
             for x in slice.iter_mut() {
                 *x = (*x - mean) / std;
@@ -197,10 +217,15 @@ pub fn add_cls_token(
 ) -> VitResult<Vec<f64>> {
     let expected = batch * num_tokens * dim;
     if tokens.len() != expected {
-        return Err(VitError::Shape("add_cls_token: tokens shape mismatch".to_string()));
+        return Err(VitError::Shape(
+            "add_cls_token: tokens shape mismatch".to_string(),
+        ));
     }
     if cls.len() != dim {
-        return Err(VitError::DimMismatch { expected: dim, got: cls.len() });
+        return Err(VitError::DimMismatch {
+            expected: dim,
+            got: cls.len(),
+        });
     }
     let new_len = batch * (num_tokens + 1) * dim;
     let mut out = vec![0.0f64; new_len];
@@ -229,11 +254,15 @@ pub fn split_cls_token(
     let expected = batch * seq_len * dim;
     if tokens.len() != expected {
         return Err(VitError::Shape(format!(
-            "split_cls_token: expected {} got {}", expected, tokens.len()
+            "split_cls_token: expected {} got {}",
+            expected,
+            tokens.len()
         )));
     }
     if seq_len == 0 {
-        return Err(VitError::Shape("split_cls_token: seq_len must be > 0".to_string()));
+        return Err(VitError::Shape(
+            "split_cls_token: seq_len must be > 0".to_string(),
+        ));
     }
     let n_rest = seq_len - 1;
     let mut cls_out = vec![0.0f64; batch * dim];
@@ -263,11 +292,15 @@ pub fn mask_patches(
 ) -> VitResult<(Vec<f64>, Vec<usize>)> {
     let expected = batch * num_tokens * dim;
     if tokens.len() != expected {
-        return Err(VitError::Shape("mask_patches: tokens shape mismatch".to_string()));
+        return Err(VitError::Shape(
+            "mask_patches: tokens shape mismatch".to_string(),
+        ));
     }
     if mask.len() != num_tokens {
         return Err(VitError::Shape(format!(
-            "mask_patches: mask length {} != num_tokens {}", mask.len(), num_tokens
+            "mask_patches: mask length {} != num_tokens {}",
+            mask.len(),
+            num_tokens
         )));
     }
     let kept: Vec<usize> = (0..num_tokens).filter(|&i| mask[i]).collect();
@@ -300,13 +333,19 @@ pub fn token_interpolate(
     new_len: usize,
 ) -> VitResult<Vec<f64>> {
     if tokens.len() != seq_len * dim {
-        return Err(VitError::Shape("token_interpolate: shape mismatch".to_string()));
+        return Err(VitError::Shape(
+            "token_interpolate: shape mismatch".to_string(),
+        ));
     }
     if new_len == 0 {
-        return Err(VitError::Shape("token_interpolate: new_len must be > 0".to_string()));
+        return Err(VitError::Shape(
+            "token_interpolate: new_len must be > 0".to_string(),
+        ));
     }
     if seq_len == 0 {
-        return Err(VitError::Shape("token_interpolate: seq_len must be > 0".to_string()));
+        return Err(VitError::Shape(
+            "token_interpolate: seq_len must be > 0".to_string(),
+        ));
     }
     let mut out = vec![0.0f64; new_len * dim];
     for j in 0..new_len {
@@ -335,11 +374,15 @@ pub fn add_pos_embed(
     let expected_tok = batch * seq_len * dim;
     let expected_pos = seq_len * dim;
     if tokens.len() != expected_tok {
-        return Err(VitError::Shape("add_pos_embed: tokens shape mismatch".to_string()));
+        return Err(VitError::Shape(
+            "add_pos_embed: tokens shape mismatch".to_string(),
+        ));
     }
     if pos_embed.len() != expected_pos {
         return Err(VitError::Shape(format!(
-            "add_pos_embed: pos_embed expected {} got {}", expected_pos, pos_embed.len()
+            "add_pos_embed: pos_embed expected {} got {}",
+            expected_pos,
+            pos_embed.len()
         )));
     }
     for b in 0..batch {
@@ -356,7 +399,9 @@ pub fn add_pos_embed(
 /// Apply dropout to a slice (training mode only).
 /// Uses simple threshold: if `rng.next_f64() < rate`, set to 0; else scale by 1/(1-rate).
 pub fn apply_dropout(data: &mut [f64], rate: f64, rng: &mut SimpleRng) {
-    if rate <= 0.0 { return; }
+    if rate <= 0.0 {
+        return;
+    }
     let scale = 1.0 / (1.0 - rate).max(1e-7);
     for x in data.iter_mut() {
         if rng.next_f64() < rate {
@@ -377,10 +422,15 @@ pub fn scaled_dot_product_attention(
     v: &Tensor2D,
 ) -> VitResult<(Tensor2D, Tensor2D)> {
     if q.cols != k.cols || q.cols != v.cols {
-        return Err(VitError::DimMismatch { expected: q.cols, got: k.cols });
+        return Err(VitError::DimMismatch {
+            expected: q.cols,
+            got: k.cols,
+        });
     }
     if k.rows != v.rows {
-        return Err(VitError::Shape("SDPA: K and V must have same seq length".to_string()));
+        return Err(VitError::Shape(
+            "SDPA: K and V must have same seq length".to_string(),
+        ));
     }
     let scale = (q.cols as f64).sqrt();
     // scores = Q @ K^T / sqrt(d_k)
@@ -423,7 +473,9 @@ pub fn mlp_forward(
         }
     }
     // activation
-    for x in h.data.iter_mut() { *x = act.apply(*x); }
+    for x in h.data.iter_mut() {
+        *x = act.apply(*x);
+    }
     // out = h @ w2^T + b2
     let w2t = w2.transpose();
     let mut out = h.matmul(&w2t)?;
@@ -442,16 +494,15 @@ pub fn mlp_forward(
 /// - `weight`: `[d_out, d_in]`
 /// - `bias`: optional `[d_out]`
 #[allow(clippy::needless_range_loop)]
-pub fn linear(
-    input: &Tensor2D,
-    weight: &Tensor2D,
-    bias: Option<&[f64]>,
-) -> VitResult<Tensor2D> {
+pub fn linear(input: &Tensor2D, weight: &Tensor2D, bias: Option<&[f64]>) -> VitResult<Tensor2D> {
     let wt = weight.transpose();
     let mut out = input.matmul(&wt)?;
     if let Some(b) = bias {
         if b.len() != out.cols {
-            return Err(VitError::DimMismatch { expected: out.cols, got: b.len() });
+            return Err(VitError::DimMismatch {
+                expected: out.cols,
+                got: b.len(),
+            });
         }
         for r in 0..out.rows {
             for c in 0..out.cols {
@@ -469,7 +520,11 @@ pub fn stochastic_depth_scale(rate: f64, training: bool, rng: &mut SimpleRng) ->
     if !training || rate <= 0.0 {
         return 1.0;
     }
-    if rng.next_f64() < rate { 0.0 } else { 1.0 / (1.0 - rate) }
+    if rng.next_f64() < rate {
+        0.0
+    } else {
+        1.0 / (1.0 - rate)
+    }
 }
 
 #[cfg(test)]
@@ -484,7 +539,7 @@ mod tests {
         let img: Vec<f64> = (0..16).map(|x| x as f64).collect();
         let patches = extract_patches(&img, 1, 1, 4, 4, 2, 2).unwrap();
         assert_eq!(patches.len(), 1 * 4 * 4); // 4 patches, each 4 elements
-        // First patch: pixels (0,0),(0,1),(1,0),(1,1) = 0,1,4,5
+                                              // First patch: pixels (0,0),(0,1),(1,0),(1,1) = 0,1,4,5
         assert_eq!(patches[0], 0.0);
         assert_eq!(patches[1], 1.0);
         assert_eq!(patches[2], 4.0);
@@ -521,9 +576,13 @@ mod tests {
         let out = add_cls_token(&tokens, &cls, 2, 4, 8).unwrap();
         assert_eq!(out.len(), 2 * 5 * 8);
         // First 8 elements of batch 0 should be cls
-        for i in 0..8 { assert_eq!(out[i], 99.0); }
+        for i in 0..8 {
+            assert_eq!(out[i], 99.0);
+        }
         // Next 32 should be the original tokens
-        for i in 8..40 { assert_eq!(out[i], 1.0); }
+        for i in 8..40 {
+            assert_eq!(out[i], 1.0);
+        }
     }
 
     #[test]
@@ -545,7 +604,9 @@ mod tests {
         let (cls, rest) = split_cls_token(&with_cls, 2, 5, 8).unwrap();
         assert_eq!(cls.len(), 2 * 8);
         assert_eq!(rest.len(), 2 * 4 * 8);
-        for i in 0..8 { assert_eq!(cls[i], 99.0); }
+        for i in 0..8 {
+            assert_eq!(cls[i], 99.0);
+        }
         let _ = tokens; // suppress unused warning
     }
 
@@ -629,17 +690,21 @@ mod tests {
 
     #[test]
     fn test_scaled_dot_product_attention() {
-        let q = Tensor2D::from_data(3, 4, vec![
-            1.0, 0.0, 0.0, 0.0,
-            0.0, 1.0, 0.0, 0.0,
-            0.0, 0.0, 1.0, 0.0,
-        ]).unwrap();
+        let q = Tensor2D::from_data(
+            3,
+            4,
+            vec![1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0],
+        )
+        .unwrap();
         let k = q.clone();
-        let v = Tensor2D::from_data(3, 4, vec![
-            1.0, 2.0, 3.0, 4.0,
-            5.0, 6.0, 7.0, 8.0,
-            9.0,10.0,11.0,12.0,
-        ]).unwrap();
+        let v = Tensor2D::from_data(
+            3,
+            4,
+            vec![
+                1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0,
+            ],
+        )
+        .unwrap();
         let (out, attn) = scaled_dot_product_attention(&q, &k, &v).unwrap();
         assert_eq!(out.rows, 3);
         assert_eq!(out.cols, 4);
@@ -652,7 +717,7 @@ mod tests {
 
     #[test]
     fn test_linear() {
-        let input = Tensor2D::from_data(2, 3, vec![1.0,0.0,0.0, 0.0,1.0,0.0]).unwrap();
+        let input = Tensor2D::from_data(2, 3, vec![1.0, 0.0, 0.0, 0.0, 1.0, 0.0]).unwrap();
         let weight = Tensor2D::from_data(4, 3, (0..12).map(|x| x as f64).collect()).unwrap();
         let out = linear(&input, &weight, None).unwrap();
         assert_eq!(out.rows, 2);
@@ -662,7 +727,7 @@ mod tests {
     #[test]
     fn test_linear_with_bias() {
         let input = Tensor2D::from_data(1, 2, vec![1.0, 0.0]).unwrap();
-        let weight = Tensor2D::from_data(2, 2, vec![1.0,0.0, 0.0,1.0]).unwrap();
+        let weight = Tensor2D::from_data(2, 2, vec![1.0, 0.0, 0.0, 1.0]).unwrap();
         let bias = vec![10.0, 20.0];
         let out = linear(&input, &weight, Some(&bias)).unwrap();
         assert!((out.get(0, 0) - 11.0).abs() < 1e-9);
@@ -671,7 +736,7 @@ mod tests {
 
     #[test]
     fn test_layer_norm_2d() {
-        let t = Tensor2D::from_data(1, 4, vec![1.0,2.0,3.0,4.0]).unwrap();
+        let t = Tensor2D::from_data(1, 4, vec![1.0, 2.0, 3.0, 4.0]).unwrap();
         let n = layer_norm_2d(&t, 1e-5);
         let mean: f64 = n.data.iter().sum::<f64>() / 4.0;
         assert!(mean.abs() < 1e-5);
@@ -743,9 +808,13 @@ mod tests {
         let full = add_cls_token(&patches, &cls, 2, 4, 8).unwrap();
         let (cls_out, rest) = split_cls_token(&full, 2, 5, 8).unwrap();
         // CLS values preserved
-        for i in 0..8 { assert_eq!(cls_out[i], 9.0); }
+        for i in 0..8 {
+            assert_eq!(cls_out[i], 9.0);
+        }
         // Rest values preserved
-        for &v in rest.iter() { assert_eq!(v, 1.0); }
+        for &v in rest.iter() {
+            assert_eq!(v, 1.0);
+        }
     }
 
     #[test]
@@ -759,21 +828,26 @@ mod tests {
     #[test]
     fn test_mlp_forward_identity() {
         // With identity weight matrices and zero biases
-        let input = Tensor2D::from_data(2, 4, vec![
-            1.0,2.0,3.0,4.0, 5.0,6.0,7.0,8.0
-        ]).unwrap();
+        let input =
+            Tensor2D::from_data(2, 4, vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0]).unwrap();
         // w1: identity-like [8, 4] will project to 8 dims, then w2 projects back to 4
         let w1 = Tensor2D::from_data(8, 4, {
             let mut data = vec![0.0f64; 32];
-            for i in 0..4 { data[i * 4 + i] = 1.0; } // first 4 rows are identity
+            for i in 0..4 {
+                data[i * 4 + i] = 1.0;
+            } // first 4 rows are identity
             data
-        }).unwrap();
+        })
+        .unwrap();
         let b1 = vec![0.0f64; 8];
         let w2 = Tensor2D::from_data(4, 8, {
             let mut data = vec![0.0f64; 32];
-            for i in 0..4 { data[i * 8 + i] = 1.0; } // first 4 cols are identity
+            for i in 0..4 {
+                data[i * 8 + i] = 1.0;
+            } // first 4 cols are identity
             data
-        }).unwrap();
+        })
+        .unwrap();
         let b2 = vec![0.0f64; 4];
         let act = Activation::Relu;
         let out = mlp_forward(&input, &w1, &b1, &w2, &b2, &act).unwrap();

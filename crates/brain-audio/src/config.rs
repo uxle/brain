@@ -109,10 +109,16 @@ impl STFTConfig {
             return Err(BrainError::invalid_value("sample_rate must be > 0"));
         }
         if self.n_fft == 0 || (self.n_fft & (self.n_fft - 1)) != 0 {
-            return Err(BrainError::invalid_value(format!("n_fft must be a power of two, got {}", self.n_fft)));
+            return Err(BrainError::invalid_value(format!(
+                "n_fft must be a power of two, got {}",
+                self.n_fft
+            )));
         }
         if self.win_length == 0 || self.win_length > self.n_fft {
-            return Err(BrainError::invalid_value(format!("win_length ({}) must be between 1 and n_fft ({})", self.win_length, self.n_fft)));
+            return Err(BrainError::invalid_value(format!(
+                "win_length ({}) must be between 1 and n_fft ({})",
+                self.win_length, self.n_fft
+            )));
         }
         if self.hop_length == 0 {
             return Err(BrainError::invalid_value("hop_length must be > 0"));
@@ -185,7 +191,10 @@ impl MelConfig {
         let nyquist = self.stft.sample_rate as f64 / 2.0;
         if let Some(f_max) = self.f_max {
             if f_max <= self.f_min || f_max > nyquist {
-                return Err(BrainError::invalid_value(format!("f_max ({}) must be between f_min ({}) and Nyquist ({})", f_max, self.f_min, nyquist)));
+                return Err(BrainError::invalid_value(format!(
+                    "f_max ({}) must be between f_min ({}) and Nyquist ({})",
+                    f_max, self.f_min, nyquist
+                )));
             }
         }
         Ok(())
@@ -224,7 +233,10 @@ impl MFCCConfig {
     pub fn validate(&self) -> BrainResult<()> {
         self.mel.validate()?;
         if self.n_mfcc == 0 || self.n_mfcc > self.mel.n_mels {
-            return Err(BrainError::invalid_value(format!("n_mfcc ({}) must be between 1 and n_mels ({})", self.n_mfcc, self.mel.n_mels)));
+            return Err(BrainError::invalid_value(format!(
+                "n_mfcc ({}) must be between 1 and n_mels ({})",
+                self.n_mfcc, self.mel.n_mels
+            )));
         }
         if self.lifter < 0.0 {
             return Err(BrainError::invalid_value("lifter parameter must be >= 0.0"));

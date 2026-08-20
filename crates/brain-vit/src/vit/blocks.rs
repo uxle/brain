@@ -7,9 +7,9 @@
 //! 4. MLP (two linear layers with GELU)
 //! 5. Residual + optional stochastic depth
 
-use crate::core::{VitError, VitResult, Tensor2D, Tensor3D, SimpleRng};
 use crate::config::VitBlockConfig;
-use crate::ops::{layer_norm_2d, mlp_forward, linear, scaled_dot_product_attention};
+use crate::core::{SimpleRng, Tensor2D, Tensor3D, VitError, VitResult};
+use crate::ops::{layer_norm_2d, linear, mlp_forward, scaled_dot_product_attention};
 
 /// A single ViT transformer block.
 ///
@@ -56,7 +56,11 @@ impl VitBlock {
         let mlp_dim = config.mlp_dim();
 
         let qkv_w = rng.xavier_uniform(3 * d, d);
-        let qkv_b = if config.qkv_bias { rng.gen_vec(3 * d, 0.0, 0.0) } else { vec![0.0; 3 * d] };
+        let qkv_b = if config.qkv_bias {
+            rng.gen_vec(3 * d, 0.0, 0.0)
+        } else {
+            vec![0.0; 3 * d]
+        };
         let out_w = rng.xavier_uniform(d, d);
         let mlp1_w = rng.xavier_uniform(mlp_dim, d);
         let mlp1_b = vec![0.0f64; mlp_dim];
@@ -65,8 +69,13 @@ impl VitBlock {
 
         Ok(Self {
             config: config.clone(),
-            qkv_w, qkv_b, out_w,
-            mlp1_w, mlp1_b, mlp2_w, mlp2_b,
+            qkv_w,
+            qkv_b,
+            out_w,
+            mlp1_w,
+            mlp1_b,
+            mlp2_w,
+            mlp2_b,
             rng,
             training: true,
         })
@@ -76,7 +85,10 @@ impl VitBlock {
     pub fn forward(&self, tokens: &Tensor3D) -> VitResult<Tensor3D> {
         let (batch, seq_len, embed_dim) = (tokens.batch, tokens.seq, tokens.dim);
         if embed_dim != self.config.embed_dim {
-            return Err(VitError::DimMismatch { expected: self.config.embed_dim, got: embed_dim });
+            return Err(VitError::DimMismatch {
+                expected: self.config.embed_dim,
+                got: embed_dim,
+            });
         }
 
         let head_dim = self.config.head_dim();
@@ -92,10 +104,14 @@ impl VitBlock {
         let mut out_data = vec![0.0f64; batch * seq_len * embed_dim];
 
         for b in 0..batch {
-            let tok_data: Vec<f64> = (0..seq_len).flat_map(|s|
-                tokens.data[b * seq_len * embed_dim + s * embed_dim
-                    ..b * seq_len * embed_dim + (s + 1) * embed_dim].iter().copied()
-            ).collect();
+            let tok_data: Vec<f64> = (0..seq_len)
+                .flat_map(|s| {
+                    tokens.data[b * seq_len * embed_dim + s * embed_dim
+                        ..b * seq_len * embed_dim + (s + 1) * embed_dim]
+                        .iter()
+                        .copied()
+                })
+                .collect();
             let tok_mat = Tensor2D::from_data(seq_len, embed_dim, tok_data)?;
 
             // Pre-LN
@@ -106,15 +122,27 @@ impl VitBlock {
 
             // Use first head's Q, K, V (simplified)
             let q_data: Vec<f64> = (0..seq_len)
-                .flat_map(|s| qkv.data[s * 3 * embed_dim..s * 3 * embed_dim + head_dim].iter().copied())
+                .flat_map(|s| {
+                    qkv.data[s * 3 * embed_dim..s * 3 * embed_dim + head_dim]
+                        .iter()
+                        .copied()
+                })
                 .collect();
             let k_data: Vec<f64> = (0..seq_len)
-                .flat_map(|s| qkv.data[s * 3 * embed_dim + embed_dim
-                    ..s * 3 * embed_dim + embed_dim + head_dim].iter().copied())
+                .flat_map(|s| {
+                    qkv.data
+                        [s * 3 * embed_dim + embed_dim..s * 3 * embed_dim + embed_dim + head_dim]
+                        .iter()
+                        .copied()
+                })
                 .collect();
             let v_data: Vec<f64> = (0..seq_len)
-                .flat_map(|s| qkv.data[s * 3 * embed_dim + 2 * embed_dim
-                    ..s * 3 * embed_dim + 2 * embed_dim + head_dim].iter().copied())
+                .flat_map(|s| {
+                    qkv.data[s * 3 * embed_dim + 2 * embed_dim
+                        ..s * 3 * embed_dim + 2 * embed_dim + head_dim]
+                        .iter()
+                        .copied()
+                })
                 .collect();
 
             let q = Tensor2D::from_data(seq_len, head_dim, q_data)?;
@@ -141,8 +169,10 @@ impl VitBlock {
             // MLP
             let mlp_out = mlp_forward(
                 &normed2,
-                &mlp1_w_mat, &self.mlp1_b,
-                &mlp2_w_mat, &self.mlp2_b,
+                &mlp1_w_mat,
+                &self.mlp1_b,
+                &mlp2_w_mat,
+                &self.mlp2_b,
                 &activation,
             )?;
 
@@ -157,16 +187,20 @@ impl VitBlock {
 
     /// Parameter count of this block.
     pub fn num_params(&self) -> usize {
-        self.qkv_w.len() + self.qkv_b.len() + self.out_w.len()
-            + self.mlp1_w.len() + self.mlp1_b.len()
-            + self.mlp2_w.len() + self.mlp2_b.len()
+        self.qkv_w.len()
+            + self.qkv_b.len()
+            + self.out_w.len()
+            + self.mlp1_w.len()
+            + self.mlp1_b.len()
+            + self.mlp2_w.len()
+            + self.mlp2_b.len()
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::{VitBlockConfig, Activation};
+    use crate::config::{Activation, VitBlockConfig};
     use crate::core::Tensor3D;
 
     fn small_cfg() -> VitBlockConfig {

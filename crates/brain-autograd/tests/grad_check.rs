@@ -4,7 +4,11 @@ use brain_autograd::Value;
 use brain_core::Tensor;
 
 fn approx(a: f64, b: f64) -> bool {
-    let r = if a.abs() > 1e-8 { (a - b).abs() / a.abs() } else { (a - b).abs() };
+    let r = if a.abs() > 1e-8 {
+        (a - b).abs() / a.abs()
+    } else {
+        (a - b).abs()
+    };
     r < 1e-4
 }
 
@@ -54,7 +58,11 @@ where
         assert!(
             rel_err < tol,
             "VJP mismatch in [{}]: idx {}, analytic={:.6}, numeric={:.6}, rel_err={:.6}",
-            name, i, a, n, rel_err
+            name,
+            i,
+            a,
+            n,
+            rel_err
         );
     }
 }
@@ -67,7 +75,11 @@ pub fn assert_grads_close(name: &str, an: &[f64], num: &[f64]) {
         assert!(
             rel_err <= tol,
             "VJP mismatch in [{}]: idx {}, analytic={:.6}, numeric={:.6}, rel_err={:.6}",
-            name, i, a, n, rel_err
+            name,
+            i,
+            a,
+            n,
+            rel_err
         );
     }
 }
@@ -118,7 +130,14 @@ fn check_scalar_ops() {
 #[test]
 fn check_new_unary_ops() {
     // abs: away from the kink at 0
-    check_gradient("abs", |x: &Value| x.abs().sum(), &[1.5, -2.0, 0.5, -3.3], &[4], 1e-5, 1e-4);
+    check_gradient(
+        "abs",
+        |x: &Value| x.abs().sum(),
+        &[1.5, -2.0, 0.5, -3.3],
+        &[4],
+        1e-5,
+        1e-4,
+    );
 
     // clamp: interior points get full gradient
     check_gradient(
@@ -131,14 +150,42 @@ fn check_new_unary_ops() {
     );
 
     // sin / cos
-    check_gradient("sin", |x: &Value| x.sin().sum(), &[0.3, 1.1, -2.0, 3.5], &[4], 1e-5, 1e-4);
-    check_gradient("cos", |x: &Value| x.cos().sum(), &[0.3, 1.1, -2.0, 3.5], &[4], 1e-5, 1e-4);
+    check_gradient(
+        "sin",
+        |x: &Value| x.sin().sum(),
+        &[0.3, 1.1, -2.0, 3.5],
+        &[4],
+        1e-5,
+        1e-4,
+    );
+    check_gradient(
+        "cos",
+        |x: &Value| x.cos().sum(),
+        &[0.3, 1.1, -2.0, 3.5],
+        &[4],
+        1e-5,
+        1e-4,
+    );
 
     // recip: away from the pole at 0
-    check_gradient("recip", |x: &Value| x.recip().sum(), &[0.5, 2.0, -3.0, 1.5], &[4], 1e-5, 1e-4);
+    check_gradient(
+        "recip",
+        |x: &Value| x.recip().sum(),
+        &[0.5, 2.0, -3.0, 1.5],
+        &[4],
+        1e-5,
+        1e-4,
+    );
 
     // square
-    check_gradient("square", |x: &Value| x.square().sum(), &[0.5, -2.0, 3.0, -0.5], &[4], 1e-5, 1e-4);
+    check_gradient(
+        "square",
+        |x: &Value| x.square().sum(),
+        &[0.5, -2.0, 3.0, -0.5],
+        &[4],
+        1e-5,
+        1e-4,
+    );
 
     // sign: piecewise constant -> gradient is exactly zero
     let mut x = Value::from_slice(&[3.0, -2.0, 0.0], vec![3]);
@@ -301,12 +348,7 @@ fn check_pow_grad() {
     for &p in &[2.0, 3.0, 0.5, -1.0] {
         for &x in &xs {
             let p_val = Value::scalar(p);
-            check(
-                &format!("pow_{}", p),
-                x,
-                |v| v.pow(&p_val),
-                |v| v.powf(p),
-            );
+            check(&format!("pow_{}", p), x, |v| v.pow(&p_val), |v| v.powf(p));
         }
     }
 }
@@ -337,10 +379,24 @@ fn check_broadcast_mul_grad() {
     let b_shape = vec![1, 3];
 
     let b_val = Value::from_slice(&b_data, b_shape);
-    check_gradient("broadcast_mul_a", |a| (a * &b_val).sum(), &a_data, &a_shape, 1e-5, 1e-4);
+    check_gradient(
+        "broadcast_mul_a",
+        |a| (a * &b_val).sum(),
+        &a_data,
+        &a_shape,
+        1e-5,
+        1e-4,
+    );
 
     let a_val = Value::from_slice(&a_data, a_shape);
-    check_gradient("broadcast_mul_b", |b| (&a_val * b).sum(), &b_data, &vec![1, 3], 1e-5, 1e-4);
+    check_gradient(
+        "broadcast_mul_b",
+        |b| (&a_val * b).sum(),
+        &b_data,
+        &vec![1, 3],
+        1e-5,
+        1e-4,
+    );
 }
 
 #[test]
@@ -348,12 +404,26 @@ fn check_broadcast_add_shapes() {
     // a: [3, 1], b: [1, 4] -> [3, 4]
     let a_data = vec![1.0, 2.0, 3.0];
     let b_data = vec![0.1, 0.2, 0.3, 0.4];
-    
+
     let b_val = Value::from_slice(&b_data, vec![1, 4]);
-    check_gradient("broadcast_add_3x1", |a| (a + &b_val).sum(), &a_data, &vec![3, 1], 1e-5, 1e-4);
+    check_gradient(
+        "broadcast_add_3x1",
+        |a| (a + &b_val).sum(),
+        &a_data,
+        &vec![3, 1],
+        1e-5,
+        1e-4,
+    );
 
     let a_val = Value::from_slice(&a_data, vec![3, 1]);
-    check_gradient("broadcast_add_1x4", |b| (&a_val + b).sum(), &b_data, &vec![1, 4], 1e-5, 1e-4);
+    check_gradient(
+        "broadcast_add_1x4",
+        |b| (&a_val + b).sum(),
+        &b_data,
+        &vec![1, 4],
+        1e-5,
+        1e-4,
+    );
 }
 
 // =============================================================================
@@ -374,8 +444,22 @@ fn check_softmax_logsoftmax_grad() {
     let x_data = vec![1.0, -2.0, 3.0, 0.5, 1.5, -0.5];
     let shape = vec![2, 3];
 
-    check_gradient("softmax", |x| brain_autograd::ops::softmax(x).sum(), &x_data, &shape, 1e-5, 1e-4);
-    check_gradient("log_softmax", |x| brain_autograd::ops::log_softmax(x).sum(), &x_data, &shape, 1e-5, 1e-4);
+    check_gradient(
+        "softmax",
+        |x| brain_autograd::ops::softmax(x).sum(),
+        &x_data,
+        &shape,
+        1e-5,
+        1e-4,
+    );
+    check_gradient(
+        "log_softmax",
+        |x| brain_autograd::ops::log_softmax(x).sum(),
+        &x_data,
+        &shape,
+        1e-5,
+        1e-4,
+    );
 }
 
 // =============================================================================
@@ -388,10 +472,24 @@ fn check_matmul_grad() {
     let b_data = vec![0.5, -1.0, 1.5, 2.0, -0.5, 1.0]; // [3, 2]
 
     let b_val = Value::from_slice(&b_data, vec![3, 2]);
-    check_gradient("matmul_wrt_a", |a| a.matmul(&b_val).sum(), &a_data, &vec![2, 3], 1e-5, 1e-4);
+    check_gradient(
+        "matmul_wrt_a",
+        |a| a.matmul(&b_val).sum(),
+        &a_data,
+        &vec![2, 3],
+        1e-5,
+        1e-4,
+    );
 
     let a_val = Value::from_slice(&a_data, vec![2, 3]);
-    check_gradient("matmul_wrt_b", |b| a_val.matmul(b).sum(), &b_data, &vec![3, 2], 1e-5, 1e-4);
+    check_gradient(
+        "matmul_wrt_b",
+        |b| a_val.matmul(b).sum(),
+        &b_data,
+        &vec![3, 2],
+        1e-5,
+        1e-4,
+    );
 }
 
 #[test]
@@ -401,10 +499,24 @@ fn test_batched_matmul_grad() {
     let b_data: Vec<f64> = (0..12).map(|i| (i as f64) * 0.3 - 0.2).collect();
 
     let b_val = Value::from_slice(&b_data, vec![2, 3, 2]);
-    check_gradient("batched_matmul_a", |a| a.matmul(&b_val).sum(), &a_data, &vec![2, 2, 3], 1e-5, 1e-4);
+    check_gradient(
+        "batched_matmul_a",
+        |a| a.matmul(&b_val).sum(),
+        &a_data,
+        &vec![2, 2, 3],
+        1e-5,
+        1e-4,
+    );
 
     let a_val = Value::from_slice(&a_data, vec![2, 2, 3]);
-    check_gradient("batched_matmul_b", |b| a_val.matmul(b).sum(), &b_data, &vec![2, 3, 2], 1e-5, 1e-4);
+    check_gradient(
+        "batched_matmul_b",
+        |b| a_val.matmul(b).sum(),
+        &b_data,
+        &vec![2, 3, 2],
+        1e-5,
+        1e-4,
+    );
 }
 
 // =============================================================================
@@ -416,7 +528,14 @@ fn check_conv2d_grad() {
     let x_data = vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0]; // [1, 1, 3, 3]
     let w_val = Value::from_slice(&[0.5, -0.5, 1.0, -1.0], vec![1, 1, 2, 2]);
 
-    check_gradient("conv2d", |x| x.conv2d(&w_val, None, (1, 1), (0, 0)).sum(), &x_data, &vec![1, 1, 3, 3], 1e-5, 1e-4);
+    check_gradient(
+        "conv2d",
+        |x| x.conv2d(&w_val, None, (1, 1), (0, 0)).sum(),
+        &x_data,
+        &vec![1, 1, 3, 3],
+        1e-5,
+        1e-4,
+    );
 }
 
 #[test]
@@ -438,18 +557,29 @@ fn check_conv2d_strided_padded_grad() {
 #[test]
 fn check_max_pool2d_grad() {
     let x_data = vec![
-        1.0, 3.0, 2.0, 4.0,
-        5.0, 6.0, 8.0, 7.0,
-        9.0, 11.0, 10.0, 12.0,
-        13.0, 14.0, 16.0, 15.0,
+        1.0, 3.0, 2.0, 4.0, 5.0, 6.0, 8.0, 7.0, 9.0, 11.0, 10.0, 12.0, 13.0, 14.0, 16.0, 15.0,
     ];
-    check_gradient("max_pool2d", |x| x.max_pool2d((2, 2), (2, 2), (0, 0)).sum(), &x_data, &vec![1, 1, 4, 4], 1e-5, 1e-4);
+    check_gradient(
+        "max_pool2d",
+        |x| x.max_pool2d((2, 2), (2, 2), (0, 0)).sum(),
+        &x_data,
+        &vec![1, 1, 4, 4],
+        1e-5,
+        1e-4,
+    );
 }
 
 #[test]
 fn check_avg_pool2d_grad() {
     let x_data: Vec<f64> = (0..16).map(|i| (i as f64) * 0.5 + 1.0).collect();
-    check_gradient("avg_pool2d", |x| x.avg_pool2d((2, 2), (2, 2), (0, 0)).sum(), &x_data, &vec![1, 1, 4, 4], 1e-5, 1e-4);
+    check_gradient(
+        "avg_pool2d",
+        |x| x.avg_pool2d((2, 2), (2, 2), (0, 0)).sum(),
+        &x_data,
+        &vec![1, 1, 4, 4],
+        1e-5,
+        1e-4,
+    );
 }
 
 #[test]
@@ -457,7 +587,14 @@ fn check_conv_transpose2d_grad() {
     let x_data = vec![1.0, 2.0, 3.0, 4.0]; // [1, 1, 2, 2]
     let w_val = Value::from_slice(&[0.5, 0.5, 0.5, 0.5], vec![1, 1, 2, 2]);
 
-    check_gradient("conv_transpose2d", |x| x.conv_transpose2d(&w_val, None, (1, 1), (0, 0)).sum(), &x_data, &vec![1, 1, 2, 2], 1e-5, 1e-4);
+    check_gradient(
+        "conv_transpose2d",
+        |x| x.conv_transpose2d(&w_val, None, (1, 1), (0, 0)).sum(),
+        &x_data,
+        &vec![1, 1, 2, 2],
+        1e-5,
+        1e-4,
+    );
 }
 
 // =============================================================================
@@ -470,7 +607,14 @@ fn check_linear_grad() {
     let w_val = Value::from_slice(&[0.5, -0.5, 1.5, -1.0], vec![2, 2]);
     let b_val = Value::from_slice(&[0.1, -0.2], vec![2]);
 
-    check_gradient("linear", |x| x.linear(&w_val, Some(&b_val)).sum(), &x_data, &vec![2, 2], 1e-5, 1e-4);
+    check_gradient(
+        "linear",
+        |x| x.linear(&w_val, Some(&b_val)).sum(),
+        &x_data,
+        &vec![2, 2],
+        1e-5,
+        1e-4,
+    );
 }
 
 #[test]
@@ -478,39 +622,52 @@ fn check_mse_loss_grad() {
     let p_data = vec![1.2, -0.8, 2.4, 0.5];
     let t_val = Value::from_slice(&[1.0, -1.0, 2.0, 0.0], vec![2, 2]);
 
-    check_gradient("mse_loss", |p| {
-        let diff = p - &t_val;
-        (&diff * &diff).mean()
-    }, &p_data, &vec![2, 2], 1e-5, 1e-4);
+    check_gradient(
+        "mse_loss",
+        |p| {
+            let diff = p - &t_val;
+            (&diff * &diff).mean()
+        },
+        &p_data,
+        &vec![2, 2],
+        1e-5,
+        1e-4,
+    );
 }
 
 #[test]
 fn check_cross_entropy_loss_grad() {
     let x_data = vec![0.5, 1.5, 2.5, 3.0, 1.0, 0.1];
-    let mask = vec![
-        0.0, 0.0, 1.0,
-        1.0, 0.0, 0.0,
-    ];
+    let mask = vec![0.0, 0.0, 1.0, 1.0, 0.0, 0.0];
 
-    check_gradient("cross_entropy_loss", |x| {
-        let lsm = brain_autograd::ops::log_softmax(x);
-        let mask_val = Value::from_slice(&mask, vec![2, 3]);
-        let selected = lsm * mask_val;
-        selected.sum().neg() / Value::scalar(2.0)
-    }, &x_data, &vec![2, 3], 1e-5, 1e-4);
+    check_gradient(
+        "cross_entropy_loss",
+        |x| {
+            let lsm = brain_autograd::ops::log_softmax(x);
+            let mask_val = Value::from_slice(&mask, vec![2, 3]);
+            let selected = lsm * mask_val;
+            selected.sum().neg() / Value::scalar(2.0)
+        },
+        &x_data,
+        &vec![2, 3],
+        1e-5,
+        1e-4,
+    );
 }
 
 #[test]
 fn check_embedding_grad() {
-    let w_data = vec![
-        0.1, 0.2, 0.3,
-        0.4, 0.5, 0.6,
-        0.7, 0.8, 0.9,
-        1.0, 1.1, 1.2,
-    ];
+    let w_data = vec![0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2];
     let indices = vec![1, 2, 1];
 
-    check_gradient("embedding", |w| w.embedding(&indices, vec![3, 3]).sum(), &w_data, &vec![4, 3], 1e-5, 1e-4);
+    check_gradient(
+        "embedding",
+        |w| w.embedding(&indices, vec![3, 3]).sum(),
+        &w_data,
+        &vec![4, 3],
+        1e-5,
+        1e-4,
+    );
 }
 
 // =============================================================================
@@ -565,15 +722,24 @@ fn test_checkpointing_numerical_equivalence() {
     // Pass with selective activation checkpointing
     let mut a_chk = Value::from_slice(&a_data, shape);
     a_chk.set_requires_grad(true);
-    let y_chk = brain_autograd::checkpoint::checkpoint(|inputs| {
-        let a = inputs[0];
-        Ok(vec![(a * a).tanh().sum()])
-    }, &[&a_chk]).unwrap();
+    let y_chk = brain_autograd::checkpoint::checkpoint(
+        |inputs| {
+            let a = inputs[0];
+            Ok(vec![(a * a).tanh().sum()])
+        },
+        &[&a_chk],
+    )
+    .unwrap();
     y_chk[0].backward().unwrap();
     let g_chk = a_chk.grad().unwrap().to_vec();
 
     for (s, c) in g_std.iter().zip(g_chk.iter()) {
-        assert!((s - c).abs() < 1e-9, "Checkpointing grad mismatch: std={}, chk={}", s, c);
+        assert!(
+            (s - c).abs() < 1e-9,
+            "Checkpointing grad mismatch: std={}, chk={}",
+            s,
+            c
+        );
     }
 }
 
@@ -588,7 +754,7 @@ fn test_mixed_precision_scale_and_unscale_equivalence() {
     let mut a_scaled = Value::from_slice(&[2.0, 4.0], vec![2]);
     a_scaled.set_requires_grad(true);
     let loss_raw = (&a_scaled * &a_scaled).sum();
-    
+
     let mut scaler = brain_autograd::engine::GradScaler::new(128.0, 2.0, 0.5, 2000);
     let loss_scaled = scaler.scale_loss(&loss_raw);
     loss_scaled.backward().unwrap();
@@ -598,7 +764,12 @@ fn test_mixed_precision_scale_and_unscale_equivalence() {
     let g_scaled = a_scaled.grad().unwrap().to_vec();
 
     for (u, s) in g_unscaled.iter().zip(g_scaled.iter()) {
-        assert!((u - s).abs() < 1e-6, "Scaled unscale grad mismatch: unscaled={}, scaled={}", u, s);
+        assert!(
+            (u - s).abs() < 1e-6,
+            "Scaled unscale grad mismatch: unscaled={}, scaled={}",
+            u,
+            s
+        );
     }
 }
 

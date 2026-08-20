@@ -7,7 +7,11 @@ use brain_core::Tensor;
 
 /// Computes Sigmoid activation: 1 / (1 + exp(-x)).
 pub fn sigmoid(input: &Tensor) -> Tensor {
-    let data: Vec<f64> = input.to_vec().iter().map(|&x| 1.0 / (1.0 + (-x).exp())).collect();
+    let data: Vec<f64> = input
+        .to_vec()
+        .iter()
+        .map(|&x| 1.0 / (1.0 + (-x).exp()))
+        .collect();
     Tensor::from_vec(data, input.shape().to_vec())
 }
 
@@ -39,7 +43,13 @@ impl Tanh {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

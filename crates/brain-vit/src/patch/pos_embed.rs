@@ -7,8 +7,8 @@
 //!
 //! Position embeddings are added to patch tokens after projection.
 
-use crate::core::{VitError, VitResult, SimpleRng};
 use crate::config::{PosEmbedConfig, PosEmbedType};
+use crate::core::{SimpleRng, VitError, VitResult};
 use crate::utils::interpolate_2d;
 
 /// Position embedding module.
@@ -41,14 +41,15 @@ impl PosEmbed {
                 let mut rng = SimpleRng::new(seed);
                 rng.gen_vec(config.seq_len * config.embed_dim, -0.02, 0.02)
             }
-            PosEmbedType::Sinusoidal => {
-                sinusoidal_1d(config.seq_len, config.embed_dim)
-            }
+            PosEmbedType::Sinusoidal => sinusoidal_1d(config.seq_len, config.embed_dim),
             PosEmbedType::None => {
                 vec![0.0f64; config.seq_len * config.embed_dim]
             }
         };
-        Ok(Self { embed, config: config.clone() })
+        Ok(Self {
+            embed,
+            config: config.clone(),
+        })
     }
 
     /// Add position embedding to token sequence in-place.
@@ -61,7 +62,9 @@ impl PosEmbed {
         let expected = batch * seq_len * embed_dim;
         if tokens.len() != expected {
             return Err(VitError::Shape(format!(
-                "PosEmbed::add_to: expected {} elements, got {}", expected, tokens.len()
+                "PosEmbed::add_to: expected {} elements, got {}",
+                expected,
+                tokens.len()
             )));
         }
         for b in 0..batch {
@@ -123,14 +126,21 @@ impl PosEmbed {
         new_config.grid_h = new_h;
         new_config.grid_w = new_w;
 
-        Ok(PosEmbed { embed: new_embed, config: new_config })
+        Ok(PosEmbed {
+            embed: new_embed,
+            config: new_config,
+        })
     }
 
     /// Number of position embedding vectors.
-    pub fn seq_len(&self) -> usize { self.config.seq_len }
+    pub fn seq_len(&self) -> usize {
+        self.config.seq_len
+    }
 
     /// Embedding dimension.
-    pub fn embed_dim(&self) -> usize { self.config.embed_dim }
+    pub fn embed_dim(&self) -> usize {
+        self.config.embed_dim
+    }
 
     /// Get the embedding vector for a specific position.
     pub fn get_pos(&self, pos: usize) -> &[f64] {
@@ -188,17 +198,29 @@ pub struct PosEmbedBuilder {
 impl PosEmbedBuilder {
     /// Create builder with defaults.
     pub fn new() -> Self {
-        Self { config: PosEmbedConfig::default(), seed: 0 }
+        Self {
+            config: PosEmbedConfig::default(),
+            seed: 0,
+        }
     }
 
     /// Set sequence length.
-    pub fn seq_len(mut self, n: usize) -> Self { self.config.seq_len = n; self }
+    pub fn seq_len(mut self, n: usize) -> Self {
+        self.config.seq_len = n;
+        self
+    }
 
     /// Set embedding dimension.
-    pub fn embed_dim(mut self, d: usize) -> Self { self.config.embed_dim = d; self }
+    pub fn embed_dim(mut self, d: usize) -> Self {
+        self.config.embed_dim = d;
+        self
+    }
 
     /// Set embed type.
-    pub fn embed_type(mut self, t: PosEmbedType) -> Self { self.config.embed_type = t; self }
+    pub fn embed_type(mut self, t: PosEmbedType) -> Self {
+        self.config.embed_type = t;
+        self
+    }
 
     /// Set grid shape for 2D embeddings.
     pub fn grid(mut self, h: usize, w: usize) -> Self {
@@ -208,10 +230,16 @@ impl PosEmbedBuilder {
     }
 
     /// Set random seed.
-    pub fn seed(mut self, s: u64) -> Self { self.seed = s; self }
+    pub fn seed(mut self, s: u64) -> Self {
+        self.seed = s;
+        self
+    }
 
     /// Set whether CLS token is present.
-    pub fn has_cls_token(mut self, v: bool) -> Self { self.config.has_cls_token = v; self }
+    pub fn has_cls_token(mut self, v: bool) -> Self {
+        self.config.has_cls_token = v;
+        self
+    }
 
     /// Build the PosEmbed.
     pub fn build(self) -> VitResult<PosEmbed> {
@@ -220,7 +248,9 @@ impl PosEmbedBuilder {
 }
 
 impl Default for PosEmbedBuilder {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 /// Check that sinusoidal encoding is unique per position (no duplicates).
@@ -228,7 +258,9 @@ pub fn check_sinusoidal_uniqueness(seq_len: usize, embed_dim: usize) -> bool {
     let enc = sinusoidal_1d(seq_len, embed_dim);
     for i in 0..seq_len {
         for j in 0..seq_len {
-            if i == j { continue; }
+            if i == j {
+                continue;
+            }
             let a = &enc[i * embed_dim..(i + 1) * embed_dim];
             let b = &enc[j * embed_dim..(j + 1) * embed_dim];
             if a.iter().zip(b.iter()).all(|(x, y)| (x - y).abs() < 1e-10) {
@@ -250,7 +282,9 @@ pub fn verify_interpolation_preserves_corners(pe: &PosEmbed) -> VitResult<bool> 
         for d in 0..pe.config.embed_dim {
             let a = pe.embed[cls_off + p * pe.config.embed_dim + d];
             let b = new_pe.embed[cls_off + p * pe.config.embed_dim + d];
-            if (a - b).abs() > tol { return Ok(false); }
+            if (a - b).abs() > tol {
+                return Ok(false);
+            }
         }
     }
     Ok(true)
@@ -349,7 +383,7 @@ mod tests {
         let cfg = small_config();
         let pe = PosEmbed::new(&cfg, 0).unwrap();
         let new_pe = pe.interpolate_to(8, 8).unwrap(); // 4x4 → 8x8
-        // New seq_len = 64 patches + 1 CLS = 65
+                                                       // New seq_len = 64 patches + 1 CLS = 65
         assert_eq!(new_pe.seq_len(), 65);
         assert_eq!(new_pe.embed.len(), 65 * 8);
     }
@@ -391,7 +425,9 @@ mod tests {
     #[test]
     fn test_sinusoidal_2d_bounds() {
         let enc = sinusoidal_2d(4, 4, 32);
-        for &v in &enc { assert!(v >= -1.0 && v <= 1.0); }
+        for &v in &enc {
+            assert!(v >= -1.0 && v <= 1.0);
+        }
     }
 
     #[test]

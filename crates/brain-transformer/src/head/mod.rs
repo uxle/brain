@@ -1,7 +1,15 @@
 //! # Transformer Prediction Heads & Task Adapters
 //!
 //! Language Modeling heads (`LmHead`), Classification poolers (`ClsHead`), and Seq2Seq output projection heads.
-#![allow(missing_docs, unused_imports, unused_variables, dead_code, unused_mut, unused_comparisons, clippy::all)]
+#![allow(
+    missing_docs,
+    unused_imports,
+    unused_variables,
+    dead_code,
+    unused_mut,
+    unused_comparisons,
+    clippy::all
+)]
 
 use crate::core::{LinearParams, TransformerError, TransformerResult};
 use brain_core::Tensor;
@@ -63,7 +71,11 @@ impl LmHead {
         let weight = Tensor::from_vec(tied_data, vec![h_dim, v_size]);
         let proj = LinearParams {
             weight,
-            bias: if config.bias { Some(Tensor::zeros(vec![v_size])) } else { None },
+            bias: if config.bias {
+                Some(Tensor::zeros(vec![v_size]))
+            } else {
+                None
+            },
             in_features: h_dim,
             out_features: v_size,
         };
@@ -93,7 +105,8 @@ impl ClsHead {
     pub fn new(config: HeadConfig, seed: u64) -> Self {
         let num_classes = config.num_classes.unwrap_or(2);
         let dense = LinearParams::new(config.hidden_dim, config.hidden_dim, true, seed);
-        let classifier = LinearParams::new(config.hidden_dim, num_classes, true, seed.wrapping_add(100));
+        let classifier =
+            LinearParams::new(config.hidden_dim, num_classes, true, seed.wrapping_add(100));
 
         Self {
             dense,
@@ -140,40 +153,55 @@ impl ClsHead {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant, clippy::needless_range_loop, clippy::manual_div_ceil, clippy::manual_is_multiple_of, clippy::too_many_arguments, clippy::doc_markdown, clippy::excessive_precision, clippy::float_cmp, clippy::len_zero, clippy::all)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant,
+        clippy::needless_range_loop,
+        clippy::manual_div_ceil,
+        clippy::manual_is_multiple_of,
+        clippy::too_many_arguments,
+        clippy::doc_markdown,
+        clippy::excessive_precision,
+        clippy::float_cmp,
+        clippy::len_zero,
+        clippy::all
+    )]
     use super::*;
-    use crate::core::*;
-    use crate::config::*;
-    use crate::utils::*;
-    use crate::ops::*;
-    use crate::attention::*;
-    use crate::attention::scaled::*;
-    use crate::attention::multi_head::*;
-    use crate::attention::relative::*;
     use crate::attention::flash_lite::*;
+    use crate::attention::multi_head::*;
     use crate::attention::multi_query::*;
+    use crate::attention::relative::*;
+    use crate::attention::scaled::*;
     use crate::attention::xformers_lite::*;
-    use crate::position::*;
-    use crate::position::rope::*;
-    use crate::position::alibi::*;
-    use crate::position::learned::*;
+    use crate::attention::*;
+    use crate::builder::*;
+    use crate::config::*;
+    use crate::core::*;
+    use crate::decoder::cross::*;
+    use crate::decoder::layer::*;
+    use crate::decoder::*;
     use crate::embedding_layers::*;
-    use crate::ffn::*;
-    use crate::encoder::*;
     use crate::encoder::block::*;
     use crate::encoder::layer::*;
-    use crate::decoder::*;
-    use crate::decoder::layer::*;
-    use crate::decoder::cross::*;
+    use crate::encoder::*;
+    use crate::ffn::*;
+    use crate::generate::*;
     use crate::head::*;
     use crate::kv_cache::*;
-    use crate::generate::*;
-    use crate::models::*;
     use crate::models::bert_lite::*;
     use crate::models::gpt_lite::*;
-    use crate::models::t5_lite::*;
     use crate::models::llama_lite::*;
-    use crate::builder::*;
+    use crate::models::t5_lite::*;
+    use crate::models::*;
+    use crate::ops::*;
+    use crate::position::alibi::*;
+    use crate::position::learned::*;
+    use crate::position::rope::*;
+    use crate::position::*;
+    use crate::utils::*;
     use brain_core::Tensor;
 
     #[test]

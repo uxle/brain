@@ -3,9 +3,9 @@
 //! Earth Mover's Distance objective: L_D = -E[D(x)] + E[D(G(z))], L_G = -E[D(G(z))].
 #![allow(missing_docs)]
 
-use brain_core::Tensor;
-use crate::core::LossResult;
 use super::AdversarialLoss;
+use crate::core::LossResult;
+use brain_core::Tensor;
 
 /// Configuration for WGAN.
 #[derive(Debug, Clone, Default)]
@@ -34,7 +34,13 @@ impl AdversarialLoss for WassersteinLoss {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

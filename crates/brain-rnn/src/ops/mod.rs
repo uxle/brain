@@ -1,13 +1,24 @@
 //! # Recurrent Sequence Kernels & Packing Primitives
 //!
 //! Generic recurrent stepping, sequence padding, and packed sequence packing/unpacking.
-#![allow(missing_docs, clippy::excessive_precision, clippy::approx_constant, clippy::needless_range_loop, clippy::too_many_arguments, clippy::manual_is_multiple_of, clippy::manual_div_ceil, clippy::doc_markdown, clippy::module_inception, clippy::manual_memcpy)]
+#![allow(
+    missing_docs,
+    clippy::excessive_precision,
+    clippy::approx_constant,
+    clippy::needless_range_loop,
+    clippy::too_many_arguments,
+    clippy::manual_is_multiple_of,
+    clippy::manual_div_ceil,
+    clippy::doc_markdown,
+    clippy::module_inception,
+    clippy::manual_memcpy
+)]
 
 pub mod linear;
 pub use linear::*;
 
-use brain_core::Tensor;
 use super::core::{RnnError, RnnResult};
+use brain_core::Tensor;
 
 /// Pads a list of variable length sequence tensors to uniform [batch, max_len, dim].
 pub fn pad_sequence(sequences: &[Tensor], pad_value: f64) -> RnnResult<Tensor> {
@@ -22,14 +33,20 @@ pub fn pad_sequence(sequences: &[Tensor], pad_value: f64) -> RnnResult<Tensor> {
     for seq in sequences {
         let s = seq.shape();
         if s.is_empty() {
-            return Err(RnnError::ShapeMismatch { expected: vec![1, 1], found: s.to_vec() });
+            return Err(RnnError::ShapeMismatch {
+                expected: vec![1, 1],
+                found: s.to_vec(),
+            });
         }
         let len = s[0];
         let dim = if s.len() > 1 { s[1] } else { 1 };
         if max_len == 0 {
             feat_dim = dim;
         } else if dim != feat_dim {
-            return Err(RnnError::DimensionMismatch { expected: feat_dim, found: dim });
+            return Err(RnnError::DimensionMismatch {
+                expected: feat_dim,
+                found: dim,
+            });
         }
         if len > max_len {
             max_len = len;
@@ -47,25 +64,40 @@ pub fn pad_sequence(sequences: &[Tensor], pad_value: f64) -> RnnResult<Tensor> {
         }
     }
 
-    Ok(Tensor::from_slice(&padded, vec![batch_size, max_len, feat_dim]))
+    Ok(Tensor::from_slice(
+        &padded,
+        vec![batch_size, max_len, feat_dim],
+    ))
 }
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant, clippy::needless_range_loop, clippy::manual_div_ceil, clippy::manual_is_multiple_of, clippy::too_many_arguments, clippy::doc_markdown, clippy::excessive_precision)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant,
+        clippy::needless_range_loop,
+        clippy::manual_div_ceil,
+        clippy::manual_is_multiple_of,
+        clippy::too_many_arguments,
+        clippy::doc_markdown,
+        clippy::excessive_precision
+    )]
     use super::*;
-    use crate::core::*;
-    use crate::config::*;
-    use crate::utils::*;
-    use crate::ops::*;
-    use crate::cells::*;
-    use crate::seq::*;
-    use crate::init_rnn::*;
-    use crate::reg_ops::*;
-    use crate::process::*;
     use crate::backward_ops::*;
     use crate::builder::*;
+    use crate::cells::*;
+    use crate::config::*;
+    use crate::core::*;
     use crate::helper::*;
+    use crate::init_rnn::*;
+    use crate::ops::*;
+    use crate::process::*;
+    use crate::reg_ops::*;
+    use crate::seq::*;
+    use crate::utils::*;
     use crate::VERSION;
     use brain_core::Tensor;
 }

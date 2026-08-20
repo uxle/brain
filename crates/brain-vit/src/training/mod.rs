@@ -7,8 +7,8 @@
 //! - [`EarlyStopping`] — patience-based stopping criterion
 //! - [`GradientClipper`] — gradient clipping by norm
 
-use std::collections::HashMap;
 use crate::core::{VitError, VitResult};
+use std::collections::HashMap;
 
 /// Supported optimizer types.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -73,7 +73,12 @@ pub struct Optimizer {
 impl Optimizer {
     /// Create a new optimizer.
     pub fn new(config: OptimizerConfig) -> Self {
-        Self { config, m: HashMap::new(), v: HashMap::new(), step: 0 }
+        Self {
+            config,
+            m: HashMap::new(),
+            v: HashMap::new(),
+            step: 0,
+        }
     }
 
     /// Apply one parameter update step.
@@ -83,7 +88,9 @@ impl Optimizer {
     /// - `grads`: gradient values.
     pub fn step_params(&mut self, name: &str, params: &mut [f64], grads: &[f64]) -> VitResult<()> {
         if params.len() != grads.len() {
-            return Err(VitError::Shape("Optimizer: params/grads length mismatch".to_string()));
+            return Err(VitError::Shape(
+                "Optimizer: params/grads length mismatch".to_string(),
+            ));
         }
         self.step += 1;
         let lr = self.config.lr;
@@ -92,7 +99,10 @@ impl Optimizer {
         match self.config.optimizer_type {
             OptimizerType::Sgd => {
                 let mom = self.config.momentum;
-                let m = self.m.entry(name.to_string()).or_insert_with(|| vec![0.0; params.len()]);
+                let m = self
+                    .m
+                    .entry(name.to_string())
+                    .or_insert_with(|| vec![0.0; params.len()]);
                 for (i, (p, &g)) in params.iter_mut().zip(grads.iter()).enumerate() {
                     m[i] = mom * m[i] + g + wd * *p;
                     *p -= lr * m[i];
@@ -106,8 +116,14 @@ impl Optimizer {
                 let bias_c1 = 1.0 - beta1.powf(t);
                 let bias_c2 = 1.0 - beta2.powf(t);
                 let lr_t = lr * bias_c2.sqrt() / bias_c1;
-                let m = self.m.entry(name.to_string()).or_insert_with(|| vec![0.0; params.len()]);
-                let v = self.v.entry(name.to_string()).or_insert_with(|| vec![0.0; params.len()]);
+                let m = self
+                    .m
+                    .entry(name.to_string())
+                    .or_insert_with(|| vec![0.0; params.len()]);
+                let v = self
+                    .v
+                    .entry(name.to_string())
+                    .or_insert_with(|| vec![0.0; params.len()]);
                 for (i, (p, &g)) in params.iter_mut().zip(grads.iter()).enumerate() {
                     m[i] = beta1 * m[i] + (1.0 - beta1) * g;
                     v[i] = beta2 * v[i] + (1.0 - beta2) * g * g;
@@ -122,7 +138,10 @@ impl Optimizer {
             OptimizerType::RmsProp => {
                 let eps = self.config.eps;
                 let rho = self.config.beta2;
-                let v = self.v.entry(name.to_string()).or_insert_with(|| vec![0.0; params.len()]);
+                let v = self
+                    .v
+                    .entry(name.to_string())
+                    .or_insert_with(|| vec![0.0; params.len()]);
                 for (i, (p, &g)) in params.iter_mut().zip(grads.iter()).enumerate() {
                     v[i] = rho * v[i] + (1.0 - rho) * g * g;
                     *p -= lr * g / (v[i].sqrt() + eps) + lr * wd * *p;
@@ -133,13 +152,20 @@ impl Optimizer {
     }
 
     /// Zero all momentum buffers.
-    pub fn zero_state(&mut self) { self.m.clear(); self.v.clear(); }
+    pub fn zero_state(&mut self) {
+        self.m.clear();
+        self.v.clear();
+    }
 
     /// Set learning rate.
-    pub fn set_lr(&mut self, lr: f64) { self.config.lr = lr; }
+    pub fn set_lr(&mut self, lr: f64) {
+        self.config.lr = lr;
+    }
 
     /// Current step count.
-    pub fn current_step(&self) -> usize { self.step }
+    pub fn current_step(&self) -> usize {
+        self.step
+    }
 }
 
 /// Learning rate schedule type.
@@ -187,8 +213,14 @@ impl LrScheduler {
         schedule: ScheduleType,
     ) -> Self {
         Self {
-            base_lr, min_lr, total_steps, warmup_steps, schedule,
-            step_size: 100, gamma: 0.1, current_step: 0,
+            base_lr,
+            min_lr,
+            total_steps,
+            warmup_steps,
+            schedule,
+            step_size: 100,
+            gamma: 0.1,
+            current_step: 0,
         }
     }
 
@@ -218,9 +250,7 @@ impl LrScheduler {
                 let progress = step as f64 / self.total_steps as f64;
                 self.base_lr + (self.min_lr - self.base_lr) * progress
             }
-            ScheduleType::Exponential => {
-                self.base_lr * self.gamma.powi(step as i32)
-            }
+            ScheduleType::Exponential => self.base_lr * self.gamma.powi(step as i32),
         }
     }
 
@@ -232,7 +262,9 @@ impl LrScheduler {
     }
 
     /// Reset to initial state.
-    pub fn reset(&mut self) { self.current_step = 0; }
+    pub fn reset(&mut self) {
+        self.current_step = 0;
+    }
 }
 
 /// Early stopping criterion.
@@ -254,8 +286,19 @@ pub struct EarlyStopping {
 impl EarlyStopping {
     /// Create a new early stopping tracker.
     pub fn new(patience: usize, min_delta: f64, minimize: bool) -> Self {
-        let best = if minimize { f64::INFINITY } else { f64::NEG_INFINITY };
-        Self { patience, min_delta, minimize, best, wait: 0, stopped: false }
+        let best = if minimize {
+            f64::INFINITY
+        } else {
+            f64::NEG_INFINITY
+        };
+        Self {
+            patience,
+            min_delta,
+            minimize,
+            best,
+            wait: 0,
+            stopped: false,
+        }
     }
 
     /// Update with a new metric value. Returns true if training should stop.
@@ -279,7 +322,11 @@ impl EarlyStopping {
 
     /// Reset state.
     pub fn reset(&mut self) {
-        let best = if self.minimize { f64::INFINITY } else { f64::NEG_INFINITY };
+        let best = if self.minimize {
+            f64::INFINITY
+        } else {
+            f64::NEG_INFINITY
+        };
         self.best = best;
         self.wait = 0;
         self.stopped = false;
@@ -296,7 +343,9 @@ impl GradientClipper {
     /// Create a new clipper.
     pub fn new(max_norm: f64) -> VitResult<Self> {
         if max_norm <= 0.0 {
-            return Err(VitError::Config("GradientClipper: max_norm must be > 0".to_string()));
+            return Err(VitError::Config(
+                "GradientClipper: max_norm must be > 0".to_string(),
+            ));
         }
         Ok(Self { max_norm })
     }
@@ -308,7 +357,9 @@ impl GradientClipper {
         if norm > self.max_norm {
             let scale = self.max_norm / norm;
             for g in grads.iter_mut() {
-                for x in g.iter_mut() { *x *= scale; }
+                for x in g.iter_mut() {
+                    *x *= scale;
+                }
             }
         }
         norm
@@ -348,9 +399,15 @@ impl ModelEma {
     /// Create a new EMA tracker.
     pub fn new(decay: f64) -> VitResult<Self> {
         if !(0.0..1.0).contains(&decay) {
-            return Err(VitError::Config("ModelEma: decay must be in [0, 1)".to_string()));
+            return Err(VitError::Config(
+                "ModelEma: decay must be in [0, 1)".to_string(),
+            ));
         }
-        Ok(Self { decay, shadow: HashMap::new(), updates: 0 })
+        Ok(Self {
+            decay,
+            shadow: HashMap::new(),
+            updates: 0,
+        })
     }
 
     /// Update shadow weights from current params.
@@ -358,7 +415,10 @@ impl ModelEma {
         self.updates += 1;
         // Warm-up: effective decay ramps up in early steps
         let d = self.decay.min(1.0 - 1.0 / (self.updates as f64 + 1.0));
-        let shadow = self.shadow.entry(name.to_string()).or_insert_with(|| params.to_vec());
+        let shadow = self
+            .shadow
+            .entry(name.to_string())
+            .or_insert_with(|| params.to_vec());
         for (s, &p) in shadow.iter_mut().zip(params.iter()) {
             *s = d * *s + (1.0 - d) * p;
         }
@@ -374,15 +434,21 @@ impl ModelEma {
 ///
 /// Returns (mixed_input, mixed_label_a, mixed_label_b, lambda).
 pub fn mixup(
-    x1: &[f64], x2: &[f64],
-    y1: usize, y2: usize,
+    x1: &[f64],
+    x2: &[f64],
+    y1: usize,
+    y2: usize,
     _alpha: f64,
     lambda: f64,
 ) -> VitResult<(Vec<f64>, usize, usize, f64)> {
     if x1.len() != x2.len() {
-        return Err(VitError::Shape("mixup: inputs must have equal length".to_string()));
+        return Err(VitError::Shape(
+            "mixup: inputs must have equal length".to_string(),
+        ));
     }
-    let mixed: Vec<f64> = x1.iter().zip(x2.iter())
+    let mixed: Vec<f64> = x1
+        .iter()
+        .zip(x2.iter())
         .map(|(&a, &b)| lambda * a + (1.0 - lambda) * b)
         .collect();
     Ok((mixed, y1, y2, lambda))
@@ -399,7 +465,9 @@ pub fn label_smooth_ce(
     smoothing: f64,
 ) -> VitResult<f64> {
     if logits.len() != batch * num_classes {
-        return Err(VitError::Shape("label_smooth_ce: shape mismatch".to_string()));
+        return Err(VitError::Shape(
+            "label_smooth_ce: shape mismatch".to_string(),
+        ));
     }
     let eps = smoothing / num_classes as f64;
     let scale = 1.0 - smoothing + eps;
@@ -410,7 +478,10 @@ pub fn label_smooth_ce(
         let log_sum_exp = max_val + row.iter().map(|&x| (x - max_val).exp()).sum::<f64>().ln();
         let label = labels[b];
         if label >= num_classes {
-            return Err(VitError::Shape(format!("label_smooth_ce: label {} >= {}", label, num_classes)));
+            return Err(VitError::Shape(format!(
+                "label_smooth_ce: label {} >= {}",
+                label, num_classes
+            )));
         }
         // Hard label component
         let ce_hard = log_sum_exp - row[label];
@@ -427,12 +498,18 @@ mod tests {
 
     #[test]
     fn test_optimizer_sgd_step() {
-        let cfg = OptimizerConfig { optimizer_type: OptimizerType::Sgd, lr: 0.1, ..Default::default() };
+        let cfg = OptimizerConfig {
+            optimizer_type: OptimizerType::Sgd,
+            lr: 0.1,
+            ..Default::default()
+        };
         let mut opt = Optimizer::new(cfg);
         let mut params = vec![1.0f64; 4];
         let grads = vec![1.0f64; 4];
         opt.step_params("w", &mut params, &grads).unwrap();
-        for &p in &params { assert!(p < 1.0); }
+        for &p in &params {
+            assert!(p < 1.0);
+        }
     }
 
     #[test]
@@ -475,12 +552,18 @@ mod tests {
 
     #[test]
     fn test_optimizer_rmsprop() {
-        let cfg = OptimizerConfig { optimizer_type: OptimizerType::RmsProp, lr: 0.01, ..Default::default() };
+        let cfg = OptimizerConfig {
+            optimizer_type: OptimizerType::RmsProp,
+            lr: 0.01,
+            ..Default::default()
+        };
         let mut opt = Optimizer::new(cfg);
         let mut params = vec![1.0f64; 3];
         let grads = vec![0.1f64; 3];
         opt.step_params("w", &mut params, &grads).unwrap();
-        for &p in &params { assert!(p < 1.0); }
+        for &p in &params {
+            assert!(p < 1.0);
+        }
     }
 
     #[test]
@@ -488,7 +571,9 @@ mod tests {
         let mut sched = LrScheduler::new(1e-3, 1e-5, 100, 10, ScheduleType::CosineWithWarmup);
         let lr0 = sched.step(); // step 0 in warmup
         assert!(lr0 < 1e-3);
-        for _ in 0..10 { sched.step(); } // through warmup
+        for _ in 0..10 {
+            sched.step();
+        } // through warmup
         let lr_peak = sched.step();
         assert!(lr_peak <= 1e-3 + 1e-10);
     }
@@ -507,7 +592,9 @@ mod tests {
         let mut sched = LrScheduler::new(1.0, 0.0, 100, 0, ScheduleType::StepDecay);
         sched.step_size = 5;
         sched.gamma = 0.5;
-        for _ in 0..5 { sched.step(); }
+        for _ in 0..5 {
+            sched.step();
+        }
         let lr = sched.step();
         assert!(lr < 1.0);
     }
@@ -534,7 +621,9 @@ mod tests {
     #[test]
     fn test_scheduler_reset() {
         let mut sched = LrScheduler::new(1e-3, 1e-5, 100, 10, ScheduleType::CosineWithWarmup);
-        for _ in 0..20 { sched.step(); }
+        for _ in 0..20 {
+            sched.step();
+        }
         sched.reset();
         assert_eq!(sched.current_step, 0);
     }
@@ -545,7 +634,7 @@ mod tests {
         assert!(!es.update(1.0));
         assert!(!es.update(1.001)); // no improvement
         assert!(!es.update(1.002)); // no improvement
-        assert!(es.update(1.003));  // patience exhausted
+        assert!(es.update(1.003)); // patience exhausted
     }
 
     #[test]
@@ -564,13 +653,15 @@ mod tests {
         assert!(!es.update(0.5));
         assert!(!es.update(0.6)); // improvement
         assert!(!es.update(0.5)); // no improvement
-        assert!(es.update(0.5));  // no improvement, patience=2
+        assert!(es.update(0.5)); // no improvement, patience=2
     }
 
     #[test]
     fn test_early_stopping_reset() {
         let mut es = EarlyStopping::new(2, 0.0, true);
-        es.update(1.0); es.update(1.1); es.update(1.2);
+        es.update(1.0);
+        es.update(1.1);
+        es.update(1.2);
         assert!(es.stopped);
         es.reset();
         assert!(!es.stopped);
@@ -584,7 +675,12 @@ mod tests {
         let norm = clipper.clip(&mut grads);
         assert!((norm - 5.0).abs() < 1e-6);
         // After clipping, norm should be ≤ 1.0
-        let clipped_norm: f64 = grads.iter().flat_map(|g| g.iter()).map(|&x| x * x).sum::<f64>().sqrt();
+        let clipped_norm: f64 = grads
+            .iter()
+            .flat_map(|g| g.iter())
+            .map(|&x| x * x)
+            .sum::<f64>()
+            .sqrt();
         assert!(clipped_norm <= 1.0 + 1e-9);
     }
 
@@ -620,7 +716,9 @@ mod tests {
         ema.update("w", &params2);
         let shadow = ema.get("w").unwrap();
         // Should be between 1.0 and 2.0
-        for &s in shadow { assert!(s > 1.0 && s < 2.0); }
+        for &s in shadow {
+            assert!(s > 1.0 && s < 2.0);
+        }
     }
 
     #[test]
@@ -703,16 +801,15 @@ mod tests {
         }
         assert_eq!(opt.current_step(), 10);
         // All params should have moved
-        for &p in &params { assert!(p < 0.5); }
+        for &p in &params {
+            assert!(p < 0.5);
+        }
     }
 
     #[test]
     fn test_gradient_clipper_multiple_groups() {
         let clipper = GradientClipper::new(1.0).unwrap();
-        let mut grads = vec![
-            vec![0.5f64, 0.5f64],
-            vec![0.5f64, 0.5f64],
-        ]; // global norm = sqrt(4 * 0.25) = 1.0, no clipping needed
+        let mut grads = vec![vec![0.5f64, 0.5f64], vec![0.5f64, 0.5f64]]; // global norm = sqrt(4 * 0.25) = 1.0, no clipping needed
         let norm = clipper.clip(&mut grads);
         assert!((norm - 1.0).abs() < 1e-6);
     }

@@ -49,19 +49,19 @@ pub mod onnx;
 pub mod ops;
 pub mod ops_supported;
 pub mod quant_export;
+pub mod safetensors;
 pub mod tflite;
 pub mod utils;
 pub mod verify;
 pub mod webnn;
 pub mod zip;
-pub mod safetensors;
 
 // Re-exports
 pub use builder::ExportBuilder;
 pub use config::{ExportConfig, TargetPlatform};
-pub use safetensors::{SafetensorsArchive, SafetensorInfo};
 pub use core::{ExportError, ExportFormat, ExportOptions};
 pub use model::{ExportModel, ModelExporter};
+pub use safetensors::{SafetensorInfo, SafetensorsArchive};
 
 /// Package version string.
 pub const VERSION: &str = "0.2.0";

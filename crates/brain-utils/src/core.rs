@@ -181,7 +181,10 @@ impl GlobalState {
 
     /// Updates current config.
     pub fn set_config(&self, config: UtilsConfig) -> UtilsResult<()> {
-        let mut w = self.config.write().map_err(|_| UtilsError::ConfigError("Lock poison".to_string()))?;
+        let mut w = self
+            .config
+            .write()
+            .map_err(|_| UtilsError::ConfigError("Lock poison".to_string()))?;
         *w = config;
         Ok(())
     }
@@ -211,19 +214,19 @@ mod tests {
         assert_eq!(cfg.log_level, "DEBUG");
         assert_eq!(cfg.app_name, "test_suite_1");
         assert!(cfg.profiling_enabled);
-        
+
         let state = GlobalState::new(cfg.clone());
         assert!(state.is_initialized());
         let _ = state.uptime();
-        
+
         cfg.metrics_interval_sec = 2;
         assert!(state.set_config(cfg.clone()).is_ok());
         let retrieved = state.get_config();
         assert_eq!(retrieved.metrics_interval_sec, 2);
-        
+
         let err = UtilsError::ConfigError(format!("err_{}", 1));
         assert_eq!(err.to_string(), format!("Config error: err_{}", 1));
-        
+
         let sys = SystemInfo::current();
         assert!(!sys.os.is_empty());
         assert!(sys.pid > 0);

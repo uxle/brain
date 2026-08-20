@@ -19,7 +19,9 @@ pub fn miou_and_pixel_accuracy(
     num_classes: usize,
 ) -> (f64, f64) {
     let n = preds.len().min(targets.len());
-    if n == 0 { return (0.0, 0.0); }
+    if n == 0 {
+        return (0.0, 0.0);
+    }
 
     let mut intersection = vec![0usize; num_classes];
     let mut union = vec![0usize; num_classes];
@@ -28,11 +30,17 @@ pub fn miou_and_pixel_accuracy(
     for i in 0..n {
         let p = preds[i];
         let t = targets[i];
-        if p == t { total_correct += 1; }
+        if p == t {
+            total_correct += 1;
+        }
         if p < num_classes && t < num_classes {
-            if p == t { intersection[p] += 1; }
+            if p == t {
+                intersection[p] += 1;
+            }
             union[p] += 1;
-            if p != t { union[t] += 1; }
+            if p != t {
+                union[t] += 1;
+            }
         }
     }
 
@@ -54,7 +62,13 @@ pub fn miou_and_pixel_accuracy(
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

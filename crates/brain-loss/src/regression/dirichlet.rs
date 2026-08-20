@@ -3,9 +3,9 @@
 //! Cosine embedding loss and angular distance metrics.
 #![allow(missing_docs)]
 
-use brain_core::Tensor;
-use crate::core::{LossResult, LossError, Reduction};
+use crate::core::{LossError, LossResult, Reduction};
 use crate::utils::reduction_apply;
+use brain_core::Tensor;
 
 /// Cosine Embedding Loss measuring angular similarity between embeddings.
 #[derive(Debug, Clone)]
@@ -16,7 +16,10 @@ pub struct CosineEmbeddingLoss {
 
 impl Default for CosineEmbeddingLoss {
     fn default() -> Self {
-        Self { margin: 0.0, reduction: Reduction::Mean }
+        Self {
+            margin: 0.0,
+            reduction: Reduction::Mean,
+        }
     }
 }
 
@@ -71,7 +74,13 @@ pub struct AngularDistanceLoss {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

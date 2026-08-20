@@ -3,9 +3,9 @@
 //! Multi-class Hinge loss, Squared Hinge, Kullback-Leibler (KL) Divergence, and Poisson loss.
 #![allow(missing_docs)]
 
-use brain_core::Tensor;
 use crate::core::{LossResult, Reduction};
 use crate::utils::reduction_apply;
+use brain_core::Tensor;
 
 /// Classification loss flavor identifier.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -25,7 +25,10 @@ pub struct HingeLoss {
 
 impl Default for HingeLoss {
     fn default() -> Self {
-        Self { margin: 1.0, reduction: Reduction::Mean }
+        Self {
+            margin: 1.0,
+            reduction: Reduction::Mean,
+        }
     }
 }
 
@@ -67,7 +70,9 @@ pub struct KLDivergenceLoss {
 
 impl Default for KLDivergenceLoss {
     fn default() -> Self {
-        Self { reduction: Reduction::Mean }
+        Self {
+            reduction: Reduction::Mean,
+        }
     }
 }
 
@@ -90,7 +95,13 @@ impl KLDivergenceLoss {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

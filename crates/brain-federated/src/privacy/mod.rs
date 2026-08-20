@@ -6,8 +6,8 @@
 pub mod dp;
 pub mod secure_agg;
 
-pub use dp::{GaussianNoise, DpConfig, add_dp_noise};
-pub use secure_agg::{SecureAggregator, mask_tensor};
+pub use dp::{add_dp_noise, DpConfig, GaussianNoise};
+pub use secure_agg::{mask_tensor, SecureAggregator};
 
 #[cfg(test)]
 mod tests {

@@ -40,7 +40,10 @@ pub fn max(a: &Tensor) -> f64 {
 
 /// Computes the variance of all elements (unbiased sample variance with Bessel correction).
 pub fn var(a: &Tensor, correction: usize) -> f64 {
-    assert!(a.numel() > correction, "Degrees of freedom <= 0 for variance");
+    assert!(
+        a.numel() > correction,
+        "Degrees of freedom <= 0 for variance"
+    );
     let m = mean(a);
     let sum_sq_diff: f64 = a.data().iter().map(|&x| (x - m).powi(2)).sum();
     sum_sq_diff / ((a.numel() - correction) as f64)
@@ -108,7 +111,10 @@ pub fn nanmean(a: &Tensor) -> f64 {
 /// Computes variance of non-NaN elements.
 pub fn nanvar(a: &Tensor, correction: usize) -> f64 {
     let valid: Vec<f64> = a.data().iter().copied().filter(|x| !x.is_nan()).collect();
-    assert!(valid.len() > correction, "nanvar: insufficient non-NaN degrees of freedom");
+    assert!(
+        valid.len() > correction,
+        "nanvar: insufficient non-NaN degrees of freedom"
+    );
     let m = valid.iter().sum::<f64>() / (valid.len() as f64);
     let sum_sq: f64 = valid.iter().map(|&x| (x - m).powi(2)).sum();
     sum_sq / ((valid.len() - correction) as f64)
@@ -121,12 +127,20 @@ pub fn nanstd(a: &Tensor, correction: usize) -> f64 {
 
 /// Computes minimum of non-NaN elements.
 pub fn nanmin(a: &Tensor) -> f64 {
-    a.data().iter().copied().filter(|x| !x.is_nan()).fold(f64::INFINITY, f64::min)
+    a.data()
+        .iter()
+        .copied()
+        .filter(|x| !x.is_nan())
+        .fold(f64::INFINITY, f64::min)
 }
 
 /// Computes maximum of non-NaN elements.
 pub fn nanmax(a: &Tensor) -> f64 {
-    a.data().iter().copied().filter(|x| !x.is_nan()).fold(f64::NEG_INFINITY, f64::max)
+    a.data()
+        .iter()
+        .copied()
+        .filter(|x| !x.is_nan())
+        .fold(f64::NEG_INFINITY, f64::max)
 }
 
 // =============================================================================
@@ -186,7 +200,7 @@ where
 
     for _ in 0..a.numel() {
         let val = a.get_index(&coords);
-        
+
         let mut out_coords = coords.clone();
         if keepdim {
             out_coords[dim] = 0;
@@ -302,7 +316,15 @@ pub fn cumsum(a: &Tensor, dim: usize) -> Tensor {
         let val = a.get(flat);
         let mut stripped = coords.clone();
         stripped.remove(dim);
-        let key = flat_index(&stripped, &a.shape().iter().enumerate().filter(|(d, _)| *d != dim).map(|(_, &s)| s).collect::<Vec<_>>());
+        let key = flat_index(
+            &stripped,
+            &a.shape()
+                .iter()
+                .enumerate()
+                .filter(|(d, _)| *d != dim)
+                .map(|(_, &s)| s)
+                .collect::<Vec<_>>(),
+        );
         acc[key] += val;
         out_data[flat] = acc[key];
 
@@ -329,7 +351,15 @@ pub fn cumprod(a: &Tensor, dim: usize) -> Tensor {
         let val = a.get(flat);
         let mut stripped = coords.clone();
         stripped.remove(dim);
-        let key = flat_index(&stripped, &a.shape().iter().enumerate().filter(|(d, _)| *d != dim).map(|(_, &s)| s).collect::<Vec<_>>());
+        let key = flat_index(
+            &stripped,
+            &a.shape()
+                .iter()
+                .enumerate()
+                .filter(|(d, _)| *d != dim)
+                .map(|(_, &s)| s)
+                .collect::<Vec<_>>(),
+        );
         acc[key] *= val;
         out_data[flat] = acc[key];
 
@@ -426,12 +456,18 @@ mod tests {
         // Column means: [2.5, 3.5, 4.5]; population variances: [2.25, 2.25, 2.25]
         let v = var_along_dim(&a, 0, false, 0);
         for i in 0..3 {
-            assert!((v.get(i) - 2.25).abs() < 1e-9, "var along dim 0 mismatch at {i}");
+            assert!(
+                (v.get(i) - 2.25).abs() < 1e-9,
+                "var along dim 0 mismatch at {i}"
+            );
         }
         // Row means: [2.0, 5.0]; population variances: [2.0/3, 2.0/3]
         let v = var_along_dim(&a, 1, false, 0);
         for i in 0..2 {
-            assert!((v.get(i) - 2.0 / 3.0).abs() < 1e-9, "var along dim 1 mismatch at {i}");
+            assert!(
+                (v.get(i) - 2.0 / 3.0).abs() < 1e-9,
+                "var along dim 1 mismatch at {i}"
+            );
         }
         // keepdim keeps the reduced axis
         let v = var_along_dim(&a, 1, true, 0);

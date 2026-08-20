@@ -43,26 +43,27 @@ pub enum VitError {
 impl fmt::Display for VitError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            VitError::InvalidPatchSize { image_dim, patch_size } =>
-                write!(f, "Image dim {} not divisible by patch size {}", image_dim, patch_size),
-            VitError::ResolutionMismatch { expected, got } =>
-                write!(f, "Resolution mismatch: expected {}, got {}", expected, got),
-            VitError::DimMismatch { expected, got } =>
-                write!(f, "Dim mismatch: expected {}, got {}", expected, got),
-            VitError::EmptyBatch =>
-                write!(f, "Batch size must be > 0"),
-            VitError::Config(msg) =>
-                write!(f, "Config error: {}", msg),
-            VitError::Checkpoint(msg) =>
-                write!(f, "Checkpoint error: {}", msg),
-            VitError::Shape(msg) =>
-                write!(f, "Shape error: {}", msg),
-            VitError::Numerical(msg) =>
-                write!(f, "Numerical error: {}", msg),
-            VitError::Unsupported(msg) =>
-                write!(f, "Unsupported: {}", msg),
-            VitError::Io(msg) =>
-                write!(f, "I/O error: {}", msg),
+            VitError::InvalidPatchSize {
+                image_dim,
+                patch_size,
+            } => write!(
+                f,
+                "Image dim {} not divisible by patch size {}",
+                image_dim, patch_size
+            ),
+            VitError::ResolutionMismatch { expected, got } => {
+                write!(f, "Resolution mismatch: expected {}, got {}", expected, got)
+            }
+            VitError::DimMismatch { expected, got } => {
+                write!(f, "Dim mismatch: expected {}, got {}", expected, got)
+            }
+            VitError::EmptyBatch => write!(f, "Batch size must be > 0"),
+            VitError::Config(msg) => write!(f, "Config error: {}", msg),
+            VitError::Checkpoint(msg) => write!(f, "Checkpoint error: {}", msg),
+            VitError::Shape(msg) => write!(f, "Shape error: {}", msg),
+            VitError::Numerical(msg) => write!(f, "Numerical error: {}", msg),
+            VitError::Unsupported(msg) => write!(f, "Unsupported: {}", msg),
+            VitError::Io(msg) => write!(f, "I/O error: {}", msg),
         }
     }
 }
@@ -110,7 +111,10 @@ impl PoolStrategy {
             "mean_pool" | "mean" => Ok(PoolStrategy::MeanPool),
             "attention_pool" | "attn_pool" => Ok(PoolStrategy::AttentionPool),
             "gap" => Ok(PoolStrategy::Gap),
-            other => Err(VitError::Config(format!("Unknown pool strategy: {}", other))),
+            other => Err(VitError::Config(format!(
+                "Unknown pool strategy: {}",
+                other
+            ))),
         }
     }
 }
@@ -202,7 +206,9 @@ impl Default for VitState {
 
 impl VitState {
     /// Create a fresh state for a new training run.
-    pub fn new() -> Self { Self::default() }
+    pub fn new() -> Self {
+        Self::default()
+    }
 
     /// Record a forward pass with `n` tokens processed.
     pub fn record_forward(&mut self, n_tokens: u64) {
@@ -221,10 +227,14 @@ impl VitState {
     }
 
     /// Set training/eval mode.
-    pub fn set_training(&mut self, training: bool) { self.is_training = training; }
+    pub fn set_training(&mut self, training: bool) {
+        self.is_training = training;
+    }
 
     /// Increment global step.
-    pub fn step(&mut self) { self.global_step += 1; }
+    pub fn step(&mut self) {
+        self.global_step += 1;
+    }
 
     /// Update best metric; returns true if new best was achieved.
     pub fn update_best(&mut self, metric: f64) -> bool {
@@ -237,7 +247,9 @@ impl VitState {
     }
 
     /// Reset statistics accumulators.
-    pub fn reset_stats(&mut self) { self.stats.clear(); }
+    pub fn reset_stats(&mut self) {
+        self.stats.clear();
+    }
 
     /// Total parameters across all tracked layers.
     pub fn total_params(&self) -> usize {
@@ -253,8 +265,11 @@ impl VitState {
     pub fn summary(&self) -> String {
         format!(
             "VitState {{ steps={}, forwards={}, tokens={}, training={}, best_metric={:.6} }}",
-            self.global_step, self.forward_count,
-            self.total_tokens_processed, self.is_training, self.best_metric
+            self.global_step,
+            self.forward_count,
+            self.total_tokens_processed,
+            self.is_training,
+            self.best_metric
         )
     }
 }
@@ -295,7 +310,11 @@ pub struct Tensor2D {
 impl Tensor2D {
     /// Create a zero-initialized tensor of shape `[rows, cols]`.
     pub fn zeros(rows: usize, cols: usize) -> Self {
-        Self { rows, cols, data: vec![0.0; rows * cols] }
+        Self {
+            rows,
+            cols,
+            data: vec![0.0; rows * cols],
+        }
     }
 
     /// Create from data, verifying shape.
@@ -303,7 +322,10 @@ impl Tensor2D {
         if data.len() != rows * cols {
             return Err(VitError::Shape(format!(
                 "Expected {} elements for shape [{}, {}], got {}",
-                rows * cols, rows, cols, data.len()
+                rows * cols,
+                rows,
+                cols,
+                data.len()
             )));
         }
         Ok(Self { rows, cols, data })
@@ -373,14 +395,27 @@ impl Tensor2D {
         if self.rows != other.rows || self.cols != other.cols {
             return Err(VitError::Shape("add: shape mismatch".to_string()));
         }
-        let data: Vec<f64> = self.data.iter().zip(other.data.iter()).map(|(&a, &b)| a + b).collect();
-        Ok(Tensor2D { rows: self.rows, cols: self.cols, data })
+        let data: Vec<f64> = self
+            .data
+            .iter()
+            .zip(other.data.iter())
+            .map(|(&a, &b)| a + b)
+            .collect();
+        Ok(Tensor2D {
+            rows: self.rows,
+            cols: self.cols,
+            data,
+        })
     }
 
     /// Element-wise scale.
     pub fn scale(&self, s: f64) -> Tensor2D {
         let data = self.data.iter().map(|&x| x * s).collect();
-        Tensor2D { rows: self.rows, cols: self.cols, data }
+        Tensor2D {
+            rows: self.rows,
+            cols: self.cols,
+            data,
+        }
     }
 
     /// Layer normalization over each row.
@@ -390,7 +425,8 @@ impl Tensor2D {
             let start = r * self.cols;
             let slice = &self.data[start..start + self.cols];
             let mean: f64 = slice.iter().sum::<f64>() / self.cols as f64;
-            let var: f64 = slice.iter().map(|&x| (x - mean).powi(2)).sum::<f64>() / self.cols as f64;
+            let var: f64 =
+                slice.iter().map(|&x| (x - mean).powi(2)).sum::<f64>() / self.cols as f64;
             let std = (var + eps).sqrt();
             for i in 0..self.cols {
                 out.data[start + i] = (self.data[start + i] - mean) / std;
@@ -401,10 +437,12 @@ impl Tensor2D {
 
     /// Row mean.
     pub fn row_mean(&self) -> Vec<f64> {
-        (0..self.rows).map(|r| {
-            let start = r * self.cols;
-            self.data[start..start + self.cols].iter().sum::<f64>() / self.cols as f64
-        }).collect()
+        (0..self.rows)
+            .map(|r| {
+                let start = r * self.cols;
+                self.data[start..start + self.cols].iter().sum::<f64>() / self.cols as f64
+            })
+            .collect()
     }
 
     /// Frobenius norm.
@@ -429,7 +467,12 @@ pub struct Tensor3D {
 impl Tensor3D {
     /// Create zero-initialized 3D tensor.
     pub fn zeros(batch: usize, seq: usize, dim: usize) -> Self {
-        Self { batch, seq, dim, data: vec![0.0; batch * seq * dim] }
+        Self {
+            batch,
+            seq,
+            dim,
+            data: vec![0.0; batch * seq * dim],
+        }
     }
 
     /// Create from flat data.
@@ -438,10 +481,19 @@ impl Tensor3D {
         if data.len() != expected {
             return Err(VitError::Shape(format!(
                 "Tensor3D: expected {} elements for [{},{},{}], got {}",
-                expected, batch, seq, dim, data.len()
+                expected,
+                batch,
+                seq,
+                dim,
+                data.len()
             )));
         }
-        Ok(Self { batch, seq, dim, data })
+        Ok(Self {
+            batch,
+            seq,
+            dim,
+            data,
+        })
     }
 
     /// Get element `[b, s, d]`.
@@ -458,7 +510,11 @@ impl Tensor3D {
     pub fn batch_slice(&self, b: usize) -> Tensor2D {
         let start = b * self.seq * self.dim;
         let data = self.data[start..start + self.seq * self.dim].to_vec();
-        Tensor2D { rows: self.seq, cols: self.dim, data }
+        Tensor2D {
+            rows: self.seq,
+            cols: self.dim,
+            data,
+        }
     }
 
     /// Mean over sequence dimension → `[batch, dim]`.
@@ -496,11 +552,17 @@ pub struct SimpleRng {
 
 impl SimpleRng {
     /// Create with given seed.
-    pub fn new(seed: u64) -> Self { Self { state: seed.wrapping_add(1) } }
+    pub fn new(seed: u64) -> Self {
+        Self {
+            state: seed.wrapping_add(1),
+        }
+    }
 
     /// Next pseudo-random f64 in [0, 1).
     pub fn next_f64(&mut self) -> f64 {
-        self.state = self.state.wrapping_mul(6_364_136_223_846_793_005)
+        self.state = self
+            .state
+            .wrapping_mul(6_364_136_223_846_793_005)
             .wrapping_add(1_442_695_040_888_963_407);
         let bits = (self.state >> 11) | 0x3FF0_0000_0000_0000u64;
         f64::from_bits(bits) - 1.0
@@ -542,7 +604,9 @@ impl SimpleRng {
 pub const BRAIN_VIT_VERSION: &str = "0.2.0";
 
 /// Returns the crate version.
-pub fn version() -> &'static str { BRAIN_VIT_VERSION }
+pub fn version() -> &'static str {
+    BRAIN_VIT_VERSION
+}
 
 #[cfg(test)]
 mod tests {
@@ -550,7 +614,10 @@ mod tests {
 
     #[test]
     fn test_vit_error_display() {
-        let e = VitError::InvalidPatchSize { image_dim: 224, patch_size: 15 };
+        let e = VitError::InvalidPatchSize {
+            image_dim: 224,
+            patch_size: 15,
+        };
         let s = e.to_string();
         assert!(s.contains("224"));
         assert!(s.contains("15"));
@@ -571,7 +638,10 @@ mod tests {
     #[test]
     fn test_pool_strategy_from_str() {
         assert_eq!(PoolStrategy::from_str("cls").unwrap(), PoolStrategy::Cls);
-        assert_eq!(PoolStrategy::from_str("mean").unwrap(), PoolStrategy::MeanPool);
+        assert_eq!(
+            PoolStrategy::from_str("mean").unwrap(),
+            PoolStrategy::MeanPool
+        );
         assert_eq!(PoolStrategy::from_str("gap").unwrap(), PoolStrategy::Gap);
         assert!(PoolStrategy::from_str("invalid").is_err());
     }
@@ -675,18 +745,18 @@ mod tests {
 
     #[test]
     fn test_tensor2d_matmul() {
-        let a = Tensor2D::from_data(2, 3, vec![1.0,2.0,3.0, 4.0,5.0,6.0]).unwrap();
-        let b = Tensor2D::from_data(3, 2, vec![7.0,8.0, 9.0,10.0, 11.0,12.0]).unwrap();
+        let a = Tensor2D::from_data(2, 3, vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]).unwrap();
+        let b = Tensor2D::from_data(3, 2, vec![7.0, 8.0, 9.0, 10.0, 11.0, 12.0]).unwrap();
         let c = a.matmul(&b).unwrap();
         assert_eq!(c.rows, 2);
         assert_eq!(c.cols, 2);
-        assert!((c.get(0,0) - 58.0).abs() < 1e-9);
-        assert!((c.get(1,1) - 154.0).abs() < 1e-9);
+        assert!((c.get(0, 0) - 58.0).abs() < 1e-9);
+        assert!((c.get(1, 1) - 154.0).abs() < 1e-9);
     }
 
     #[test]
     fn test_tensor2d_transpose() {
-        let a = Tensor2D::from_data(2, 3, vec![1.0,2.0,3.0, 4.0,5.0,6.0]).unwrap();
+        let a = Tensor2D::from_data(2, 3, vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]).unwrap();
         let b = a.transpose();
         assert_eq!(b.rows, 3);
         assert_eq!(b.cols, 2);
@@ -695,18 +765,18 @@ mod tests {
 
     #[test]
     fn test_tensor2d_scale() {
-        let a = Tensor2D::from_data(1, 3, vec![1.0,2.0,3.0]).unwrap();
+        let a = Tensor2D::from_data(1, 3, vec![1.0, 2.0, 3.0]).unwrap();
         let b = a.scale(2.0);
-        assert!((b.get(0,2) - 6.0).abs() < 1e-10);
+        assert!((b.get(0, 2) - 6.0).abs() < 1e-10);
     }
 
     #[test]
     fn test_tensor2d_add() {
-        let a = Tensor2D::from_data(1, 2, vec![1.0,2.0]).unwrap();
-        let b = Tensor2D::from_data(1, 2, vec![3.0,4.0]).unwrap();
+        let a = Tensor2D::from_data(1, 2, vec![1.0, 2.0]).unwrap();
+        let b = Tensor2D::from_data(1, 2, vec![3.0, 4.0]).unwrap();
         let c = a.add(&b).unwrap();
-        assert!((c.get(0,0) - 4.0).abs() < 1e-10);
-        assert!((c.get(0,1) - 6.0).abs() < 1e-10);
+        assert!((c.get(0, 0) - 4.0).abs() < 1e-10);
+        assert!((c.get(0, 1) - 6.0).abs() < 1e-10);
     }
 
     #[test]
@@ -719,7 +789,7 @@ mod tests {
 
     #[test]
     fn test_tensor2d_layer_norm() {
-        let a = Tensor2D::from_data(1, 4, vec![1.0,2.0,3.0,4.0]).unwrap();
+        let a = Tensor2D::from_data(1, 4, vec![1.0, 2.0, 3.0, 4.0]).unwrap();
         let b = a.layer_norm(1e-5);
         let mean: f64 = b.data.iter().sum::<f64>() / 4.0;
         assert!(mean.abs() < 1e-5);
@@ -727,7 +797,7 @@ mod tests {
 
     #[test]
     fn test_tensor2d_frobenius() {
-        let a = Tensor2D::from_data(1, 3, vec![3.0,4.0,0.0]).unwrap();
+        let a = Tensor2D::from_data(1, 3, vec![3.0, 4.0, 0.0]).unwrap();
         assert!((a.frobenius_norm() - 5.0).abs() < 1e-9);
     }
 
@@ -750,7 +820,9 @@ mod tests {
     #[test]
     fn test_tensor3d_cls_pool() {
         let mut t = Tensor3D::zeros(2, 5, 4);
-        for d in 0..4 { t.set(0, 0, d, (d + 1) as f64); }
+        for d in 0..4 {
+            t.set(0, 0, d, (d + 1) as f64);
+        }
         let cls = t.cls_pool();
         assert_eq!(cls.rows, 2);
         assert_eq!(cls.cols, 4);

@@ -12,7 +12,12 @@ pub fn confirm_prompt(prompt: &str, default: bool, _sink: &OutputSink) -> bool {
 }
 
 /// Prompts user to select from an array of options.
-pub fn select_prompt(prompt: &str, options: &[&str], default_idx: usize, _sink: &OutputSink) -> usize {
+pub fn select_prompt(
+    prompt: &str,
+    options: &[&str],
+    default_idx: usize,
+    _sink: &OutputSink,
+) -> usize {
     let _ = (prompt, options);
     default_idx.min(options.len().saturating_sub(1))
 }

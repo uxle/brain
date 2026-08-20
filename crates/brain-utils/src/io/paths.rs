@@ -3,9 +3,9 @@
 //! Provides path sanitization, directory ensuring, relative and absolute joins,
 //! and temporary path generators.
 
+use crate::core::{UtilsError, UtilsResult};
 use std::fs;
 use std::path::{Path, PathBuf};
-use crate::core::{UtilsError, UtilsResult};
 
 /// Ensures that a directory and all parent directories exist.
 pub fn ensure_dir<P: AsRef<Path>>(path: P) -> UtilsResult<()> {
@@ -21,7 +21,9 @@ pub fn join_safe<P: AsRef<Path>, Q: AsRef<Path>>(base: P, suffix: Q) -> UtilsRes
     let s = suffix.as_ref();
     for comp in s.components() {
         if let std::path::Component::ParentDir = comp {
-            return Err(UtilsError::ValidationError("Parent directory traversal disallowed".to_string()));
+            return Err(UtilsError::ValidationError(
+                "Parent directory traversal disallowed".to_string(),
+            ));
         }
     }
     Ok(base.as_ref().join(s))
@@ -31,7 +33,11 @@ pub fn join_safe<P: AsRef<Path>, Q: AsRef<Path>>(base: P, suffix: Q) -> UtilsRes
 pub fn unique_temp_path(prefix: &str, suffix: &str) -> PathBuf {
     let id = crate::utils::now_ns();
     let name = format!("{}_{}_{}", prefix, std::process::id(), id);
-    let name_with_ext = if suffix.is_empty() { name } else { format!("{}.{}", name, suffix.trim_start_matches('.')) };
+    let name_with_ext = if suffix.is_empty() {
+        name
+    } else {
+        format!("{}.{}", name, suffix.trim_start_matches('.'))
+    };
     std::env::temp_dir().join(name_with_ext)
 }
 
@@ -59,10 +65,10 @@ mod tests {
         let tmp = unique_temp_path("test_prefix", "bin");
         assert!(tmp.to_str().unwrap().contains("test_prefix"));
         assert_eq!(extension(&tmp), "bin");
-    
+
         let joined = join_safe("/tmp/base", "sub/folder").unwrap();
         assert_eq!(normalize_slashes(joined), "/tmp/base/sub/folder");
-    
+
         let bad_join = join_safe("/tmp/base", "../escaped");
         assert!(bad_join.is_err());
     }

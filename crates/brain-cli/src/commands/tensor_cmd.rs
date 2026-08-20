@@ -50,7 +50,10 @@ pub fn run_tensor_command(args: &[String], sink: &OutputSink) -> ExitCode {
         }
         "info" => {
             let dims = parse_dims(&args[1..]);
-            sink.println(&format!("Tensor inspection: shape={:?}, dtype=f64, device=cpu", dims));
+            sink.println(&format!(
+                "Tensor inspection: shape={:?}, dtype=f64, device=cpu",
+                dims
+            ));
             ExitCode::SUCCESS
         }
         "stats" => {
@@ -58,7 +61,12 @@ pub fn run_tensor_command(args: &[String], sink: &OutputSink) -> ExitCode {
             let t = Tensor::ones(dims.clone());
             let sum: f64 = t.data().iter().sum();
             let mean = sum / t.numel().max(1) as f64;
-            sink.println(&format!("Tensor stats: shape={:?}, numel={}, mean={:.4}", dims, t.numel(), mean));
+            sink.println(&format!(
+                "Tensor stats: shape={:?}, numel={}, mean={:.4}",
+                dims,
+                t.numel(),
+                mean
+            ));
             ExitCode::SUCCESS
         }
         "reshape" => {

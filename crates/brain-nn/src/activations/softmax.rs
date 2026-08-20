@@ -36,7 +36,11 @@ pub fn softmax(input: &Tensor) -> Tensor {
 /// Numerically stable 2D LogSoftmax along the last dimension.
 pub fn log_softmax(input: &Tensor) -> Tensor {
     let sm = softmax(input);
-    let data: Vec<f64> = sm.to_vec().iter().map(|&x| x.clamp(1e-15, 1.0).ln()).collect();
+    let data: Vec<f64> = sm
+        .to_vec()
+        .iter()
+        .map(|&x| x.clamp(1e-15, 1.0).ln())
+        .collect();
     Tensor::from_vec(data, input.shape().to_vec())
 }
 
@@ -62,7 +66,13 @@ impl LogSoftmax {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

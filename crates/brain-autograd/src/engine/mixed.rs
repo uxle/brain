@@ -24,7 +24,12 @@ impl Default for GradScaler {
 
 impl GradScaler {
     /// Creates a new `GradScaler`.
-    pub fn new(init_scale: f64, growth_factor: f64, backoff_factor: f64, growth_interval: usize) -> Self {
+    pub fn new(
+        init_scale: f64,
+        growth_factor: f64,
+        backoff_factor: f64,
+        growth_interval: usize,
+    ) -> Self {
         Self {
             scale_factor: init_scale,
             growth_factor,
@@ -94,9 +99,9 @@ mod tests {
     #[allow(unused_imports)]
     use super::*;
     #[allow(unused_imports)]
+    use crate::tape::OpRecord;
+    #[allow(unused_imports)]
     use crate::value::Value;
     #[allow(unused_imports)]
     use brain_core::Tensor;
-    #[allow(unused_imports)]
-    use crate::tape::OpRecord;
 }

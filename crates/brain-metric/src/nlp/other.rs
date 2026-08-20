@@ -11,7 +11,9 @@ pub fn meteor_score_lite(hypothesis: &[&str], reference: &[&str]) -> f64 {
     let ref_set: HashSet<&str> = reference.iter().copied().collect();
 
     let matches = hyp_set.intersection(&ref_set).count();
-    if matches == 0 { return 0.0; }
+    if matches == 0 {
+        return 0.0;
+    }
 
     let p = matches as f64 / hypothesis.len().max(1) as f64;
     let r = matches as f64 / reference.len().max(1) as f64;
@@ -22,7 +24,9 @@ pub fn meteor_score_lite(hypothesis: &[&str], reference: &[&str]) -> f64 {
 
 /// Evaluates Perplexity = exp(-1/N * sum(log_prob)).
 pub fn perplexity_score(log_probs: &[f64]) -> f64 {
-    if log_probs.is_empty() { return 1.0; }
+    if log_probs.is_empty() {
+        return 1.0;
+    }
     let avg_log_prob = log_probs.iter().sum::<f64>() / log_probs.len() as f64;
     (-avg_log_prob).exp()
 }
@@ -35,8 +39,12 @@ pub fn edit_distance_levenshtein(s1: &str, s2: &str) -> usize {
     let (n1, n2) = (c1.len(), c2.len());
 
     let mut dp = vec![vec![0usize; n2 + 1]; n1 + 1];
-    for i in 0..=n1 { dp[i][0] = i; }
-    for j in 0..=n2 { dp[0][j] = j; }
+    for i in 0..=n1 {
+        dp[i][0] = i;
+    }
+    for j in 0..=n2 {
+        dp[0][j] = j;
+    }
 
     for i in 1..=n1 {
         for j in 1..=n2 {
@@ -52,7 +60,13 @@ pub fn edit_distance_levenshtein(s1: &str, s2: &str) -> usize {
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused_imports, unused_variables, unused_mut, dead_code, clippy::approx_constant)]
+    #![allow(
+        unused_imports,
+        unused_variables,
+        unused_mut,
+        dead_code,
+        clippy::approx_constant
+    )]
     use super::*;
     use brain_core::Tensor;
 }

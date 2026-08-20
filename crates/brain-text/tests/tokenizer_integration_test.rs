@@ -19,9 +19,20 @@ fn test_word_tokenizer_and_vocab() {
 
 #[test]
 fn test_bleu_score_exact_match() {
-    let reference = vec!["the".into(), "cat".into(), "sat".into(), "on".into(), "the".into(), "mat".into()];
+    let reference = vec![
+        "the".into(),
+        "cat".into(),
+        "sat".into(),
+        "on".into(),
+        "the".into(),
+        "mat".into(),
+    ];
     let candidate = reference.clone();
 
     let score = bleu_score(&reference, &candidate, 4, true);
-    assert!((score - 1.0).abs() < 1e-4, "Exact match BLEU must be 1.0, got {}", score);
+    assert!(
+        (score - 1.0).abs() < 1e-4,
+        "Exact match BLEU must be 1.0, got {}",
+        score
+    );
 }
