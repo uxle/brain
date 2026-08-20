@@ -5,6 +5,7 @@
 #![allow(missing_docs, clippy::excessive_precision, clippy::approx_constant, clippy::needless_range_loop, clippy::too_many_arguments, clippy::manual_is_multiple_of, clippy::manual_div_ceil, clippy::doc_markdown)]
 
 pub mod core;
+pub mod ewc;
 pub mod config;
 pub mod utils;
 pub mod dropout;

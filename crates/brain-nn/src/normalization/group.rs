@@ -28,9 +28,15 @@ impl GroupNorm {
     }
 }
 
+use brain_autograd::Value;
+
 impl Module for GroupNorm {
-    fn forward(&self, input: &Tensor) -> ModuleResult<Tensor> {
+    fn forward(&self, input: &Value) -> ModuleResult<Value> {
         Ok(input.clone())
+    }
+
+    fn parameters(&self) -> Vec<Value> {
+        vec![Value::new(self.weight.clone(), true), Value::new(self.bias.clone(), true)]
     }
 }
 

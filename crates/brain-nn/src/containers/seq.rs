@@ -3,13 +3,14 @@
 //! Standard sequential pipeline forwarding tensors through submodules in insertion order.
 #![allow(missing_docs)]
 
-use brain_core::Tensor;
 use crate::module::{Module, ModuleResult};
 
 /// Sequential container chaining modules in forward order.
 pub struct Sequential {
     pub layers: Vec<Box<dyn Module>>,
 }
+
+use brain_autograd::Value;
 
 impl Sequential {
     pub fn new() -> Self {
@@ -28,7 +29,7 @@ impl Sequential {
         self.layers.is_empty()
     }
 
-    pub fn forward(&self, input: &Tensor) -> ModuleResult<Tensor> {
+    pub fn forward(&self, input: &Value) -> ModuleResult<Value> {
         let mut cur = input.clone();
         for layer in &self.layers {
             cur = layer.forward(&cur)?;
@@ -44,11 +45,11 @@ impl Default for Sequential {
 }
 
 impl Module for Sequential {
-    fn forward(&self, input: &Tensor) -> ModuleResult<Tensor> {
+    fn forward(&self, input: &Value) -> ModuleResult<Value> {
         self.forward(input)
     }
 
-    fn parameters(&self) -> Vec<Tensor> {
+    fn parameters(&self) -> Vec<Value> {
         self.layers.iter().flat_map(|l| l.parameters()).collect()
     }
 }

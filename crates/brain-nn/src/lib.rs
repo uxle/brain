@@ -45,7 +45,7 @@ pub use init::{
     InitConfig, InitPolicy, InitScheme,
 };
 pub use layers::{
-    scaled_dot_product_attention, AttentionConfig, AvgPool2d, Bilinear, Conv2d,
+    scaled_dot_product_attention, AttentionConfig, AvgPool2d, Bilinear, Conv1d, Conv2d,
     ConvTranspose2d, Embedding, Identity, LayerNorm, Linear, MaxPool2d,
     MultiheadAttention, GRU, LSTM,
 };

@@ -3,7 +3,6 @@
 //! Named sequential execution pipeline with forward hook dispatch and layer indexing.
 #![allow(missing_docs)]
 
-use brain_core::Tensor;
 use crate::module::{Module, ModuleResult};
 
 /// Named layer entry in an extended sequential container.
@@ -17,6 +16,8 @@ pub struct SequentialNamed {
     pub children: Vec<NamedModule>,
 }
 
+use brain_autograd::Value;
+
 impl SequentialNamed {
     pub fn new() -> Self {
         Self { children: Vec::new() }
@@ -29,7 +30,7 @@ impl SequentialNamed {
         });
     }
 
-    pub fn forward(&self, input: &Tensor) -> ModuleResult<Tensor> {
+    pub fn forward(&self, input: &Value) -> ModuleResult<Value> {
         let mut cur = input.clone();
         for child in &self.children {
             cur = child.module.forward(&cur)?;
@@ -41,6 +42,16 @@ impl SequentialNamed {
 impl Default for SequentialNamed {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+impl Module for SequentialNamed {
+    fn forward(&self, input: &Value) -> ModuleResult<Value> {
+        self.forward(input)
+    }
+
+    fn parameters(&self) -> Vec<Value> {
+        self.children.iter().flat_map(|c| c.module.parameters()).collect()
     }
 }
 

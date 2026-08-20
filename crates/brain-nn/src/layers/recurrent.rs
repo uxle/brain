@@ -27,8 +27,10 @@ impl LSTM {
     }
 }
 
+use brain_autograd::Value;
+
 impl Module for LSTM {
-    fn forward(&self, input: &Tensor) -> ModuleResult<Tensor> {
+    fn forward(&self, input: &Value) -> ModuleResult<Value> {
         let shape = input.shape();
         if shape.len() < 3 || shape[2] != self.input_size {
             return Err(ModuleError::ShapeMismatch {
@@ -67,11 +69,12 @@ impl Module for LSTM {
             }
         }
 
-        Ok(Tensor::from_vec(out_all, vec![batch, seq_len, self.hidden_size]))
+        let t_out = Tensor::from_vec(out_all, vec![batch, seq_len, self.hidden_size]);
+        Ok(Value::new(t_out, input.requires_grad()))
     }
 
-    fn parameters(&self) -> Vec<Tensor> {
-        self.cell.parameters()
+    fn parameters(&self) -> Vec<Value> {
+        self.cell.parameters().into_iter().map(|t| Value::new(t, true)).collect()
     }
 }
 
@@ -94,7 +97,7 @@ impl GRU {
 }
 
 impl Module for GRU {
-    fn forward(&self, input: &Tensor) -> ModuleResult<Tensor> {
+    fn forward(&self, input: &Value) -> ModuleResult<Value> {
         let shape = input.shape();
         if shape.len() < 3 || shape[2] != self.input_size {
             return Err(ModuleError::ShapeMismatch {
@@ -128,11 +131,12 @@ impl Module for GRU {
             }
         }
 
-        Ok(Tensor::from_vec(out_all, vec![batch, seq_len, self.hidden_size]))
+        let t_out = Tensor::from_vec(out_all, vec![batch, seq_len, self.hidden_size]);
+        Ok(Value::new(t_out, input.requires_grad()))
     }
 
-    fn parameters(&self) -> Vec<Tensor> {
-        self.cell.parameters()
+    fn parameters(&self) -> Vec<Value> {
+        self.cell.parameters().into_iter().map(|t| Value::new(t, true)).collect()
     }
 }
 
@@ -144,7 +148,7 @@ mod tests {
     #[test]
     fn test_lstm_forward_shape_and_values() {
         let lstm = LSTM::new(4, 8, 1);
-        let x = Tensor::from_vec(vec![1.0; 2 * 5 * 4], vec![2, 5, 4]);
+        let x = Value::new(Tensor::from_vec(vec![1.0; 2 * 5 * 4], vec![2, 5, 4]), false);
         let out = lstm.forward(&x).unwrap();
         assert_eq!(out.shape(), &[2, 5, 8]);
         assert!(out.to_vec().iter().any(|&v| v != 0.0));
@@ -153,7 +157,7 @@ mod tests {
     #[test]
     fn test_gru_forward_shape_and_values() {
         let gru = GRU::new(4, 8);
-        let x = Tensor::from_vec(vec![1.0; 2 * 5 * 4], vec![2, 5, 4]);
+        let x = Value::new(Tensor::from_vec(vec![1.0; 2 * 5 * 4], vec![2, 5, 4]), false);
         let out = gru.forward(&x).unwrap();
         assert_eq!(out.shape(), &[2, 5, 8]);
         assert!(out.to_vec().iter().any(|&v| v != 0.0));

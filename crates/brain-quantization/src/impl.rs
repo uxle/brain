@@ -5,7 +5,7 @@
 
 use brain_core::Tensor;
 use super::config::QuantConfig;
-use super::core::{QParams, QuantDType, QuantResult, QuantScheme, QuantTensor};
+use super::core::{QParams, QuantResult, QuantScheme, QuantTensor};
 use super::prune::{MagnitudePruner, PruneResult, Pruner};
 use super::quantizer::{AffineQuantizer, Quantizer, SymmetricQuantizer};
 use super::utils::{compute_scale_zero_point, minmax, quantize_val};
@@ -19,11 +19,7 @@ pub fn quantize_tensor(tensor: &Tensor, config: &QuantConfig) -> QuantResult<Qua
         )
     {
         let num_channels = tensor.shape().first().copied().unwrap_or(1);
-        let channel_size = if num_channels > 0 {
-            tensor.numel() / num_channels
-        } else {
-            0
-        };
+        let channel_size = tensor.numel().checked_div(num_channels).unwrap_or(0);
         let is_sym = config.symmetric
             || matches!(
                 config.scheme,
@@ -66,8 +62,8 @@ pub fn quantize_tensor(tensor: &Tensor, config: &QuantConfig) -> QuantResult<Qua
             } else {
                 (start + channel_size).min(data.len())
             };
-            for i in start..end {
-                q_data.push(quantize_val(data[i], scale, zp, qmin, qmax));
+            for &val in &data[start..end] {
+                q_data.push(quantize_val(val, scale, zp, qmin, qmax));
             }
         }
         Ok(QuantTensor::new(q_data, tensor.shape().to_vec(), params))

@@ -230,3 +230,69 @@ mod tests {
     use super::*;
     use brain_core::Tensor;
 }
+
+/// Noam Learning Rate Scheduler (Vaswani et al., 2017):
+/// lr = factor * (d_model ^ -0.5) * min(step ^ -0.5, step * (warmup_steps ^ -1.5))
+#[derive(Debug, Clone)]
+pub struct NoamLR {
+    pub d_model: usize,
+    pub warmup_steps: usize,
+    pub factor: f64,
+    pub last_lrs: Vec<f64>,
+    pub step_count: usize,
+}
+
+impl NoamLR {
+    pub fn new(d_model: usize, warmup_steps: usize, factor: f64) -> Self {
+        Self {
+            d_model: d_model.max(1),
+            warmup_steps: warmup_steps.max(1),
+            factor,
+            last_lrs: vec![0.0],
+            step_count: 0,
+        }
+    }
+
+    pub fn compute_lr(&self, step: usize) -> f64 {
+        let s = (step.max(1)) as f64;
+        let d = self.d_model as f64;
+        let w = self.warmup_steps as f64;
+        self.factor * d.powf(-0.5) * (s.powf(-0.5)).min(s * w.powf(-1.5))
+    }
+}
+
+impl LrScheduler for NoamLR {
+    fn step(&mut self, optimizer: &mut dyn Optimizer) -> OptimResult<Vec<f64>> {
+        self.step_count += 1;
+        let new_lr = self.compute_lr(self.step_count);
+        self.last_lrs = vec![new_lr; optimizer.param_groups().len()];
+        for (i, group) in optimizer.param_groups_mut().iter_mut().enumerate() {
+            group.lr = self.last_lrs.get(i).copied().unwrap_or(new_lr);
+        }
+        Ok(self.last_lrs.clone())
+    }
+
+    fn get_last_lr(&self) -> &[f64] {
+        &self.last_lrs
+    }
+
+    fn get_step_count(&self) -> usize {
+        self.step_count
+    }
+
+    fn state_dict(&self) -> HashMap<String, f64> {
+        let mut map = HashMap::new();
+        map.insert("step_count".to_string(), self.step_count as f64);
+        map.insert("d_model".to_string(), self.d_model as f64);
+        map.insert("warmup_steps".to_string(), self.warmup_steps as f64);
+        map.insert("factor".to_string(), self.factor);
+        map
+    }
+
+    fn load_state_dict(&mut self, state: &HashMap<String, f64>) -> OptimResult<()> {
+        if let Some(&s) = state.get("step_count") {
+            self.step_count = s as usize;
+        }
+        Ok(())
+    }
+}

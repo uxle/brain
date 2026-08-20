@@ -1,0 +1,23 @@
+[package]
+name = "brain-python"
+version = "1.0.0"
+edition = "2021"
+description = "Official Python bindings for the Brain Deep Learning Framework"
+license = "MIT"
+
+[lib]
+name = "brain_native"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+brain-core = { path = "../brain-core" }
+brain-autograd = { path = "../brain-autograd" }
+brain-nn = { path = "../brain-nn" }
+brain-optim = { path = "../brain-optim" }
+brain-loss = { path = "../brain-loss" }
+brain-export = { path = "../brain-export" }
+pyo3 = { version = "0.22", features = ["extension-module", "abi3-py38"], optional = true }
+
+[features]
+default = ["extension-module"]
+extension-module = ["dep:pyo3"]

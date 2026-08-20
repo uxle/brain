@@ -10,3 +10,6 @@ brain-loss = { path = "../brain-loss" }
 brain-optim = { path = "../brain-optim" }
 brain-train = { path = "../brain-train" }
 brain-transformer = { path = "../brain-transformer" }
+brain-rl = { path = "../brain-rl" }
+brain-utils = { path = "../brain-utils" }
+brain-regularization = { path = "../brain-regularization" }

@@ -174,6 +174,32 @@ impl Value {
         *g = None;
     }
 
+    /// Returns element at flat index from underlying tensor.
+    pub fn get(&self, idx: usize) -> f64 {
+        self.data.data()[idx]
+    }
+
+    /// Returns element at 4D index from underlying tensor.
+    pub fn get_4d(&self, b: usize, c: usize, h: usize, w: usize) -> f64 {
+        let shape = self.shape();
+        if shape.len() == 4 {
+            let idx = ((b * shape[1] + c) * shape[2] + h) * shape[3] + w;
+            self.data.data()[idx]
+        } else {
+            0.0
+        }
+    }
+
+    /// Returns copy of the underlying flattened vector of elements.
+    pub fn to_vec(&self) -> Vec<f64> {
+        self.data.to_vec()
+    }
+
+    /// In-place updates the underlying Tensor data payload.
+    pub fn set_data(&mut self, tensor: Tensor) {
+        self.data = Arc::new(tensor);
+    }
+
     /// Accumulates incoming gradient into this node.
     pub fn accumulate_grad(&self, incoming: &Tensor) -> BrainResult<()> {
         let mut g = self.grad.write().unwrap();

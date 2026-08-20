@@ -81,3 +81,32 @@ fn test_llama_lite_end_to_end_forward() {
         assert!(v.is_finite(), "Logits must be finite");
     }
 }
+
+#[test]
+fn test_alibi_geometric_slopes_and_biases() {
+    use brain_transformer::position::alibi::AlibiPositionalBias;
+
+    let slopes = AlibiPositionalBias::compute_slopes(8);
+    assert_eq!(slopes.len(), 8);
+
+    // Assert strictly decreasing geometric progression
+    for i in 0..7 {
+        assert!(slopes[i] > slopes[i + 1], "Slopes must be monotonically decreasing");
+    }
+}
+
+#[test]
+fn test_kv_cache_layer_lifecycle() {
+    use brain_transformer::kv_cache::LayerKvCache;
+
+    let mut cache = LayerKvCache::new(1, 4, 8, 16);
+    assert_eq!(cache.current_seq_len, 0);
+
+    let k_step = Tensor::ones(vec![1, 4, 1, 8]);
+    let v_step = Tensor::ones(vec![1, 4, 1, 8]);
+
+    let (k_cached, v_cached) = cache.update(&k_step, &v_step).expect("Append KV step");
+    assert_eq!(k_cached.shape(), &[1, 4, 1, 8]);
+    assert_eq!(v_cached.shape(), &[1, 4, 1, 8]);
+    assert_eq!(cache.current_seq_len, 1);
+}

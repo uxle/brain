@@ -3,10 +3,12 @@
 //! Classification loss trait and modular loss functions (Cross-Entropy, Focal, Hinge, KL).
 #![allow(missing_docs)]
 
+pub mod bce;
 pub mod ce;
 pub mod focal;
 pub mod other;
 
+pub use bce::{BCELoss, BCEWithLogitsLoss, BCEConfig};
 pub use ce::{CrossEntropyLoss, CrossEntropyConfig};
 pub use focal::{FocalLoss, FocalConfig};
 pub use other::{HingeLoss, KLDivergenceLoss, ClassLossKind};

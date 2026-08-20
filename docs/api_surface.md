@@ -85,7 +85,7 @@ This document provides a concise reference to the primary public traits, structs
 - **`brain-compile`**: `IrGraph`, `IrOp`, `PassManager`, `Interpreter::evaluate`, `JitCache::get_or_compile`, `MemoryPlan`, `estimate_total_flops`, `export_dot`/`export_text`
 
 ## `brain-cli` / `brain`
-- **CLI Commands**: `brain make`, `brain check`, `brain run`, `brain train`, `brain chat`, `brain space`, `brain new`, `brain script`, `brain dataset`, `brain convert`, `brain doctor`, `brain repl`, `brain init`, `brain bench`, `brain tensor`
+- **CLI Commands**: `brain make`, `brain check`, `brain run`, `brain train`, `brain chat`, `brain new`, `brain agent`, `brain script`, `brain dataset`, `brain convert`, `brain doctor`, `brain repl`, `brain init`, `brain bench`, `brain tensor`
 - **Entry**: `brain_cli::run_cli(args, &OutputSink) -> ExitCode`
 
 ## Research & Systems

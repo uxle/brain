@@ -17,6 +17,9 @@ pub fn leaky_relu(input: &Tensor, negative_slope: f64) -> Tensor {
     Tensor::from_vec(data, input.shape().to_vec())
 }
 
+use brain_autograd::Value;
+use crate::module::{Module, ModuleResult};
+
 /// ReLU module wrapper.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct ReLU;
@@ -24,6 +27,12 @@ pub struct ReLU;
 impl ReLU {
     pub fn forward(&self, input: &Tensor) -> Tensor {
         relu(input)
+    }
+}
+
+impl Module for ReLU {
+    fn forward(&self, input: &Value) -> ModuleResult<Value> {
+        Ok(input.relu())
     }
 }
 

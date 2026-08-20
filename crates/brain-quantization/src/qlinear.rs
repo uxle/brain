@@ -4,7 +4,6 @@
 #![allow(missing_docs, clippy::needless_range_loop, clippy::too_many_arguments, clippy::manual_is_multiple_of, clippy::manual_div_ceil, clippy::doc_markdown)]
 
 use super::core::{QuantDType, QuantResult, QuantTensor};
-use super::qmatmul::q8_matmul;
 
 /// Configuration parameters for Quantized Linear layer.
 #[derive(Debug, Clone, PartialEq)]

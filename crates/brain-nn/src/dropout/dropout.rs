@@ -51,9 +51,12 @@ impl Dropout {
     }
 }
 
+use brain_autograd::Value;
+
 impl Module for Dropout {
-    fn forward(&self, input: &Tensor) -> ModuleResult<Tensor> {
-        Ok(self.forward_tensor(input))
+    fn forward(&self, input: &Value) -> ModuleResult<Value> {
+        let t_out = self.forward_tensor(input.data());
+        Ok(Value::new(t_out, input.requires_grad()))
     }
 
     fn set_training(&mut self, training: bool) {

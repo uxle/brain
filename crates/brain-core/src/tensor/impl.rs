@@ -243,6 +243,12 @@ impl Tensor {
         &self.data
     }
 
+    /// Extracts the single scalar value of a 1-element tensor.
+    pub fn item(&self) -> f64 {
+        assert_eq!(self.data.len(), 1, "item() can only be called on tensors with exactly 1 element, got {}", self.data.len());
+        self.data[0]
+    }
+
     /// Returns a mutable slice to the underlying data buffer.
     #[inline(always)]
     pub fn data_mut(&mut self) -> &mut [f64] {

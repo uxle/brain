@@ -29,8 +29,10 @@ impl InstanceNorm2d {
     }
 }
 
+use brain_autograd::Value;
+
 impl Module for InstanceNorm2d {
-    fn forward(&self, input: &Tensor) -> ModuleResult<Tensor> {
+    fn forward(&self, input: &Value) -> ModuleResult<Value> {
         let shape = input.shape();
         if shape.len() < 4 || shape[1] != self.num_features {
             return Err(crate::module::ModuleError::ShapeMismatch {
@@ -65,12 +67,13 @@ impl Module for InstanceNorm2d {
             }
         }
 
-        Ok(Tensor::from_vec(out, shape.to_vec()))
+        let t_out = Tensor::from_vec(out, shape.to_vec());
+        Ok(Value::new(t_out, input.requires_grad()))
     }
 
-    fn parameters(&self) -> Vec<Tensor> {
+    fn parameters(&self) -> Vec<Value> {
         if self.affine {
-            vec![self.weight.clone(), self.bias.clone()]
+            vec![Value::new(self.weight.clone(), true), Value::new(self.bias.clone(), true)]
         } else {
             vec![]
         }
@@ -84,10 +87,10 @@ mod tests {
     #[test]
     fn test_instance_norm2d_no_affine() {
         let in_ = InstanceNorm2d::new(2, false);
-        let t = Tensor::from_slice(
+        let t = Value::new(Tensor::from_slice(
             &[1.0, 3.0, 2.0, 4.0, 10.0, 20.0, 30.0, 40.0],
             vec![1, 2, 2, 2],
-        );
+        ), false);
         let out = in_.forward(&t).unwrap();
         // Channel 0: mean 2.5, pop-var 1.25 -> inv_std ~0.8944
         let inv = 1.0 / (1.25f64 + 1e-5).sqrt();
@@ -102,7 +105,7 @@ mod tests {
     #[test]
     fn test_instance_norm2d_affine() {
         let in_ = InstanceNorm2d::new(1, true);
-        let t = Tensor::from_slice(&[1.0, 2.0, 3.0, 4.0], vec![1, 1, 2, 2]);
+        let t = Value::new(Tensor::from_slice(&[1.0, 2.0, 3.0, 4.0], vec![1, 1, 2, 2]), false);
         let out = in_.forward(&t).unwrap();
         // mean 2.5, var 1.25, gamma 1, beta 0
         let inv = 1.0 / (1.25f64 + 1e-5).sqrt();
@@ -113,7 +116,7 @@ mod tests {
     #[test]
     fn test_instance_norm_per_sample_independent() {
         let in_ = InstanceNorm2d::new(1, false);
-        let t = Tensor::from_slice(&[1.0, 3.0, 100.0, 300.0], vec![2, 1, 1, 2]);
+        let t = Value::new(Tensor::from_slice(&[1.0, 3.0, 100.0, 300.0], vec![2, 1, 1, 2]), false);
         let out = in_.forward(&t).unwrap();
         // Both samples normalize to the same values: [-1, 1] (within eps tolerance)
         assert!((out.get(0) + 1.0).abs() < 1e-4);

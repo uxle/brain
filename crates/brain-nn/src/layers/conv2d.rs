@@ -38,8 +38,10 @@ impl Conv1d {
     }
 }
 
+use brain_autograd::Value;
+
 impl Module for Conv1d {
-    fn forward(&self, input: &Tensor) -> ModuleResult<Tensor> {
+    fn forward(&self, input: &Value) -> ModuleResult<Value> {
         let shape = input.shape();
         if shape.len() < 3 || shape[1] != self.in_channels {
             return Err(ModuleError::ShapeMismatch {
@@ -79,13 +81,14 @@ impl Module for Conv1d {
                 }
             }
         }
-        Ok(Tensor::from_vec(out, vec![batch, self.out_channels, out_len]))
+        let t_out = Tensor::from_vec(out, vec![batch, self.out_channels, out_len]);
+        Ok(Value::new(t_out, input.requires_grad()))
     }
 
-    fn parameters(&self) -> Vec<Tensor> {
-        let mut p = vec![self.weight.clone()];
+    fn parameters(&self) -> Vec<Value> {
+        let mut p = vec![Value::new(self.weight.clone(), true)];
         if let Some(ref b) = self.bias {
-            p.push(b.clone());
+            p.push(Value::new(b.clone(), true));
         }
         p
     }
@@ -101,7 +104,7 @@ mod tests {
         let mut c1 = Conv1d::new(1, 1, 3);
         c1.weight = Tensor::from_slice(&[1.0, 2.0, 1.0], vec![1, 1, 3]);
         c1.bias = Some(Tensor::from_slice(&[0.5], vec![1]));
-        let x = Tensor::from_slice(&[1.0, 2.0, 3.0, 4.0, 5.0], vec![1, 1, 5]);
+        let x = Value::new(Tensor::from_slice(&[1.0, 2.0, 3.0, 4.0, 5.0], vec![1, 1, 5]), false);
         let out = c1.forward(&x).unwrap();
         assert_eq!(out.shape(), &[1, 1, 3]);
         // Pos 0: 1*1 + 2*2 + 3*1 + 0.5 = 8.5

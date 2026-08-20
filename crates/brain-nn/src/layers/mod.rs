@@ -6,6 +6,7 @@
 pub mod linear;
 pub mod linear2d;
 pub mod conv;
+pub mod conv1d;
 pub mod conv2d;
 pub mod conv_transpose;
 pub mod attention;
@@ -21,6 +22,7 @@ pub mod pixel_shuffle;
 pub use linear::Linear;
 pub use linear2d::{Bilinear, Identity};
 pub use conv::Conv2d;
+pub use conv1d::Conv1d;
 pub use conv_transpose::ConvTranspose2d;
 pub use attention::{MultiheadAttention, scaled_dot_product_attention, AttentionConfig};
 pub use norm::LayerNorm;

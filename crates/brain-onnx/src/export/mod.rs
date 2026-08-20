@@ -8,7 +8,7 @@ use crate::ir::OnnxModel;
 use crate::utils::encode_varint;
 
 fn encode_varint_field(buf: &mut Vec<u8>, field_num: u32, val: u64) {
-    buf.extend(encode_varint(((field_num as u64) << 3) | 0));
+    buf.extend(encode_varint((field_num as u64) << 3));
     buf.extend(encode_varint(val));
 }
 

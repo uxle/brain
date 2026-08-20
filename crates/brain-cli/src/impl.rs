@@ -21,6 +21,9 @@ pub fn run_cli(args: &[String], sink: &OutputSink) -> ExitCode {
             print_help(sink);
             ExitCode::SUCCESS
         }
+        "agent" => {
+            crate::commands::agent_cmd::run_agent_command(&args[1..], sink)
+        }
         "tensor" => {
             crate::commands::tensor_cmd::run_tensor_command(&args[1..], sink)
         }
@@ -104,16 +107,20 @@ pub fn print_help(sink: &OutputSink) {
     sink.println("Usage: brain <command> [options]");
     sink.println("");
     sink.println("Commands:");
-    sink.println("  space      Synthesize a 3D cubic interconnected neural lattice in a .bn file");
-    sink.println("  tensor     Inspect, create, transform, and evaluate tensors");
-    sink.println("  model      Build, inspect, and evaluate deep neural models");
-    sink.println("  train      Train models with progress bars and metric tracking");
+    sink.println("  new        Create a newborn 3D cubic neural mind in a .bn file");
+    sink.println("  chat       Start an interactive conversation with a growing BrainMind");
     sink.println("  make       Build, train, and checkpoint a model from a dataset");
-    sink.println("  run        Load a model checkpoint and run inference (\"talk to brain\")");
+    sink.println("  run        Load a model checkpoint and run inference");
+    sink.println("  agent      Run autonomous perceive-think-act-learn agent loop");
+    sink.println("  train      Train models with progress bars and metric tracking");
+    sink.println("  model      Build, inspect, and evaluate deep neural models");
+    sink.println("  check      Verify model and computational graph integrity");
+    sink.println("  tensor     Inspect, create, transform, and evaluate tensors");
     sink.println("  bench      Run high-resolution operator & model benchmarks");
     sink.println("  dataset    Inspect, split, and cache datasets");
     sink.println("  convert    Convert and export tensor and model formats");
     sink.println("  repl       Start interactive computation REPL");
+    sink.println("  script     Execute declarative .brain automation scripts");
     sink.println("  doctor     Diagnose system hardware and backend health");
     sink.println("  init       Scaffold a new Brain project workspace");
 }

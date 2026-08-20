@@ -3,7 +3,6 @@
 //! Self-normalizing AlphaDropout preserving mean and variance under SELU activations.
 #![allow(missing_docs)]
 
-use brain_core::Tensor;
 use crate::module::{Module, ModuleResult};
 
 /// AlphaDropout for self-normalizing neural networks (SNNs).
@@ -19,8 +18,10 @@ impl AlphaDropout {
     }
 }
 
+use brain_autograd::Value;
+
 impl Module for AlphaDropout {
-    fn forward(&self, input: &Tensor) -> ModuleResult<Tensor> {
+    fn forward(&self, input: &Value) -> ModuleResult<Value> {
         Ok(input.clone())
     }
 
@@ -43,7 +44,7 @@ impl Dropout2d {
 }
 
 impl Module for Dropout2d {
-    fn forward(&self, input: &Tensor) -> ModuleResult<Tensor> {
+    fn forward(&self, input: &Value) -> ModuleResult<Value> {
         Ok(input.clone())
     }
 }

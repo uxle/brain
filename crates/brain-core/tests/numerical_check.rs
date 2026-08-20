@@ -403,3 +403,129 @@ fn check_backend_abstraction_dispatch() {
     let add_simd = simd.add(&a, &b).unwrap();
     assert_eq!(add_cpu.to_vec(), add_simd.to_vec());
 }
+
+// =============================================================================
+// =============================================================================
+// Phase 1 Edge Cases & Linalg/FFT Hardening
+// =============================================================================
+
+#[test]
+fn test_empty_tensor_and_scalar_edge_cases() {
+    let empty = Tensor::zeros(vec![0]);
+    assert_eq!(empty.numel(), 0);
+    assert_eq!(empty.shape(), &[0]);
+
+    let scalar = Tensor::from_slice(&[42.0], vec![]);
+    assert_eq!(scalar.numel(), 1);
+    assert_eq!(scalar.ndim(), 0);
+    assert_eq!(scalar.item(), 42.0);
+}
+
+#[test]
+fn test_non_contiguous_transposed_matmul_and_reduction() {
+    let a = Tensor::from_slice(&[1.0, 2.0, 3.0, 4.0, 5.0, 6.0], vec![2, 3]);
+    let a_t = a.transpose(0, 1); // 3x2, non-contiguous
+    assert_eq!(a_t.shape(), &[3, 2]);
+
+    let b = Tensor::from_slice(&[1.0, 0.0, 0.0, 1.0], vec![2, 2]);
+    let c = arith::matmul(&a_t, &b);
+    assert_eq!(c.shape(), &[3, 2]);
+    assert_eq!(c.to_vec(), a_t.to_vec());
+
+    let red_sum = red::sum(&a_t);
+    assert_eq!(red_sum, 21.0);
+}
+
+#[test]
+fn test_nan_and_inf_ieee754_propagation() {
+    let t = Tensor::from_slice(&[1.0, f64::NAN, 3.0], vec![3]);
+    let out = arith::add(&t, &Tensor::from_slice(&[1.0, 2.0, 3.0], vec![3]));
+    assert_eq!(out.data()[0], 2.0);
+    assert!(out.data()[1].is_nan());
+    assert_eq!(out.data()[2], 6.0);
+
+    let t_inf = Tensor::from_slice(&[f64::INFINITY, 1.0], vec![2]);
+    let out_inf = arith::mul(&t_inf, &Tensor::from_slice(&[2.0, 2.0], vec![2]));
+    assert!(out_inf.data()[0].is_infinite());
+    assert_eq!(out_inf.data()[1], 2.0);
+}
+
+#[test]
+fn test_matrix_determinant_4x4_and_8x8_reference() {
+    use brain_core::tensor::linalg::det;
+
+    // Diagonal matrix with known det = product of diagonal
+    let diag4 = Tensor::from_slice(&[
+        2.0, 0.0, 0.0, 0.0,
+        0.0, 3.0, 0.0, 0.0,
+        0.0, 0.0, 4.0, 0.0,
+        0.0, 0.0, 0.0, 5.0,
+    ], vec![4, 4]);
+    assert!(approx(det(&diag4), 120.0));
+
+    // 8x8 identity scaled by 2 -> det = 2^8 = 256
+    let mut data8 = vec![0.0; 64];
+    for i in 0..8 {
+        data8[i * 8 + i] = 2.0;
+    }
+    let diag8 = Tensor::from_slice(&data8, vec![8, 8]);
+    assert!(approx(det(&diag8), 256.0));
+}
+
+#[test]
+fn test_svd_reconstruction_fidelity() {
+    use brain_core::tensor::linalg::{svd_symmetric, norm_frobenius};
+
+    // Symmetric positive-definite matrix
+    let a = Tensor::from_slice(&[
+        4.0, 1.0,
+        1.0, 3.0,
+    ], vec![2, 2]);
+
+    let svd_res = svd_symmetric(&a);
+
+    // Reconstruct A = U * S * V^T
+    let mut s_mat_data = vec![0.0; 4];
+    s_mat_data[0] = svd_res.singular_values[0];
+    s_mat_data[3] = svd_res.singular_values[1];
+    let s_mat = Tensor::from_slice(&s_mat_data, vec![2, 2]);
+
+    let us = arith::matmul(&svd_res.u, &s_mat);
+    let vt = svd_res.v.transpose(0, 1);
+    let recon = arith::matmul(&us, &vt);
+
+    let diff = arith::sub(&a, &recon);
+    let frob_err = norm_frobenius(&diff);
+    assert!(frob_err < 1e-7, "SVD Frobenius reconstruction error too large: {}", frob_err);
+}
+
+#[test]
+fn test_fft_ifft_roundtrip_power_of_two_and_arbitrary() {
+    use brain_core::tensor::fft::dft;
+
+    // Power of two length (64)
+    let n1 = 64;
+    let original1: Vec<f64> = (0..n1).map(|i| (i as f64 * 0.1).sin()).collect();
+    let mut re1 = original1.clone();
+    let mut im1 = vec![0.0; n1];
+
+    dft(&mut re1, &mut im1, false);
+    dft(&mut re1, &mut im1, true);
+
+    for (a, b) in original1.iter().zip(re1.iter()) {
+        assert!((a - b).abs() < 1e-6, "Power of two FFT roundtrip failed");
+    }
+
+    // Arbitrary non-power-of-two length (50)
+    let n2 = 50;
+    let original2: Vec<f64> = (0..n2).map(|i| (i as f64 * 0.2).cos()).collect();
+    let mut re2 = original2.clone();
+    let mut im2 = vec![0.0; n2];
+
+    dft(&mut re2, &mut im2, false);
+    dft(&mut re2, &mut im2, true);
+
+    for (a, b) in original2.iter().zip(re2.iter()) {
+        assert!((a - b).abs() < 1e-6, "Arbitrary length DFT roundtrip failed");
+    }
+}

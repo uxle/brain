@@ -17,7 +17,7 @@ pub use step::{StepLR, MultiStepLR, ExponentialLR, PolynomialLR, StepSchedulerCo
 pub use cosine::{CosineAnnealingLR, CosineAnnealingWarmRestarts, CosineConfig};
 pub use cyclic::{CyclicLR, CyclicMode, CyclicConfig};
 pub use onecycle::{OneCycleLR, AnnealStrategy, OneCycleConfig};
-pub use warmup::{LinearWarmup, ConstantWarmup, ExponentialWarmup, WarmupConfig};
+pub use warmup::{LinearWarmup, ConstantWarmup, ExponentialWarmup, WarmupConfig, NoamLR};
 pub use plateau::{ReduceLROnPlateau, PlateauMode, PlateauConfig};
 
 /// Execution mode for scheduler stepping.

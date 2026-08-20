@@ -152,17 +152,20 @@ impl BatchNorm2d {
     }
 }
 
+use brain_autograd::Value;
+
 impl Module for BatchNorm2d {
-    fn forward(&self, input: &Tensor) -> ModuleResult<Tensor> {
-        if self.training {
-            Ok(self.forward_train(input))
+    fn forward(&self, input: &Value) -> ModuleResult<Value> {
+        let t_out = if self.training {
+            self.forward_train(input.data())
         } else {
-            Ok(self.forward_eval(input))
-        }
+            self.forward_eval(input.data())
+        };
+        Ok(Value::new(t_out, input.requires_grad()))
     }
 
-    fn parameters(&self) -> Vec<Tensor> {
-        vec![self.weight.clone(), self.bias.clone()]
+    fn parameters(&self) -> Vec<Value> {
+        vec![Value::new(self.weight.clone(), true), Value::new(self.bias.clone(), true)]
     }
 
     fn set_training(&mut self, training: bool) {
@@ -178,7 +181,7 @@ mod tests {
     #[test]
     fn test_batchnorm_train_updates_stats() {
         let bn = BatchNorm2d::new(2);
-        let x = Tensor::from_vec(vec![10.0, 20.0, 10.0, 20.0], vec![2, 2, 1, 1]);
+        let x = Value::new(Tensor::from_vec(vec![10.0, 20.0, 10.0, 20.0], vec![2, 2, 1, 1]), false);
         let out = bn.forward(&x).unwrap();
         assert_eq!(out.shape(), &[2, 2, 1, 1]);
 
@@ -191,7 +194,7 @@ mod tests {
     fn test_batchnorm_eval_mode() {
         let mut bn = BatchNorm2d::new(2);
         bn.set_training(false);
-        let x = Tensor::from_vec(vec![10.0, 20.0, 10.0, 20.0], vec![2, 2, 1, 1]);
+        let x = Value::new(Tensor::from_vec(vec![10.0, 20.0, 10.0, 20.0], vec![2, 2, 1, 1]), false);
         let out = bn.forward(&x).unwrap();
         assert_eq!(out.shape(), &[2, 2, 1, 1]);
 

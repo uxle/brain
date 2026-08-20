@@ -3,10 +3,14 @@
 //! InfoNCE, Triplet margin loss, SimCLR / NT-Xent representation learning.
 #![allow(missing_docs)]
 
+pub mod cosine_embedding;
+pub mod margin_ranking;
 pub mod infonce;
 pub mod triplet;
 pub mod simclr;
 
+pub use cosine_embedding::CosineEmbeddingLoss;
+pub use margin_ranking::MarginRankingLoss;
 pub use infonce::{InfoNCELoss, InfoNceConfig};
 pub use triplet::{TripletMarginLoss, TripletConfig};
 pub use simclr::{SimCLRLoss, SimclrConfig};

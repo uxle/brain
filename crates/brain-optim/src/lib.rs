@@ -12,6 +12,7 @@ pub mod adadelta;
 pub mod adam;
 pub mod radam;
 pub mod lamb;
+pub mod adan;
 pub mod lion;
 pub mod novograd;
 pub mod schedulers;
@@ -34,6 +35,7 @@ pub use adadelta::{Adadelta, AdadeltaConfig};
 pub use adam::{Adam, AdamConfig, AdamWConfig, variants::{Adamax, Nadam, AdamVariant}};
 pub use radam::{RAdam, RAdamConfig};
 pub use lamb::{Lamb, LambConfig};
+pub use adan::{Adan, AdanConfig};
 pub use lion::{Lion, LionConfig};
 pub use novograd::{NovoGrad, NovoGradConfig};
 pub use schedulers::{

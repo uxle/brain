@@ -1,0 +1,24 @@
+[build-system]
+requires = ["maturin>=1.5,<2.0"]
+build-backend = "maturin"
+
+[project]
+name = "brain-dl"
+version = "1.0.0"
+description = "Pure-Rust High-Performance Deep Learning Framework Python Bindings"
+readme = "README.md"
+requires-python = ">=3.8"
+dependencies = [
+    "numpy>=1.20.0"
+]
+classifiers = [
+    "Programming Language :: Rust",
+    "Programming Language :: Python :: Implementation :: CPython",
+    "Programming Language :: Python :: 3",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence"
+]
+
+[tool.maturin]
+module-name = "brain.brain_native"
+python-source = "../../python"
+features = ["extension-module"]

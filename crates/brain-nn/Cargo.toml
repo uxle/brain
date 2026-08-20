@@ -5,3 +5,4 @@ edition = "2021"
 
 [dependencies]
 brain-core = { path = "../brain-core" }
+brain-autograd = { path = "../brain-autograd" }

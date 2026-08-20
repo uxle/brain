@@ -2,8 +2,7 @@
 
 use brain_core::Tensor;
 use brain_nn::{
-    celu, elu, glu, hard_sigmoid, hard_swish, selu, softplus, softsign, swiglu, CELU, ELU,
-    HardSigmoid, HardSwish, HardTanh, SELU, Softplus, Softsign,
+    celu, elu, glu, hard_sigmoid, hard_swish, selu, softplus, softsign, swiglu,
 };
 
 #[test]

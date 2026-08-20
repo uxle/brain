@@ -277,13 +277,15 @@ pub fn gemm(
                         };
                         let alpha_a = alpha * a_val;
 
-                        for j in j_block..j_end {
-                            let b_val = if !trans_b {
-                                b[k_idx * ldb + j]
-                            } else {
-                                b[j * ldb + k_idx]
-                            };
-                            c[i * ldc + j] += alpha_a * b_val;
+                        if !trans_b {
+                            let b_row = &b[k_idx * ldb + j_block..k_idx * ldb + j_end];
+                            let c_row = &mut c[i * ldc + j_block..i * ldc + j_end];
+                            crate::tensor::simd::simd_axpy(alpha_a, b_row, c_row);
+                        } else {
+                            for j in j_block..j_end {
+                                let b_val = b[j * ldb + k_idx];
+                                c[i * ldc + j] += alpha_a * b_val;
+                            }
                         }
                     }
                 }

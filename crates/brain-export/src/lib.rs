@@ -54,10 +54,12 @@ pub mod utils;
 pub mod verify;
 pub mod webnn;
 pub mod zip;
+pub mod safetensors;
 
 // Re-exports
 pub use builder::ExportBuilder;
 pub use config::{ExportConfig, TargetPlatform};
+pub use safetensors::{SafetensorsArchive, SafetensorInfo};
 pub use core::{ExportError, ExportFormat, ExportOptions};
 pub use model::{ExportModel, ModelExporter};
 

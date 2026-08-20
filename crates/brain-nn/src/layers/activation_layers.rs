@@ -3,7 +3,7 @@
 //! Object-oriented `Module` wrappers for point-wise activation functions.
 #![allow(missing_docs)]
 
-use brain_core::Tensor;
+use brain_autograd::Value;
 use crate::module::{Module, ModuleResult};
 use crate::activations::{relu, sigmoid, tanh, gelu, silu, mish};
 
@@ -12,8 +12,9 @@ macro_rules! impl_activation_module {
         #[derive(Debug, Clone, Copy, Default)]
         pub struct $name;
         impl Module for $name {
-            fn forward(&self, input: &Tensor) -> ModuleResult<Tensor> {
-                Ok($func(input))
+            fn forward(&self, input: &Value) -> ModuleResult<Value> {
+                let out = $func(input.data());
+                Ok(Value::new(out, input.requires_grad()))
             }
         }
     };

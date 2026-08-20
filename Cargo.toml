@@ -33,6 +33,7 @@ members = [
     "crates/brain-data",
     "crates/brain-benchmark",
     "crates/brain-cli",
+    "crates/brain-python",
 ]
 default-members = ["crates/brain"]
 

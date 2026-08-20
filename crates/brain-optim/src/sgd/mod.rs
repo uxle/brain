@@ -1,4 +1,18 @@
-//! # Stochastic Gradient Descent (SGD)
+//! # Stochastic Gradient Descent (SGD & Momentum)
+//!
+//! ## Mathematical Formulation
+//!
+//! Standard SGD update:
+//! $$\theta_t = \theta_{t-1} - \eta g_t$$
+//!
+//! Classical Polyak Momentum ($v_0 = 0, \mu \in [0, 1)$):
+//! $$v_t = \mu v_{t-1} + g_t$$
+//! $$\theta_t = \theta_{t-1} - \eta v_t$$
+//!
+//! Nesterov Accelerated Gradient (NAG, Nesterov, 1983):
+//! $$v_t = \mu v_{t-1} + g_t$$
+//! $$\theta_t = \theta_{t-1} - \eta (g_t + \mu v_t)$$
+//! (SGD)
 //!
 //! Production implementation of SGD with classical momentum, dampening, L2 regularization,
 //! and decoupled weight decay (SGDW).

@@ -53,7 +53,24 @@ name = "quantize_linear"
 path = "../../examples/quantize_linear.rs"
 required-features = ["export"]
 
+[[example]]
+name = "agent_notepad_task"
+path = "../../examples/agent_notepad_task.rs"
+
 [dev-dependencies]
+brain-rl = { path = "../brain-rl" }
+brain-utils = { path = "../brain-utils" }
 brain-graph = { path = "../brain-graph" }
 brain-onnx = { path = "../brain-onnx" }
 brain-quantization = { path = "../brain-quantization" }
+brain-export = { path = "../brain-export" }
+brain-loss = { path = "../brain-loss" }
+brain-metric = { path = "../brain-metric" }
+brain-nn = { path = "../brain-nn" }
+brain-optim = { path = "../brain-optim" }
+brain-transformer = { path = "../brain-transformer" }
+brain-vit = { path = "../brain-vit" }
+brain-gnn = { path = "../brain-gnn" }
+brain-diffusion = { path = "../brain-diffusion" }
+brain-distributed = { path = "../brain-distributed" }
+

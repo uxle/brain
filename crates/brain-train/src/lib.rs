@@ -16,8 +16,12 @@ use std::collections::HashMap;
 use std::fmt;
 
 pub mod callbacks;
+pub mod metrics;
+pub mod checkpointer;
 
 pub use callbacks::{CallbackAction, EarlyStopping, MetricHistoryLogger, TrainingCallback};
+pub use metrics::{RunningAverage, AccuracyMetric, TopKAccuracyMetric};
+pub use checkpointer::{BestModelTracker, CheckpointMeta};
 
 /// Result type used by integrated training APIs.
 pub type TrainResult<T> = Result<T, TrainError>;
@@ -96,13 +100,11 @@ impl<M> TensorModuleAdapter<M> {
 }
 
 impl<M: Module> TensorModuleAdapter<M> {
-    /// Runs the wrapped module using the tensor payload from a `Value`.
+    /// Runs the wrapped module using `Module::forward`.
     pub fn forward_value(&self, input: &Value) -> TrainResult<Value> {
-        let output = self
-            .module
-            .forward(input.data())
-            .map_err(|err| TrainError::Module(err.to_string()))?;
-        Ok(tensor_to_value(&output, input.requires_grad()))
+        self.module
+            .forward(input)
+            .map_err(|err| TrainError::Module(err.to_string()))
     }
 }
 

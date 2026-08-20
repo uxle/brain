@@ -1,6 +1,7 @@
-//! # CUDA C Kernel Source Generator
+//! # CUDA C Kernel Source Text Generator (Codegen Only)
 //!
-//! Emits `.cu` CUDA C kernel sources with thread block indexing and grid mapping.
+//! Generates `.cu` CUDA C kernel source code strings from IR graphs for external compilation
+//! or future GPU JIT dispatch. NOTE: Does not compile or execute kernels on GPU hardware directly.
 
 use crate::ir::IrGraph;
 

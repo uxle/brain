@@ -1,7 +1,23 @@
 //! # Adaptive Moment Estimation (Adam & AdamW)
 //!
-//! Production-grade Adam and AdamW with first/second moment bias correction, AMSGrad,
-//! numerical stabilization, and decoupled weight decay.
+//! ## Mathematical Formulation
+//!
+//! Given objective $f(\theta)$, learning rate $\eta$, decay rates $\beta_1, \beta_2 \in [0, 1)$, and $\epsilon > 0$:
+//!
+//! First moment (momentum):
+//! $$m_t = \beta_1 m_{t-1} + (1 - \beta_1) g_t$$
+//!
+//! Second moment (uncentered variance):
+//! $$v_t = \beta_2 v_{t-1} + (1 - \beta_2) g_t^2$$
+//!
+//! Bias corrections:
+//! $$\hat{m}_t = \frac{m_t}{1 - \beta_1^t}, \quad \hat{v}_t = \frac{v_t}{1 - \beta_2^t}$$
+//!
+//! Parameter update (Standard Adam with L2 regularization):
+//! $$\theta_t = \theta_{t-1} - \eta \frac{\hat{m}_t}{\sqrt{\hat{v}_t} + \epsilon}$$
+//!
+//! Decoupled Weight Decay (AdamW, Loshchilov & Hutter, 2019):
+//! $$\theta_t = (1 - \eta \lambda) \theta_{t-1} - \eta \frac{\hat{m}_t}{\sqrt{\hat{v}_t} + \epsilon}$$
 #![allow(missing_docs)]
 
 pub mod variants;

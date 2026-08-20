@@ -4,6 +4,9 @@
 #![allow(missing_docs, clippy::excessive_precision, clippy::approx_constant, clippy::needless_range_loop, clippy::too_many_arguments, clippy::manual_is_multiple_of, clippy::manual_div_ceil, clippy::doc_markdown)]
 
 pub mod core;
+pub mod world_model;
+pub mod curiosity;
+pub mod skill_library;
 pub mod env;
 pub mod policy;
 pub mod value;
@@ -20,6 +23,9 @@ pub mod checkpoint;
 pub mod utils;
 
 pub use core::{RlError, RlResult, Space, Trajectory, Transition};
+pub use world_model::{WorldModel, WorldModelPrediction};
+pub use curiosity::IntrinsicCuriosityModule;
+pub use skill_library::{SkillLibrary, Skill, SkillStep};
 pub use env::{CartPoleEnv, Env, EnvStep, GridWorldEnv, MountainCarEnv, PendulumEnv};
 pub use policy::{CategoricalDist, DiagonalGaussianDist, EpsilonGreedyPolicy, EpsilonSchedule, GaussianPolicy, Policy};
 pub use value::{QNet, QTable, VNet, VTable, ValueFn};

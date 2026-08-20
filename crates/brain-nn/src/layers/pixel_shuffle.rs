@@ -20,8 +20,10 @@ impl PixelShuffle {
     }
 }
 
+use brain_autograd::Value;
+
 impl Module for PixelShuffle {
-    fn forward(&self, input: &Tensor) -> ModuleResult<Tensor> {
+    fn forward(&self, input: &Value) -> ModuleResult<Value> {
         let r = self.upscale_factor;
         let shape = input.shape();
         if shape.len() != 4 {
@@ -43,13 +45,15 @@ impl Module for PixelShuffle {
         let mut out = vec![0.0f64; b * c_out * h * r * w * r];
         for bi in 0..b {
             for co in 0..c_out {
-                for ri in 0..r {
-                    for rj in 0..r {
-                        for i in 0..h {
-                            for j in 0..w {
-                                let in_ch = co * r * r + ri * r + rj;
-                                let in_idx = ((bi * c + in_ch) * h + i) * w + j;
-                                let out_idx = ((bi * c_out + co) * (h * r) + (i * r + ri)) * (w * r) + j * r + rj;
+                for hi in 0..h {
+                    for wi in 0..w {
+                        for ri in 0..r {
+                            for rj in 0..r {
+                                let c_in = co * r * r + ri * r + rj;
+                                let in_idx = ((bi * c + c_in) * h + hi) * w + wi;
+                                let h_out = hi * r + ri;
+                                let w_out = wi * r + rj;
+                                let out_idx = ((bi * c_out + co) * (h * r) + h_out) * (w * r) + w_out;
                                 out[out_idx] = in_data[in_idx];
                             }
                         }
@@ -58,7 +62,8 @@ impl Module for PixelShuffle {
             }
         }
 
-        Ok(Tensor::from_vec(out, vec![b, c_out, h * r, w * r]))
+        let t_out = Tensor::from_vec(out, vec![b, c_out, h * r, w * r]);
+        Ok(Value::new(t_out, input.requires_grad()))
     }
 }
 
@@ -70,7 +75,7 @@ mod tests {
     fn test_pixel_shuffle_small() {
         let ps = PixelShuffle::new(2);
         // 1 channel, r=2 -> 4 input channels
-        let t = Tensor::from_slice(
+        let t = Value::new(Tensor::from_slice(
             &[
                 1.0, 2.0, 3.0, 4.0,
                 5.0, 6.0, 7.0, 8.0,
@@ -78,7 +83,7 @@ mod tests {
                 13.0, 14.0, 15.0, 16.0,
             ],
             vec![1, 4, 1, 4],
-        );
+        ), false);
         let out = ps.forward(&t).unwrap();
         assert_eq!(out.shape(), &[1, 1, 2, 8]);
         // ch0 (r=0,j=0) fills even rows/cols, ch1 (r=0,j=1) fills odd cols, ch2 (r=1,j=0) fills odd rows
@@ -93,7 +98,7 @@ mod tests {
     #[test]
     fn test_pixel_shuffle_roundtrip_permutation() {
         let ps = PixelShuffle::new(3);
-        let t = Tensor::arange(0.0, 81.0, 1.0).reshape(vec![1, 9, 3, 3]);
+        let t = Value::new(Tensor::arange(0.0, 81.0, 1.0).reshape(vec![1, 9, 3, 3]), false);
         let out = ps.forward(&t).unwrap();
         assert_eq!(out.shape(), &[1, 1, 9, 9]);
         // (0,0,0,0) -> (0,0,0,0)

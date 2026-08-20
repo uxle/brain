@@ -4,6 +4,7 @@
 //! and diagnostics platform for the **Brain** deep learning framework.
 
 pub mod core;
+pub mod hal;
 pub mod config;
 pub mod utils;
 pub mod ops;
@@ -25,6 +26,7 @@ pub mod r#impl;
 /// Unified prelude for brain-utils crate.
 pub mod prelude {
     pub use crate::core::{GlobalState, SystemInfo, UtilsConfig, UtilsError, UtilsResult};
+    pub use crate::hal::*;
     pub use crate::config::{ConfigEntry, ConfigManager, ConfigSource};
     pub use crate::config::schema::{Constraint, FieldDef, FieldType, SchemaValidator};
     pub use crate::utils::{now_ms, now_ns, now_us, pad_left, pad_right, random_uuid_lite, sanitize_filename, shell_quote, truncate_str};

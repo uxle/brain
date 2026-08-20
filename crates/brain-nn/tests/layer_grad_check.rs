@@ -1,6 +1,7 @@
 //! Layer-level gradient checking and parameter cross-checks.
 
 use brain_core::Tensor;
+use brain_autograd::Value;
 use brain_nn::{Linear, Conv2d, BatchNorm2d, LayerNorm, RMSNorm, Embedding, Dropout, MaxPool2d, Module};
 
 /// Verifies analytic gradient against numerical central finite differences.
@@ -40,10 +41,10 @@ where
 #[test]
 fn test_linear_layer_weight_and_bias_gradient() {
     let mut linear = Linear::new(3, 2, true);
-    linear.weight = Tensor::from_slice(&[0.5, -0.2, 1.0, 0.8, -1.2, 0.3], vec![2, 3]);
-    linear.bias = Some(Tensor::from_slice(&[0.1, -0.4], vec![2]));
+    linear.weight = Value::new(Tensor::from_slice(&[0.5, -0.2, 1.0, 0.8, -1.2, 0.3], vec![2, 3]), true);
+    linear.bias = Some(Value::new(Tensor::from_slice(&[0.1, -0.4], vec![2]), true));
 
-    let x = Tensor::from_slice(&[1.0, 2.0, 3.0, -1.0, 0.5, 2.0], vec![2, 3]);
+    let x = Value::new(Tensor::from_slice(&[1.0, 2.0, 3.0, -1.0, 0.5, 2.0], vec![2, 3]), false);
 
     let b_size = 2.0;
     let mut analytic_dw = vec![0.0f64; 6];
@@ -61,7 +62,7 @@ fn test_linear_layer_weight_and_bias_gradient() {
     check_param_gradient(
         |w_test| {
             let mut l = linear.clone();
-            l.weight = Tensor::from_slice(w_test, vec![2, 3]);
+            l.weight = Value::new(Tensor::from_slice(w_test, vec![2, 3]), true);
             l.forward(&x_fixed).unwrap().to_vec().iter().sum()
         },
         &w_data,
@@ -74,7 +75,7 @@ fn test_linear_layer_weight_and_bias_gradient() {
     check_param_gradient(
         |b_test| {
             let mut l = linear.clone();
-            l.bias = Some(Tensor::from_slice(b_test, vec![2]));
+            l.bias = Some(Value::new(Tensor::from_slice(b_test, vec![2]), true));
             l.forward(&x_fixed).unwrap().to_vec().iter().sum()
         },
         &b_data,
@@ -87,8 +88,8 @@ fn test_linear_layer_weight_and_bias_gradient() {
 #[test]
 fn test_linear_layer_without_bias() {
     let mut linear = Linear::new(2, 2, false);
-    linear.weight = Tensor::from_slice(&[1.5, -0.5, 0.2, 2.0], vec![2, 2]);
-    let x = Tensor::from_slice(&[2.0, 3.0], vec![1, 2]);
+    linear.weight = Value::new(Tensor::from_slice(&[1.5, -0.5, 0.2, 2.0], vec![2, 2]), true);
+    let x = Value::new(Tensor::from_slice(&[2.0, 3.0], vec![1, 2]), false);
 
     let w_data = linear.weight.to_vec();
     let x_fixed = x.clone();
@@ -97,7 +98,7 @@ fn test_linear_layer_without_bias() {
     check_param_gradient(
         |w_test| {
             let mut l = linear.clone();
-            l.weight = Tensor::from_slice(w_test, vec![2, 2]);
+            l.weight = Value::new(Tensor::from_slice(w_test, vec![2, 2]), true);
             l.forward(&x_fixed).unwrap().to_vec().iter().sum()
         },
         &w_data,
@@ -115,21 +116,21 @@ fn test_linear_layer_without_bias() {
 fn test_conv2d_layer_weight_and_bias_gradient() {
     let mut conv = Conv2d::new(1, 1, 2, true);
     conv.config.padding = (0, 0);
-    conv.weight = Tensor::from_slice(&[0.5, -0.5, 1.0, -1.0], vec![1, 1, 2, 2]);
-    conv.bias = Some(Tensor::from_slice(&[0.2], vec![1]));
+    conv.weight = Value::new(Tensor::from_slice(&[0.5, -0.5, 1.0, -1.0], vec![1, 1, 2, 2]), true);
+    conv.bias = Some(Value::new(Tensor::from_slice(&[0.2], vec![1]), true));
 
-    let input = Tensor::from_slice(&[
+    let input = Value::new(Tensor::from_slice(&[
         1.0, 2.0, 3.0,
         4.0, 5.0, 6.0,
         7.0, 8.0, 9.0,
-    ], vec![1, 1, 3, 3]);
+    ], vec![1, 1, 3, 3]), false);
 
     let w_data = conv.weight.to_vec();
     let in_fixed = input.clone();
 
     let eval_w = |w_test: &[f64]| {
         let mut c = conv.clone();
-        c.weight = Tensor::from_slice(w_test, vec![1, 1, 2, 2]);
+        c.weight = Value::new(Tensor::from_slice(w_test, vec![1, 1, 2, 2]), true);
         c.forward(&in_fixed).unwrap().to_vec().iter().sum()
     };
 
@@ -153,7 +154,7 @@ fn test_conv2d_layer_weight_and_bias_gradient() {
     check_param_gradient(
         |b_test| {
             let mut c = conv.clone();
-            c.bias = Some(Tensor::from_slice(b_test, vec![1]));
+            c.bias = Some(Value::new(Tensor::from_slice(b_test, vec![1]), true));
             c.forward(&in_fixed).unwrap().to_vec().iter().sum()
         },
         &b_data,
@@ -222,7 +223,7 @@ fn test_layernorm_and_rmsnorm_gradient() {
     ln.weight = Tensor::from_slice(&[1.0, 2.0, 0.5], vec![3]);
     ln.bias = Tensor::from_slice(&[0.1, -0.1, 0.2], vec![3]);
 
-    let input = Tensor::from_slice(&[1.0, 2.0, 3.0, 4.0, 5.0, 6.0], vec![2, 3]);
+    let input = Value::new(Tensor::from_slice(&[1.0, 2.0, 3.0, 4.0, 5.0, 6.0], vec![2, 3]), false);
     let in_fixed = input.clone();
 
     let b_data = ln.bias.to_vec();
@@ -230,7 +231,7 @@ fn test_layernorm_and_rmsnorm_gradient() {
         |b_test| {
             let mut l = ln.clone();
             l.bias = Tensor::from_slice(b_test, vec![3]);
-            l.forward(&in_fixed).to_vec().iter().sum()
+            Module::forward(&l, &in_fixed).unwrap().to_vec().iter().sum()
         },
         &b_data,
         &[2.0, 2.0, 2.0],
@@ -245,13 +246,13 @@ fn test_layernorm_and_rmsnorm_gradient() {
         |w_test| {
             let mut r = rms.clone();
             r.weight = Tensor::from_slice(w_test, vec![3]);
-            r.forward(&in_fixed).to_vec().iter().sum()
+            Module::forward(&r, &in_fixed).unwrap().to_vec().iter().sum()
         },
         &w_data,
         &[
-            (rms.forward(&in_fixed).to_vec()[0]/1.2 + rms.forward(&in_fixed).to_vec()[3]/1.2),
-            (rms.forward(&in_fixed).to_vec()[1]/0.8 + rms.forward(&in_fixed).to_vec()[4]/0.8),
-            (rms.forward(&in_fixed).to_vec()[2]/1.0 + rms.forward(&in_fixed).to_vec()[5]/1.0),
+            (Module::forward(&rms, &in_fixed).unwrap().to_vec()[0]/1.2 + Module::forward(&rms, &in_fixed).unwrap().to_vec()[3]/1.2),
+            (Module::forward(&rms, &in_fixed).unwrap().to_vec()[1]/0.8 + Module::forward(&rms, &in_fixed).unwrap().to_vec()[4]/0.8),
+            (Module::forward(&rms, &in_fixed).unwrap().to_vec()[2]/1.0 + Module::forward(&rms, &in_fixed).unwrap().to_vec()[5]/1.0),
         ],
         1e-5,
         1e-4,
@@ -265,12 +266,12 @@ fn test_layernorm_and_rmsnorm_gradient() {
 #[test]
 fn test_embedding_duplicate_index_accumulation() {
     let mut emb = Embedding::new(4, 2);
-    emb.weight = Tensor::from_slice(&[
+    emb.weight = Value::new(Tensor::from_slice(&[
         1.0, 2.0,
         3.0, 4.0,
         5.0, 6.0,
         7.0, 8.0,
-    ], vec![4, 2]);
+    ], vec![4, 2]), true);
 
     let indices = vec![1, 2, 1];
 
@@ -285,7 +286,7 @@ fn test_embedding_duplicate_index_accumulation() {
     check_param_gradient(
         |w_test| {
             let mut e = emb.clone();
-            e.weight = Tensor::from_slice(w_test, vec![4, 2]);
+            e.weight = Value::new(Tensor::from_slice(w_test, vec![4, 2]), true);
             e.forward_indices(&indices).to_vec().iter().sum()
         },
         &w_data,
@@ -302,7 +303,7 @@ fn test_embedding_duplicate_index_accumulation() {
 #[test]
 fn test_dropout_mask_consistency_and_eval() {
     let mut drop = Dropout::with_seed(0.5, 42);
-    let input = Tensor::from_slice(&[1.0, 2.0, 3.0, 4.0], vec![4]);
+    let input = Value::new(Tensor::from_slice(&[1.0, 2.0, 3.0, 4.0], vec![4]), false);
 
     let out_train1 = drop.forward(&input).unwrap();
     let out_train2 = drop.forward(&input).unwrap();
@@ -320,14 +321,139 @@ fn test_dropout_mask_consistency_and_eval() {
 #[test]
 fn test_maxpool2d_argmax_and_tie_breaking() {
     let pool = MaxPool2d::new(2, 2);
-    let input = Tensor::from_slice(&[
+    let input = Value::new(Tensor::from_slice(&[
         4.0, 4.0, 1.0, 2.0,
         1.0, 2.0, 3.0, 0.0,
         0.0, 1.0, 5.0, 6.0,
         2.0, 3.0, 7.0, 8.0,
-    ], vec![1, 1, 4, 4]);
+    ], vec![1, 1, 4, 4]), false);
 
-    let out = pool.forward(&input).unwrap();
+    let out = pool.forward(&input);
     assert_eq!(out.shape(), &[1, 1, 2, 2]);
     assert_eq!(out.to_vec(), vec![4.0, 3.0, 3.0, 8.0]);
+}
+
+// =============================================================================
+// 8. ConvTranspose2d Gradient Verification
+// =============================================================================
+
+#[test]
+fn test_conv_transpose2d_weight_gradient() {
+    use brain_nn::ConvTranspose2d;
+
+    let mut conv_t = ConvTranspose2d::new(1, 1, 2);
+    conv_t.weight = Value::new(Tensor::from_slice(&[1.0, 0.5, -0.5, 2.0], vec![1, 1, 2, 2]), true);
+
+    let input = Value::new(Tensor::from_slice(&[1.0, 2.0, 3.0, 4.0], vec![1, 1, 2, 2]), false);
+    let w_data = conv_t.weight.to_vec();
+
+    // Analytic gradient of sum(output) w.r.t weight
+    let mut analytic_dw = vec![0.0; 4];
+    let in_sum: f64 = input.to_vec().iter().sum();
+    for g in analytic_dw.iter_mut() {
+        *g = in_sum;
+    }
+
+    check_param_gradient(
+        |w_test| {
+            let mut layer = conv_t.clone();
+            layer.weight = Value::new(Tensor::from_slice(w_test, vec![1, 1, 2, 2]), true);
+            layer.forward(&input).unwrap().to_vec().iter().sum()
+        },
+        &w_data,
+        &analytic_dw,
+        1e-5,
+        1e-4,
+    );
+}
+
+// =============================================================================
+// 9. Conv1d Weight Gradient Verification
+// =============================================================================
+
+#[test]
+fn test_conv1d_weight_gradient() {
+    use brain_nn::Conv1d;
+
+    let mut conv = Conv1d::new(1, 1, 2, false);
+    conv.weight = Tensor::from_slice(&[0.8, -0.4], vec![1, 1, 2]);
+
+    let input = Value::new(Tensor::from_slice(&[1.0, 2.0, 3.0], vec![1, 1, 3]), false);
+    let w_data = conv.weight.to_vec();
+
+    // For valid padding and kernel=2 on input [1, 2, 3], outputs are:
+    // y0 = 1*w0 + 2*w1
+    // y1 = 2*w0 + 3*w1
+    // dy/dw0 = 1 + 2 = 3, dy/dw1 = 2 + 3 = 5
+    let analytic_dw = vec![6.0, 6.0];
+
+    check_param_gradient(
+        |w_test| {
+            let mut layer = conv.clone();
+            layer.weight = Tensor::from_slice(w_test, vec![1, 1, 2]);
+            layer.forward(&input).unwrap().to_vec().iter().sum()
+        },
+        &w_data,
+        &analytic_dw,
+        1e-5,
+        1e-4,
+    );
+}
+
+// =============================================================================
+// 10. MultiheadAttention Forward & Numerical Sensitivity
+// =============================================================================
+
+#[test]
+fn test_multihead_attention_numerical_forward() {
+    use brain_nn::MultiheadAttention;
+
+    let mha = MultiheadAttention::new(8, 2);
+    let x = Value::new(Tensor::from_slice(&[0.1; 16], vec![1, 2, 8]), false); // batch=1, seq=2, embed=8
+    let out = mha.forward(&x).unwrap();
+    assert_eq!(out.shape(), &[1, 2, 8]);
+}
+
+// =============================================================================
+// 11. Weight Initialization Schemes & Parameter Completeness
+// =============================================================================
+
+#[test]
+fn test_initialization_schemes_and_variance() {
+    use brain_nn::init::{xavier_uniform, kaiming_normal, calculate_fan};
+
+    let shape = [128, 128];
+    let (fan_in, fan_out) = calculate_fan(&shape);
+    assert_eq!(fan_in, 128);
+    assert_eq!(fan_out, 128);
+
+    let xavier_t = xavier_uniform(&shape);
+    let x_data = xavier_t.to_vec();
+    let mean: f64 = x_data.iter().sum::<f64>() / x_data.len() as f64;
+    assert!(mean.abs() < 0.05);
+
+    let kaiming_t = kaiming_normal(&shape, 0.0);
+    let k_data = kaiming_t.to_vec();
+    let k_var: f64 = k_data.iter().map(|&x| (x - 0.0).powi(2)).sum::<f64>() / k_data.len() as f64;
+    let expected_var = 2.0 / 128.0;
+    let rel_diff = (k_var - expected_var).abs() / expected_var;
+    assert!(rel_diff < 0.20, "Kaiming normal variance mismatch: observed={}, expected={}", k_var, expected_var);
+}
+
+#[test]
+fn test_sequential_module_parameters_completeness() {
+    use brain_nn::{Linear, Sequential};
+
+    let l1 = Linear::new(10, 20, true);
+    let l2 = Linear::new(20, 5, false);
+
+    let mut seq = Sequential::new();
+    seq.add(l1);
+    seq.add(l2);
+
+    let params = seq.parameters();
+    // l1 has weight [20, 10] + bias [20] = 220
+    // l2 has weight [5, 20] = 100
+    let total_elements: usize = params.iter().map(|p| p.numel()).sum();
+    assert_eq!(total_elements, 320);
 }

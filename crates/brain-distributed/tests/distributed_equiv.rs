@@ -25,3 +25,28 @@ fn test_distributed_2rank_allreduce_equivalence() {
     assert!((reduced.data()[0] - 0.4).abs() < 1e-6);
     assert!((reduced.data()[1] - 0.6).abs() < 1e-6);
 }
+
+#[test]
+fn test_ring_and_tree_topology_neighbors() {
+    use brain_distributed::collective::{RingTopology, TreeTopology};
+
+    let ring = RingTopology::new(0, 4);
+    assert_eq!(ring.left_neighbor(), 3);
+    assert_eq!(ring.right_neighbor(), 1);
+
+    let ring3 = RingTopology::new(3, 4);
+    assert_eq!(ring3.left_neighbor(), 2);
+    assert_eq!(ring3.right_neighbor(), 0);
+
+    let tree0 = TreeTopology::new(0, 4);
+    assert_eq!(tree0.parent(), None);
+
+    let tree1 = TreeTopology::new(1, 4);
+    assert_eq!(tree1.parent(), Some(0));
+
+    let tree2 = TreeTopology::new(2, 4);
+    assert_eq!(tree2.parent(), Some(0));
+
+    let tree3 = TreeTopology::new(3, 4);
+    assert_eq!(tree3.parent(), Some(1));
+}

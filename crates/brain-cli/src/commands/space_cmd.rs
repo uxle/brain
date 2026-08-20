@@ -119,10 +119,10 @@ fn create_and_teach_brain(bn_path: &str, args: &[String], sink: &OutputSink) -> 
             }
         }
     } else {
-        sink.println(&format!("============================================================"));
+        sink.println("============================================================");
         sink.println(&format!(" Initializing Newborn 3D Cubic Brain Space: {} x {} x {}", cube_dim, cube_dim, cube_dim));
         sink.println(&format!(" Total Interconnected Neural Cells: {}", cube_dim * cube_dim * cube_dim));
-        sink.println(&format!("============================================================"));
+        sink.println("============================================================");
         BrainMind::new("growing_brain", cube_dim)
     };
 
@@ -144,11 +144,11 @@ fn create_and_teach_brain(bn_path: &str, args: &[String], sink: &OutputSink) -> 
     match mind.save_bn(bn_path) {
         Ok(()) => {
             sink.println(&format!("[✓] Brain successfully saved to '{}'", bn_path));
-            sink.println(&format!("    - Magic Header: 'BRAIN_BN' (Version 1)"));
+            sink.println("    - Magic Header: 'BRAIN_BN' (Version 1)");
             sink.println(&format!("    - Active Synapses: {}", mind.total_synapses()));
             sink.println(&format!("    - Learned Words: {}", mind.vocab.len()));
             sink.println(&format!("    - Memory Facts: {}", mind.facts.len()));
-            sink.println(&format!("    - CRC-32 Tamper Verification: 100% Validated"));
+            sink.println("    - CRC-32 Tamper Verification: 100% Validated");
             sink.println("");
             sink.println("3D Neural Lattice Signal Transmission Map:");
             sink.println("      +-----------------+");
@@ -220,7 +220,7 @@ fn run_interactive_chatbot(bn_path: &str, sink: &OutputSink) -> ExitCode {
         }
 
         if input == "/stats" {
-            sink.println(&format!("--- Brain Statistics ---"));
+            sink.println("--- Brain Statistics ---");
             sink.println(&format!("  Name: {}", mind.name));
             sink.println(&format!("  Biological Age: {} turns", mind.age_steps));
             sink.println(&format!("  3D Lattice: {}x{}x{} ({} cells)", mind.cube_dim, mind.cube_dim, mind.cube_dim, mind.total_neurons()));
@@ -239,8 +239,8 @@ fn run_interactive_chatbot(bn_path: &str, sink: &OutputSink) -> ExitCode {
             continue;
         }
 
-        if input.starts_with("/teach ") {
-            let file_to_teach = input[7..].trim();
+        if let Some(stripped) = input.strip_prefix("/teach ") {
+            let file_to_teach = stripped.trim();
             sink.println(&format!("[*] Teaching brain from '{}'...", file_to_teach));
             match mind.teach_file(file_to_teach) {
                 Ok(stats) => {
@@ -267,15 +267,16 @@ fn run_interactive_chatbot(bn_path: &str, sink: &OutputSink) -> ExitCode {
 }
 
 fn print_usage(sink: &OutputSink) {
-    sink.println("Usage: brain space <command> [options]");
+    sink.println("Usage: brain <new|chat> <brain.bn> [options]");
     sink.println("");
     sink.println("Commands:");
-    sink.println("  brain space chatbot <brain.bn>              Start interactive growing chatbot session");
-    sink.println("  brain space new <brain.bn> [--neurons N]    Create newborn 3D cubic brain space");
-    sink.println("  brain space <brain.bn> --teach <file.txt>   Teach brain from text knowledge base");
+    sink.println("  brain chat <brain.bn>              Start interactive growing conversation session");
+    sink.println("  brain new <brain.bn> [--neurons N] Create newborn 3D cubic neural mind");
+    sink.println("  brain new <brain.bn> --teach <file.txt> Teach neural mind from text knowledge base");
     sink.println("");
     sink.println("Options:");
     sink.println("  --neurons <N>    Total neurons (e.g. 1000 for 10x10x10 cube)");
     sink.println("  --cube <DIM>     Explicit cube dimension");
     sink.println("  --teach <FILE>   Path to text corpus to ingest (e.g. data.txt, mathematics.txt)");
+    sink.println("  --chat           Enter interactive chat immediately after creation/teaching");
 }

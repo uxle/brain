@@ -54,13 +54,16 @@ impl LayerNorm {
     }
 }
 
+use brain_autograd::Value;
+
 impl Module for LayerNorm {
-    fn forward(&self, input: &Tensor) -> ModuleResult<Tensor> {
-        Ok(self.forward(input))
+    fn forward(&self, input: &Value) -> ModuleResult<Value> {
+        let t_out = self.forward(input.data());
+        Ok(Value::new(t_out, input.requires_grad()))
     }
 
-    fn parameters(&self) -> Vec<Tensor> {
-        vec![self.weight.clone(), self.bias.clone()]
+    fn parameters(&self) -> Vec<Value> {
+        vec![Value::new(self.weight.clone(), true), Value::new(self.bias.clone(), true)]
     }
 }
 

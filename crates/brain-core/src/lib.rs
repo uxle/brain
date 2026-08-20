@@ -29,6 +29,7 @@ pub mod device;
 pub mod dtype;
 pub mod error;
 pub mod memory;
+pub mod pool;
 pub mod random;
 pub mod serialization;
 pub mod shape;

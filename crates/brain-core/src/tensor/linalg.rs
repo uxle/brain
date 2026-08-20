@@ -518,8 +518,8 @@ pub fn pinv(a: &Tensor) -> Tensor {
 /// Computes condition number (ratio of largest to smallest singular value).
 pub fn condition_number(a: &Tensor) -> f64 {
     let svd = svd_symmetric(a);
-    let max_s = svd.singular_values.first().copied().unwrap_or(0.0);
-    let min_s = svd.singular_values.last().copied().unwrap_or(0.0);
+    let max_s = svd.singular_values.iter().copied().fold(0.0f64, f64::max);
+    let min_s = svd.singular_values.iter().copied().fold(f64::INFINITY, f64::min);
     if min_s < 1e-15 {
         f64::INFINITY
     } else {

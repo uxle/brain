@@ -1,6 +1,15 @@
 //! # Multi-Head Self & Cross Attention Module
 //!
-//! Multi-head attention projecting inputs into Q, K, V representations across parallel attention heads.
+//! Vaswani et al., 2017: "Attention Is All You Need"
+//!
+//! ## Mathematical Formulation
+//!
+//! Scaled Dot-Product Attention:
+//! $$\text{Attention}(Q, K, V) = \text{softmax}\left( \frac{Q K^T}{\sqrt{d_k}} + M \right) V$$
+//!
+//! Multi-Head Decomposition across $h$ parallel heads:
+//! $$\text{MultiHead}(Q, K, V) = \text{Concat}(\text{head}_1, \dots, \text{head}_h) W^O$$
+//! $$\text{where } \text{head}_i = \text{Attention}(Q W_i^Q, K W_i^K, V W_i^V)$$
 #![allow(missing_docs)]
 
 use brain_core::Tensor;
@@ -44,9 +53,9 @@ impl MultiheadAttention {
     }
 
     pub fn forward_mha(&self, query: &Tensor, key: &Tensor, value: &Tensor, mask: Option<&Tensor>) -> ModuleResult<Tensor> {
-        let q = self.q_proj.forward(query)?;
-        let k = self.k_proj.forward(key)?;
-        let v = self.v_proj.forward(value)?;
+        let q = self.q_proj.forward_tensor(query)?;
+        let k = self.k_proj.forward_tensor(key)?;
+        let v = self.v_proj.forward_tensor(value)?;
 
         let num_heads = self.config.num_heads.max(1);
         let embed_dim = self.config.embed_dim;
@@ -99,16 +108,19 @@ impl MultiheadAttention {
         }
 
         let attn_out = Tensor::from_vec(concat_out, vec![batch, seq_q, embed_dim]);
-        self.out_proj.forward(&attn_out)
+        self.out_proj.forward_tensor(&attn_out)
     }
 }
 
+use brain_autograd::Value;
+
 impl Module for MultiheadAttention {
-    fn forward(&self, input: &Tensor) -> ModuleResult<Tensor> {
-        self.forward_mha(input, input, input, None)
+    fn forward(&self, input: &Value) -> ModuleResult<Value> {
+        let t_out = self.forward_mha(input.data(), input.data(), input.data(), None)?;
+        Ok(Value::new(t_out, input.requires_grad()))
     }
 
-    fn parameters(&self) -> Vec<Tensor> {
+    fn parameters(&self) -> Vec<Value> {
         let mut p = Vec::new();
         p.extend(self.q_proj.parameters());
         p.extend(self.k_proj.parameters());

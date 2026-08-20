@@ -6,18 +6,20 @@
 use brain_core::Tensor;
 use crate::module::{Module, ModuleResult};
 
+use brain_autograd::Value;
+
 /// Identity pass-through module.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct Identity;
 
 impl Identity {
-    pub fn forward(&self, input: &Tensor) -> ModuleResult<Tensor> {
+    pub fn forward(&self, input: &Value) -> ModuleResult<Value> {
         Ok(input.clone())
     }
 }
 
 impl Module for Identity {
-    fn forward(&self, input: &Tensor) -> ModuleResult<Tensor> {
+    fn forward(&self, input: &Value) -> ModuleResult<Value> {
         self.forward(input)
     }
 }

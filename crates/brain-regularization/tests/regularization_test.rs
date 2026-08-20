@@ -21,3 +21,23 @@ fn test_inverted_dropout_scaling_and_eval_mode() {
     let eval_out = dropout.apply(&x).expect("Dropout eval");
     assert_eq!(eval_out.to_vec(), x.to_vec(), "Eval mode must be identity");
 }
+
+#[test]
+fn test_ewc_continual_learning_penalty() {
+    use brain_regularization::ewc::ElasticWeightConsolidation;
+
+    let mut ewc = ElasticWeightConsolidation::new(100.0);
+    let p1 = Tensor::from_slice(&[1.0, 2.0], vec![2]);
+    let grads = vec![vec![0.5, 0.5]];
+
+    ewc.register_task(&[p1.clone()], &grads);
+
+    // Identical parameters -> penalty should be 0
+    let penalty0 = ewc.compute_penalty(&[p1]);
+    assert!((penalty0 - 0.0).abs() < 1e-6);
+
+    // Shifted parameters -> penalty > 0
+    let p2 = Tensor::from_slice(&[1.1, 1.9], vec![2]);
+    let penalty1 = ewc.compute_penalty(&[p2]);
+    assert!(penalty1 > 0.0);
+}
