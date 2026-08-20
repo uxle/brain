@@ -202,18 +202,18 @@ cargo build -p brain --release -j 2
 ```
 
 ```bash
-# 1. Train and checkpoint a model directly from dataset
-brain make my_model.brain --data .agent/sample_data.csv --arch convnet --epochs 20 --lr 0.1
+# 1. Train and checkpoint a classifier directly from a dataset
+brain make my_model.brain --data .agent/sample_data.csv --epochs 40 --lr 0.1
 
 # 2. Inspect checkpoint parameters and verify health
 brain check my_model.brain
 
-# 3. Execute inference on a single input or dataset
-brain run my_model.brain --input "1.0, -2.5, 0.4, 3.2"
-brain run my_model.brain --data test_features.csv
+# 3. Execute inference on a single input
+brain run my_model.brain --input "0.1, 0.2"
 
-# 4. Chat with a BrainMind model
-brain chat my_model.brain --say "What do you know about cats?"
+# 4. Create a BrainMind chatbot, teach it a knowledge base, and chat with it
+brain space new my_brain.bn --teach .agent/knowledge.txt
+brain chat my_brain.bn
 ```
 
 ### 2. Low-Level Reverse-Mode Autograd (`brain-autograd`)

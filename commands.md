@@ -127,7 +127,7 @@ Brain: A catalyst is a substance that speeds up a chemical reaction without bein
 
 #### Synopsis:
 ```bash
-brain make <output.brain> --data <.agent/data.txt> [options]
+brain make <output.brain> --data <data.csv> [options]
 ```
 
 #### Flags & Options:
